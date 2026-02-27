@@ -1,0 +1,81 @@
+/* ============================================================
+   perfil.css — Pantalla de Perfil (Usuario)
+   Requiere: shared.css
+   ============================================================ */
+
+/* ── BANNER PERFIL ── */
+.perfil-banner {
+  background: var(--purple);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+  color: #fff;
+}
+
+.perfil-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.perfil-info { flex: 1; }
+
+.perfil-info h2 {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  font-size: 1.2rem;
+}
+
+.perfil-info p { opacity: .85; font-size: .85rem; }
+
+.perfil-banner-actions {
+  display: flex;
+  gap: .5rem;
+}
+
+/* ── ACCIONES RÁPIDAS ── */
+.acciones-grid {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.accion-btn {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  width: 100%;
+  padding: .65rem .9rem;
+  background: #f9fafb;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .2s, background .2s;
+}
+
+.accion-btn svg { color: var(--purple); }
+.accion-btn:hover { border-color: var(--purple); background: var(--purple-bg); }
+
+/* ── ESTADÍSTICAS ── */
+.estadistica-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: .875rem;
+  padding: .5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.estadistica-row:last-child { border-bottom: none; }
+.estadistica-row span { color: var(--muted); }
