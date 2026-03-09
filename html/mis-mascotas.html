@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PetCard – Mis Mascotas</title>
+  <link rel="stylesheet" href="../css/shared.css"/>
+  <link rel="stylesheet" href="../css/mis-mascotas.css"/>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="inicio.html" class="nav-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="currentColor" opacity=".15"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/><path d="M9 14s1 1.5 3 1.5 3-1.5 3-1.5" stroke-linecap="round"/></svg>
+      PETCARD
+    </a>
+    <ul class="nav-links">
+      <li><a href="inicio.html">Inicio</a></li>
+      <li><a href="servicios.html">Servicios</a></li>
+      <li><a href="citas.html">Citas</a></li>
+      <li><a href="alimentacion.html">Alimentación</a></li>
+      <li><a href="carnet-vacunas.html">Carnet de Vacunas</a></li>
+      <li><a href="mis-mascotas.html" class="active">Mis Mascotas</a></li>
+      <li><a href="perfil.html">Perfil</a></li>
+    </ul>
+    <div class="nav-actions">
+      <button class="btn-icon" onclick="window.location.href='notificaciones.html'" ><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></button>
+      <button class="btn btn-danger btn-sm" onclick="window.location.href='login-usuario.html'" id="btn-cerrar-sesion">Iniciar Sesión</button>
+      <button class="btn btn-danger btn-sm" onclick="window.location.href='registro-usuario.html'" id="btn-cerrar-sesion">Registrarse</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+
+    <div class="mascotas-header">
+      <div>
+        <h1 class="mascotas-title">Mis Mascotas</h1>
+        <p style="color:var(--muted); font-size:.9rem;">Gestiona la información de tus queridos compañeros</p>
+      </div>
+      <button class="btn btn-primary" id="btn-agregar-mascota">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Agregar Mascota
+      </button>
+    </div>
+
+    <div class="cards-grid-3" id="mascotas-grid">
+
+      <div class="mascota-card card">
+        <div class="mascota-top">
+          <div class="mascota-avatar" style="background:#fef3c7;">🐕</div>
+          <div class="mascota-info">
+            <div class="mascota-nombre">Max</div>
+            <div class="mascota-tipo">Golden Retriever • 3 años</div>
+          </div>
+          <div class="mascota-actions">
+            <button class="btn-icon" data-id="max" id="btn-editar-max" title="Editar">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-icon delete-btn" data-id="max" id="btn-eliminar-max" title="Eliminar">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="mascota-datos">
+          <div class="dato-item">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+            Peso: <strong>20 kg</strong>
+          </div>
+          <div class="dato-item">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+            Color: <strong>Dorado</strong>
+          </div>
+          <div class="dato-item">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Última visita: <strong>2024-08-15</strong>
+          </div>
+        </div>
+        <div class="microchip-tag">Microchip: 123456789</div>
+        <div class="mascota-btns">
+          <button class="btn btn-secondary btn-sm" data-id="max" id="btn-vacunas-max">Vacunas</button>
+          <button class="btn btn-primary btn-sm" data-id="max" id="btn-cita-max">Cita</button>
+        </div>
+      </div>
+
+
+      <div class="mascota-card card">
+        <div class="mascota-top">
+          <div class="mascota-avatar" style="background:#f3e8ff;">🐱</div>
+          <div class="mascota-info">
+            <div class="mascota-nombre">Luna</div>
+            <div class="mascota-tipo">Persa • 2 años</div>
+          </div>
+          <div class="mascota-actions">
+            <button class="btn-icon" data-id="luna" id="btn-editar-luna" title="Editar">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-icon delete-btn" data-id="luna" id="btn-eliminar-luna" title="Eliminar">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="mascota-datos">
+          <div class="dato-item">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+            Peso: <strong>4.5 kg</strong>
+          </div>
+          <div class="dato-item">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+            Color: <strong>Blanco</strong>
+          </div>
+          <div class="dato-item">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Última visita: <strong>2024-09-01</strong>
+          </div>
+        </div>
+        <div class="microchip-tag">Microchip: 987654321</div>
+        <div class="mascota-btns">
+          <button class="btn btn-secondary btn-sm" data-id="luna" id="btn-vacunas-luna">Vacunas</button>
+          <button class="btn btn-primary btn-sm" data-id="luna" id="btn-cita-luna">Cita</button>
+        </div>
+      </div>
+
+
+      <div class="mascota-card card">
+        <div class="mascota-top">
+          <div class="mascota-avatar" style="background:#fef9c3;">🐦</div>
+          <div class="mascota-info">
+            <div class="mascota-nombre">Coco</div>
+            <div class="mascota-tipo">Canario • 1 año</div>
+          </div>
+          <div class="mascota-actions">
+            <button class="btn-icon" data-id="coco" id="btn-editar-coco" title="Editar">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-icon delete-btn" data-id="coco" id="btn-eliminar-coco" title="Eliminar">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="mascota-datos">
+          <div class="dato-item">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+            Peso: <strong>0.02 kg</strong>
+          </div>
+          <div class="dato-item">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+            Color: <strong>Amarillo</strong>
+          </div>
+          <div class="dato-item">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Última visita: <strong>2024-07-10</strong>
+          </div>
+        </div>
+        <div class="mascota-btns" style="margin-top:.75rem;">
+          <button class="btn btn-secondary btn-sm" data-id="coco" id="btn-vacunas-coco">Vacunas</button>
+          <button class="btn btn-primary btn-sm" data-id="coco" id="btn-cita-coco">Cita</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <footer class="footer" style="margin-top:2rem;">
+    <div class="footer-grid">
+      <div class="footer-brand"><span class="nav-logo" style="color:#fff; margin-bottom:.5rem; display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div>
+      <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div>
+      <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
+      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
+    </div>
+    <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
+  </footer>
+<script src="../js/script.js"></script>
+</body>
+</html>

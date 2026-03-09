@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PetCard – Iniciar Sesión</title>
+
+<link rel="stylesheet" href="../css/shared.css"/>
+<link rel="stylesheet" href="../css/login-usuario.css"/>
+
+<style>
+.spinner{width:18px;height:18px;border:3px solid rgba(255,255,255,.4);border-top:3px solid white;border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{100%{transform:rotate(360deg);}}
+.btn-loading{display:flex;align-items:center;justify-content:center;gap:8px;pointer-events:none;opacity:.85;}
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+<a href="./inicio.html" class="nav-logo">PETCARD</a>
+</nav>
+
+<main class="auth-wrapper">
+<div class="auth-card card">
+
+<h1 class="auth-title">Iniciar Sesión</h1>
+
+<div class="form-group">
+<label>Correo Electrónico</label>
+<input type="email" class="form-control" id="input-email"/>
+</div>
+
+<div class="form-group">
+<label>Contraseña</label>
+<div class="input-wrapper">
+<input type="password" class="form-control" id="input-password"/>
+<button type="button" class="input-icon" id="toggle-pass">👁</button>
+</div>
+</div>
+
+<label class="checkbox-group">
+<input type="checkbox" id="chk-recordar"/> Recordarme
+</label>
+
+<button class="btn btn-primary btn-full btn-lg" id="btn-login" style="margin-top:1rem;">
+Iniciar Sesión
+</button>
+
+<p style="text-align:center;margin-top:15px;">
+¿No tienes cuenta?
+<a href="./registro-usuario.html">Crear cuenta</a>
+</p>
+
+</div>
+</main>
+
+<footer class="footer-simple">
+<p>© 2024 PetCard</p>
+</footer>
+
+<script>
+const btnLogin = document.getElementById("btn-login");
+const email = document.getElementById("input-email");
+const password = document.getElementById("input-password");
+const togglePass = document.getElementById("toggle-pass");
+
+togglePass.onclick=()=>{ password.type = password.type==="password"?"text":"password"; };
+
+document.addEventListener("keydown",(e)=>{ if(e.key==="Enter") btnLogin.click(); });
+
+btnLogin.onclick=()=>{
+const correo=email.value.trim();
+const clave=password.value.trim();
+if(!correo || !clave){ alert("⚠️ Completa todos los campos"); return; }
+
+btnLogin.classList.add("btn-loading");
+btnLogin.innerHTML='<span class="spinner"></span> Verificando...';
+
+setTimeout(()=>{
+const admin=JSON.parse(localStorage.getItem("adminPetcard"));
+
+// Buscar en array de usuarios (nuevo sistema)
+const usuarios=JSON.parse(localStorage.getItem("usuariosPetcard") || "[]");
+// También soportar usuario único legacy
+const usuarioLegacy=JSON.parse(localStorage.getItem("usuarioPetcard"));
+if(usuarioLegacy){
+  const existe=usuarios.find(u=>u.email===usuarioLegacy.email);
+  if(!existe) usuarios.push(usuarioLegacy);
+}
+
+if(admin && correo===admin.email && clave===admin.password){
+localStorage.setItem("petcardUser","Administrador");
+localStorage.setItem("petcardRol","admin");
+location.href="./inicio.html";
+return;
+}
+
+const encontrado=usuarios.find(u=>u.email===correo && u.password===clave);
+if(encontrado){
+localStorage.setItem("petcardUser",encontrado.nombre||correo);
+localStorage.setItem("petcardRol","usuario");
+if(document.getElementById("chk-recordar").checked) localStorage.setItem("recordado",correo);
+location.href="./inicio.html";
+return;
+}
+
+alert("❌ Datos incorrectos");
+btnLogin.classList.remove("btn-loading");
+btnLogin.innerHTML="Iniciar Sesión";
+
+},1200);
+};
+
+window.onload=()=>{
+const guardado=localStorage.getItem("recordado");
+if(guardado){ email.value=guardado; document.getElementById("chk-recordar").checked=true; }
+};
+</script>
+
+</body>
+</html>
