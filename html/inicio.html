@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PetCard – Inicio</title>
+
+  <link rel="stylesheet" href="../css/shared.css"/>
+  <link rel="stylesheet" href="../css/inicio.css"/>
+</head>
+
+<body>
+
+<nav class="navbar">
+  <a href="./inicio.html" class="nav-logo">PETCARD</a>
+
+  <ul class="nav-links">
+    <li><a href="./inicio.html" class="active">Inicio</a></li>
+    <li><a href="./servicios.html">Servicios</a></li>
+    <li><a href="./citas.html">Citas</a></li>
+    <li><a href="./alimentacion.html">Alimentación</a></li>
+    <li><a href="./carnet-vacunas.html">Carnet</a></li>
+    <li><a href="./mis-mascotas.html">Mis Mascotas</a></li>
+    <li><a href="./perfil.html">Perfil</a></li>
+  </ul>
+
+  <div class="nav-actions">
+    <span id="usuarioNombre"></span>
+    <a href="./registro-usuario.html" class="btn btn-outline btn-sm" id="btnRegistro">Crear cuenta</a>
+    <button class="btn btn-danger btn-sm" id="btnSesion">Iniciar Sesión</button>
+  </div>
+</nav>
+
+<section class="hero-inicio">
+  <div class="hero-content">
+    <h1>Cuidado Veterinario de Excelencia</h1>
+    <p>gestiona citas, historial médico y toda la información de tus mascotas en un solo lugar.</p>
+
+    <div class="hero-btns">
+      <button class="btn btn-primary btn-lg" id="btn-agendar">agendar cita</button>
+      <button class="btn btn-outline-white btn-lg" onclick="window.location.href='./servicios.html'">Ver servicios</button>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="background:#fff;">
+  <div class="container">
+    <h2 class="section-title">Servicios para tu Mascota</h2>
+    <div class="cards-grid-3">
+      <div class="feature-card card">
+        <div class="feature-icon blue">📅</div>
+        <h3>Agendar Citas</h3>
+        <p>Programa citas veterinarias fácilmente.</p>
+      </div>
+      <div class="feature-card card">
+        <div class="feature-icon green">❤️</div>
+        <h3>Servicios Veterinarios</h3>
+        <p>Consultas, vacunas y tratamientos completos.</p>
+      </div>
+      <div class="feature-card card">
+        <div class="feature-icon purple">🐾</div>
+        <h3>Gestión de Mascotas</h3>
+        <p>Administra perfiles e historial médico.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section">
+  <h2>¿Tu mascota necesita atención?</h2>
+  <p>Agenda una cita y dale el mejor cuidado.</p>
+</section>
+
+<footer class="footer">
+  <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
+</footer>
+
+<script>
+const btnSesion   = document.getElementById("btnSesion");
+const btnRegistro = document.getElementById("btnRegistro");
+const nombreUI    = document.getElementById("usuarioNombre");
+
+function actualizarUI() {
+  const usuario = localStorage.getItem("petcardUser");
+  const rol     = localStorage.getItem("petcardRol");
+
+  if (usuario) {
+    // SESIÓN ACTIVA: mostrar nombre, ocultar botones de auth
+    nombreUI.textContent  = "👤 " + usuario + (rol === "admin" ? " | Admin" : "");
+    btnSesion.textContent = "Cerrar sesión";
+    btnRegistro.style.display = "none";
+  } else {
+    // SIN SESIÓN: ocultar nombre, mostrar botones de auth
+    nombreUI.textContent  = "";
+    btnSesion.textContent = "Iniciar Sesión";
+    btnRegistro.style.display = "inline-block";
+  }
+}
+
+// Ejecutar al cargar
+actualizarUI();
+
+// Botón login/logout
+btnSesion.addEventListener("click", () => {
+  if (localStorage.getItem("petcardUser")) {
+    localStorage.removeItem("petcardUser");
+    localStorage.removeItem("petcardRol");
+    actualizarUI();
+  } else {
+    window.location.href = "./login-usuario.html";
+  }
+});
+
+// Botón agendar cita
+document.getElementById("btn-agendar").addEventListener("click", () => {
+  if (!localStorage.getItem("petcardUser")) {
+    alert("⚠️ Debes iniciar sesión primero");
+    window.location.href = "./login-usuario.html";
+    return;
+  }
+  window.location.href = "./agendar-cita.html";
+});
+</script>
+
+</body>
+</html>
