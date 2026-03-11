@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="../css/shared.css"/>
   <link rel="stylesheet" href="../css/inicio.css"/>
 </head>
-
 <body>
 
 <nav class="navbar">
@@ -26,8 +25,8 @@
 
   <div class="nav-actions">
     <span id="usuarioNombre"></span>
-    <a href="./registro-usuario.html" class="btn btn-outline btn-sm" id="btnRegistro">Crear cuenta</a>
-    <button class="btn btn-danger btn-sm" id="btnSesion">Iniciar Sesión</button>
+    <button class="btn btn-danger btn-sm" onclick="window.location.href='login-usuario.html'" id="btnSesion">Iniciar Sesión</button>
+    <button class="btn btn-danger btn-sm" onclick="window.location.href='registro-usuario.html'" id="btnSesion">Registrarse</button>
   </div>
 </nav>
 
@@ -37,8 +36,8 @@
     <p>gestiona citas, historial médico y toda la información de tus mascotas en un solo lugar.</p>
 
     <div class="hero-btns">
-      <button class="btn btn-primary btn-lg" id="btn-agendar">agendar cita</button>
-      <button class="btn btn-outline-white btn-lg" onclick="window.location.href='./servicios.html'">Ver servicios</button>
+      <button class="btn btn-primary btn-lg" onclick="window.location.href='citas.html'" id="btn-agendar">Agendar cita</button>
+      <button class="btn btn-outline-white btn-lg" onclick="window.location.href='servicios.html'">Ver servicios</button>
     </div>
   </div>
 </section>
@@ -74,53 +73,7 @@
 <footer class="footer">
   <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
 </footer>
-
-<script>
-const btnSesion   = document.getElementById("btnSesion");
-const btnRegistro = document.getElementById("btnRegistro");
-const nombreUI    = document.getElementById("usuarioNombre");
-
-function actualizarUI() {
-  const usuario = localStorage.getItem("petcardUser");
-  const rol     = localStorage.getItem("petcardRol");
-
-  if (usuario) {
-    // SESIÓN ACTIVA: mostrar nombre, ocultar botones de auth
-    nombreUI.textContent  = "👤 " + usuario + (rol === "admin" ? " | Admin" : "");
-    btnSesion.textContent = "Cerrar sesión";
-    btnRegistro.style.display = "none";
-  } else {
-    // SIN SESIÓN: ocultar nombre, mostrar botones de auth
-    nombreUI.textContent  = "";
-    btnSesion.textContent = "Iniciar Sesión";
-    btnRegistro.style.display = "inline-block";
-  }
-}
-
-// Ejecutar al cargar
-actualizarUI();
-
-// Botón login/logout
-btnSesion.addEventListener("click", () => {
-  if (localStorage.getItem("petcardUser")) {
-    localStorage.removeItem("petcardUser");
-    localStorage.removeItem("petcardRol");
-    actualizarUI();
-  } else {
-    window.location.href = "./login-usuario.html";
-  }
-});
-
-// Botón agendar cita
-document.getElementById("btn-agendar").addEventListener("click", () => {
-  if (!localStorage.getItem("petcardUser")) {
-    alert("⚠️ Debes iniciar sesión primero");
-    window.location.href = "./login-usuario.html";
-    return;
-  }
-  window.location.href = "./agendar-cita.html";
-});
-</script>
-
+<script src="../js/script.js"></script>
 </body>
+
 </html>
