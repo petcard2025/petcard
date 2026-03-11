@@ -1,8 +1,4 @@
-/* ============================================================
-   login-usuario.css
-   Estilos específicos de la pantalla de Inicio de Sesión (Usuario)
-   Requiere: shared.css
-   ============================================================ */
+
 
  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -68,7 +64,7 @@
       align-items: center;
       justify-content: center;
       padding: 60px 80px;
-      ba
+      
     }
 
     .form-wrapper {

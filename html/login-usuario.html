@@ -4,118 +4,115 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>PetCard – Iniciar Sesión</title>
-
 <link rel="stylesheet" href="../css/shared.css"/>
 <link rel="stylesheet" href="../css/login-usuario.css"/>
-
-<style>
-.spinner{width:18px;height:18px;border:3px solid rgba(255,255,255,.4);border-top:3px solid white;border-radius:50%;animation:spin .8s linear infinite;}
-@keyframes spin{100%{transform:rotate(360deg);}}
-.btn-loading{display:flex;align-items:center;justify-content:center;gap:8px;pointer-events:none;opacity:.85;}
-</style>
 </head>
+
 <body>
+  <nav class="navbar">
+    <a href="./inicio.html" class="nav-logo">PETCARD</a>
+  </nav>
 
-<nav class="navbar">
-<a href="./inicio.html" class="nav-logo">PETCARD</a>
-</nav>
+  <div class="right-panel">
+    <div class="form-wrapper">
+      <h1>Bienvenido a PetCard</h1>
+      <p class="subtitle">Completa los siguientes campos</p>
 
-<main class="auth-wrapper">
-<div class="auth-card card">
+      <div class="error-msg" id="error-login"></div>
+      <div class="success-msg" id="success-login"></div>
 
-<h1 class="auth-title">Iniciar Sesión</h1>
+      <div class="form-group">
+        <select id="tipo-documento">
+          <option value="" disabled selected>Tipo de documento *</option>
+          <option value="cc">Cédula de Ciudadanía</option>
+          <option value="ce">Cédula de Extranjería</option>
+          <option value="ti">Tarjeta de Identidad</option>
+          <option value="pp">Pasaporte</option>
+        </select>
+      </div>
 
-<div class="form-group">
-<label>Correo Electrónico</label>
-<input type="email" class="form-control" id="input-email"/>
-</div>
+      <div class="form-group">
+        <input type="text" id="numero-documento" placeholder="Número de documento *" />
+      </div>
 
-<div class="form-group">
-<label>Contraseña</label>
-<div class="input-wrapper">
-<input type="password" class="form-control" id="input-password"/>
-<button type="button" class="input-icon" id="toggle-pass">👁</button>
-</div>
-</div>
+      <div class="form-group password-wrapper">
+        <input type="password" id="contrasena" placeholder="Contraseña *" />
+        <button class="eye-btn" onclick="togglePassword()" aria-label="Mostrar contraseña">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
 
-<label class="checkbox-group">
-<input type="checkbox" id="chk-recordar"/> Recordarme
-</label>
+      <a href="#" class="forgot-link">¿Olvidaste tu Contraseña?</a>
 
-<button class="btn btn-primary btn-full btn-lg" id="btn-login" style="margin-top:1rem;">
-Iniciar Sesión
-</button>
+      <button class="btn-ingresar" id="btn-ingresar" onclick="handleLogin()">Ingresar</button>
 
-<p style="text-align:center;margin-top:15px;">
-¿No tienes cuenta?
-<a href="./registro-usuario.html">Crear cuenta</a>
-</p>
+      <!-- ✅ CONEXIÓN: enlace hacia registro-usuario.html -->
+      <p class="create-account">¿No tienes cuenta? <a href="./registro-usuario.html">Crear cuenta</a></p>
 
-</div>
-</main>
+    </div>
+  </div>
 
-<footer class="footer-simple">
-<p>© 2024 PetCard</p>
-</footer>
+  <div class="left-panel">
+    <div class="illustration-container"></div>
+  </div>
 
-<script>
-const btnLogin = document.getElementById("btn-login");
-const email = document.getElementById("input-email");
-const password = document.getElementById("input-password");
-const togglePass = document.getElementById("toggle-pass");
+  <script>
+    function togglePassword() {
+      const input = document.getElementById('contrasena');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
 
-togglePass.onclick=()=>{ password.type = password.type==="password"?"text":"password"; };
+    function showError(msg) {
+      const el = document.getElementById('error-login');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('success-login').style.display = 'none';
+    }
 
-document.addEventListener("keydown",(e)=>{ if(e.key==="Enter") btnLogin.click(); });
+    function showSuccess(msg) {
+      const el = document.getElementById('success-login');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('error-login').style.display = 'none';
+    }
 
-btnLogin.onclick=()=>{
-const correo=email.value.trim();
-const clave=password.value.trim();
-if(!correo || !clave){ alert("⚠️ Completa todos los campos"); return; }
+    function handleLogin() {
+      const tipoDoc   = document.getElementById('tipo-documento').value;
+      const numDoc    = document.getElementById('numero-documento').value.trim();
+      const password  = document.getElementById('contrasena').value;
 
-btnLogin.classList.add("btn-loading");
-btnLogin.innerHTML='<span class="spinner"></span> Verificando...';
+      // Validaciones
+      if (!tipoDoc) { showError('Por favor selecciona el tipo de documento.'); return; }
+      if (!numDoc)  { showError('Por favor ingresa tu número de documento.'); return; }
+      if (numDoc.length < 4) { showError('El número de documento no es válido.'); return; }
+      if (!password) { showError('Por favor ingresa tu contraseña.'); return; }
+      if (password.length < 6) { showError('La contraseña debe tener al menos 6 caracteres.'); return; }
 
-setTimeout(()=>{
-const admin=JSON.parse(localStorage.getItem("adminPetcard"));
+      // Verificar si el usuario existe en localStorage (registrado desde registro-usuario.html)
+      const usuarios = JSON.parse(localStorage.getItem('petcard_usuarios') || '[]');
+      const usuario  = usuarios.find(u => u.documento === numDoc && u.tipoDocumento === tipoDoc && u.password === password);
 
-// Buscar en array de usuarios (nuevo sistema)
-const usuarios=JSON.parse(localStorage.getItem("usuariosPetcard") || "[]");
-// También soportar usuario único legacy
-const usuarioLegacy=JSON.parse(localStorage.getItem("usuarioPetcard"));
-if(usuarioLegacy){
-  const existe=usuarios.find(u=>u.email===usuarioLegacy.email);
-  if(!existe) usuarios.push(usuarioLegacy);
-}
+      if (!usuario) {
+        showError('Credenciales incorrectas. Verifica tus datos o crea una cuenta.');
+        return;
+      }
 
-if(admin && correo===admin.email && clave===admin.password){
-localStorage.setItem("petcardUser","Administrador");
-localStorage.setItem("petcardRol","admin");
-location.href="./inicio.html";
-return;
-}
+      showSuccess(`¡Bienvenido/a, ${usuario.nombre}! Redirigiendo...`);
+      localStorage.setItem('petcard_sesion', JSON.stringify(usuario));
 
-const encontrado=usuarios.find(u=>u.email===correo && u.password===clave);
-if(encontrado){
-localStorage.setItem("petcardUser",encontrado.nombre||correo);
-localStorage.setItem("petcardRol","usuario");
-if(document.getElementById("chk-recordar").checked) localStorage.setItem("recordado",correo);
-location.href="./inicio.html";
-return;
-}
+      // Redirigir tras 1.5 segundos
+      setTimeout(() => {
+        window.location.href = './inicio.html';
+      }, 1500);
+    }
 
-alert("❌ Datos incorrectos");
-btnLogin.classList.remove("btn-loading");
-btnLogin.innerHTML="Iniciar Sesión";
-
-},1200);
-};
-
-window.onload=()=>{
-const guardado=localStorage.getItem("recordado");
-if(guardado){ email.value=guardado; document.getElementById("chk-recordar").checked=true; }
-};
-</script>
-
+    // Permitir Enter para iniciar sesión
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') handleLogin();
+    });
+  </script>
 </body>
 </html>

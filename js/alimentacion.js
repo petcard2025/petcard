@@ -38,6 +38,7 @@
         <div class="comida-status ${done? 'green-check':''}">
           ${done? '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>' : '<button class="btn btn-outline-primary btn-sm btn-marcar" data-id="'+h.id+'">Marcar</button>'}
         </div>
+        <button class="btn btn-outline-danger btn-sm" style="margin-left:0.5rem; padding:0.25rem 0.5rem;" data-delete-id="${h.id}" title="Eliminar">✕</button>
       `;
       list.appendChild(item);
     })
@@ -45,6 +46,11 @@
     // attach marcar buttons
     qsa('.btn-marcar').forEach(b=> b.addEventListener('click', function(){
       const id = this.dataset.id; marcarComidaPorId(id);
+    }))
+
+    // attach delete buttons
+    qsa('button[data-delete-id]').forEach(b=> b.addEventListener('click', function(){
+      const id = this.dataset.deleteId; deleteHorarioById(id);
     }))
 
     renderProximas(horarios);
@@ -89,13 +95,70 @@
     if(!nombre || !hora) { alert('Nombre y hora son requeridos'); return }
     const horarios = loadHorarios();
     const item = { id: 'h_'+Date.now(), nombre, hora, cal: cal || '', lastCompleted: null };
-    horarios.push(item); saveHorarios(horarios); renderHorarios();
+    horarios.push(item); 
+    saveHorarios(horarios);
+    
+    // Registrar en historial
+    const hist = loadHist();
+    const entry = { 
+      fecha: new Date().toLocaleString(), 
+      accion: 'Agregar horario',
+      anterior: '-',
+      nuevo: nombre + ' - ' + hora + ' (' + (cal || '0') + ' cal)',
+      notas: 'Se agregó nuevo horario de comida'
+    };
+    hist.push(entry);
+    saveHist(hist);
+    
+    renderHorarios(); 
+    alert('✓ Horario agregado: ' + nombre + ' a las ' + hora);
   }
 
   function marcarComidaPorId(id){
     const horarios = loadHorarios();
     const item = horarios.find(h=>h.id===id); if(!item) return;
-    item.lastCompleted = todayStr(); saveHorarios(horarios); renderHorarios(); alert('Comida marcada como completada.');
+    item.lastCompleted = todayStr(); 
+    saveHorarios(horarios);
+    
+    // Registrar en historial
+    const hist = loadHist();
+    const entry = { 
+      fecha: new Date().toLocaleString(), 
+      accion: 'Marcar comida completada',
+      anterior: 'Pendiente',
+      nuevo: item.nombre + ' - ' + item.hora + ' completada',
+      notas: 'Se marcó como completada hoy'
+    };
+    hist.push(entry);
+    saveHist(hist);
+    
+    renderHorarios(); 
+    alert('✓ ' + item.nombre + ' marcada como completada.');
+  }
+
+  function deleteHorarioById(id){
+    const horarios = loadHorarios();
+    const item = horarios.find(h=>h.id===id);
+    if(!item) return;
+    if(!confirm('¿Eliminar "' + item.nombre + '"?')) return;
+    
+    horarios.splice(horarios.indexOf(item), 1);
+    saveHorarios(horarios);
+    
+    // Registrar en historial
+    const hist = loadHist();
+    const entry = { 
+      fecha: new Date().toLocaleString(), 
+      accion: 'Eliminar horario',
+      anterior: item.nombre + ' - ' + item.hora + ' (' + (item.cal || '0') + ' cal)',
+      nuevo: '-',
+      notas: 'Se eliminó horario de comida'
+    };
+    hist.push(entry);
+    saveHist(hist);
+    
+    renderHorarios();
+    alert('✓ Horario eliminado.');
   }
 
   function marcarProxima(){
@@ -160,12 +223,46 @@
   }
 
   function renderHistorial(){
-    const hist = loadHist(); const node = qs('historial-list'); if(!node) return;
-    if(hist.length===0){ node.innerHTML = '<div style="color:var(--muted)">No hay registros.</div>'; return }
+    const hist = loadHist(); 
+    const node = qs('historial-list'); 
+    if(!node) return;
+    
+    if(hist.length===0){ 
+      node.innerHTML = '<div style="color:var(--muted); padding:1rem; text-align:center;">No hay cambios registrados.</div>'; 
+      return;
+    }
+    
     node.innerHTML = '';
-    hist.slice().reverse().forEach(h=>{
-      const d = document.createElement('div'); d.style.padding = '.5rem 0'; d.style.borderBottom='1px solid var(--border)';
-      d.innerHTML = `<div style="font-weight:700">${h.nuevo}</div><div style="font-size:.85rem;color:var(--muted)">${h.fecha} — ${h.notas||''}</div>`;
+    hist.slice().reverse().forEach((h, idx)=>{
+      const d = document.createElement('div'); 
+      d.style.padding = '0.75rem'; 
+      d.style.borderBottom='1px solid var(--border)';
+      d.style.borderRadius = '4px';
+      d.style.marginBottom = '0.5rem';
+      d.style.background = idx === 0 ? '#f0f9ff' : 'transparent';
+      
+      let accionIcon = '📝';
+      if(h.accion === 'Agregar horario') accionIcon = '➕';
+      else if(h.accion === 'Marcar comida completada') accionIcon = '✓';
+      else if(h.accion === 'Eliminar horario') accionIcon = '🗑️';
+      else if(h.accion === 'Cambiar alimento') accionIcon = '🔄';
+      
+      d.innerHTML = `
+        <div style="display:flex; align-items:flex-start; gap:0.75rem;">
+          <div style="font-size:1.2rem; flex-shrink:0;">${accionIcon}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:700; color:var(--dark); margin-bottom:0.25rem;">${h.accion || 'Cambio'}</div>
+            <div style="font-size:.85rem; color:var(--muted); margin-bottom:0.25rem;">
+              <span style="display:block;"><strong>Anterior:</strong> ${h.anterior}</span>
+              <span style="display:block;"><strong>Nuevo:</strong> ${h.nuevo}</span>
+            </div>
+            <div style="font-size:.75rem; color:#999; display:flex; justify-content:space-between; align-items:center;">
+              <span>${h.fecha}</span>
+              ${h.notas ? '<span style="color:#666; font-style:italic;">' + h.notas + '</span>' : ''}
+            </div>
+          </div>
+        </div>
+      `;
       node.appendChild(d);
     })
   }
@@ -175,11 +272,18 @@
       const name = this.dataset.name; if(!name) return;
       // aplicar alternativa: guardar en historial y actualizar alimento recomendado
       const hist = loadHist();
-      const entry = { fecha: new Date().toLocaleString(), anterior: document.querySelector('.alimento-nombre')?.textContent || '', nuevo: name, notas: 'Aplicada desde Alternativas' };
+      const anterior = document.querySelector('.alimento-nombre')?.textContent || 'Anterior';
+      const entry = { 
+        fecha: new Date().toLocaleString(), 
+        accion: 'Cambiar alimento',
+        anterior: anterior,
+        nuevo: name,
+        notas: 'Aplicada desde Alternativas Recomendadas'
+      };
       hist.push(entry); saveHist(hist);
       // actualizar UI
       const alName = document.querySelector('.alimento-nombre'); if(alName) alName.textContent = name;
-      alert('Alternativa aplicada: '+name);
+      alert('✓ Alternativa aplicada: '+name);
       renderHistorial();
     }))
   }

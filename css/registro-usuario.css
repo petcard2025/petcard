@@ -129,7 +129,7 @@ body {
 .form-control:focus {
   outline: none;
   border-color: #2196f3;
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+  box-shadow: 0 0 0 3px rgba(67, 154, 224, 0.1);
 }
 
 
@@ -171,7 +171,7 @@ body {
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(33, 150, 243, 0.3);
+  box-shadow: 0 5px 15px rgba(53, 144, 219, 0.3);
 }
 
 
