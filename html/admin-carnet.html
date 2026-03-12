@@ -1,74 +1,102 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PetCard Admin – Carnet de Vacunas</title>
-  <link rel="stylesheet" href="../css/shared.css"/>
-  <link rel="stylesheet" href="../css/admin-pages.css"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PetCard Admin – Carnet de Vacunas</title>
+
+<link rel="stylesheet" href="../css/shared.css"/>
+<link rel="stylesheet" href="../css/admin-pages.css"/>
+
 </head>
+
 <body>
-  <nav class="navbar">
-    <a href="admin-inicio.html" class="nav-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="currentColor" opacity=".15"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/><path d="M9 14s1 1.5 3 1.5 3-1.5 3-1.5" stroke-linecap="round"/></svg>PETCARD</a>
-    <ul class="nav-links" style="margin-left:1.5rem;">
-      <li><a href="admin-alimentacion.html">Alimentación</a></li>
-      <li><a href="admin-carnet.html" class="active">Carnet de Vacunas</a></li>
-      <li><a href="admin-notificaciones.html">Notificaciones</a></li>
-      <li><a href="admin-servicios.html">Servicios</a></li>
-      <li><a href="admin-citas.html">Citas</a></li>
-    </ul>
-    <div class="nav-actions"><span id="admin-nombre" style="color: white; margin-right: 1rem; font-weight: 500;"></span><button class="btn btn-outline-white btn-sm" id="btn-perfil-admin" title="Ver Perfil">👤</button><button class="btn btn-danger btn-sm" id="btn-cerrar-sesion">Cerrar Sesión</button></div>
-  </nav>
-  <div class="page-wrapper">
-    <div class="gestion-header">
-      <div><div class="gestion-title">Gestión de Registros de Vacunación</div><div class="gestion-sub">Administra todos los registros de vacunación de las mascotas</div></div>
-      <div class="gestion-btns">
-        <button class="btn btn-primary btn-sm" id="btn-generar">Generar Datos</button>
-        <button class="btn btn-success btn-sm" id="btn-nuevo-registro">+ Nuevo Registro</button>
-      </div>
-    </div>
-    <div class="search-filter">
-      <div class="search-wrap"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Buscar por mascota o vacuna..." id="input-buscar"/></div>
-      <select class="filter-select" id="select-filtro"><option>Todos</option><option>Completada</option><option>Pendiente</option></select>
-    </div>
-    <div class="cards-grid-2">
-      <div class="admin-card">
-        <div class="admin-card-header"><div><div class="admin-card-title">Max</div><div class="admin-card-tipo">Perro</div></div><span class="badge badge-green">Completada</span></div>
-        <div class="admin-card-body">
-          <div class="detail">Rabia</div>
-          <div class="admin-card-meta">Lote: RAB-2024-001</div>
-          <div class="admin-card-meta"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Aplicada: 2024-08-15</div>
-          <div class="admin-card-meta"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Próxima: 2025-08-15</div>
-          <div class="admin-card-meta">Veterinario: Dr. García</div>
-        </div>
-        <div class="admin-card-actions">
-          <button class="btn btn-secondary btn-sm" id="btn-editar-max">Editar</button>
-          <button class="btn btn-danger btn-sm" id="btn-eliminar-max">Eliminar</button>
-        </div>
-      </div>
-      <div class="admin-card">
-        <div class="admin-card-header"><div><div class="admin-card-title">Luna</div><div class="admin-card-tipo">Gato</div></div><span class="badge badge-yellow">Pendiente</span></div>
-        <div class="admin-card-body">
-          <div class="detail">Triple Felina</div>
-          <div class="admin-card-meta">Lote: TF-2024-042</div>
-          <div class="admin-card-meta"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Aplicada: 2024-09-01</div>
-          <div class="admin-card-meta"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Próxima: 2025-09-01</div>
-          <div class="admin-card-meta">Veterinario: Dra. López</div>
-        </div>
-        <div class="admin-card-actions">
-          <button class="btn btn-secondary btn-sm" id="btn-editar-luna">Editar</button>
-          <button class="btn btn-danger btn-sm" id="btn-eliminar-luna">Eliminar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <footer class="footer" style="margin-top:2rem;"><div class="footer-grid"><div class="footer-brand"><span class="nav-logo" style="color:#fff;display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8">
-    <path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/>
-  </svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional.</p>
+
+<nav class="navbar">
+
+<a href="admin-inicio.html" class="nav-logo">
+PETCARD
+</a>
+
+<ul class="nav-links" style="margin-left:1.5rem;">
+<li><a href="admin-alimentacion.html">Alimentación</a></li>
+<li><a href="admin-carnet.html" class="active">Carnet de Vacunas</a></li>
+<li><a href="admin-notificaciones.html">Notificaciones</a></li>
+<li><a href="admin-servicios.html">Servicios</a></li>
+<li><a href="admin-citas.html">Citas</a></li>
+</ul>
+
+<div class="nav-actions">
+<span id="admin-nombre" style="color:white;margin-right:1rem;font-weight:500;"></span>
+
+<button class="btn btn-outline-white btn-sm" id="btn-perfil-admin">
+👤
+</button>
+
+<button class="btn btn-danger btn-sm" id="btn-cerrar-sesion">
+Cerrar Sesión
+</button>
+
 </div>
-<div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li></ul>
+
+</nav>
+
+<div class="page-wrapper">
+
+<div class="gestion-header">
+
+<div>
+<div class="gestion-title">
+Gestión de Registros de Vacunación
 </div>
-<div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p></div><div class="footer-col"><h4>Horarios</h4><p>Lun - Vie: 8:00 AM - 7:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div></div><div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div></footer>
+
+<div class="gestion-sub">
+Administra todos los registros de vacunación de las mascotas
+</div>
+</div>
+
+<div class="gestion-btns">
+
+
+<button class="btn btn-success btn-sm" id="btn-nuevo-registro">
++ Nuevo Registro
+</button>
+
+</div>
+
+</div>
+
+<div class="search-filter">
+
+<div class="search-wrap">
+
+<input
+type="text"
+placeholder="Buscar por mascota o vacuna..."
+id="input-buscar"
+/>
+
+</div>
+
+<select class="filter-select" id="select-filtro">
+
+<option>Todos</option>
+<option>Completada</option>
+<option>Pendiente</option>
+
+</select>
+
+</div>
+
+<div class="cards-grid-2"></div>
+
+</div>
+
+<footer class="footer"></footer>
+
 <script src="../js/auth.js"></script>
 <script src="../js/script.js"></script>
+<script src="../js/admin-carnet.js"></script>
+
 </body>
 </html>
