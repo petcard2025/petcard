@@ -49,7 +49,6 @@
 
       <button class="btn-ingresar" id="btn-ingresar" onclick="handleLogin()">Ingresar</button>
 
-      <!-- ✅ CONEXIÓN: enlace hacia registro-usuario.html -->
       <p class="create-account">¿No tienes cuenta? <a href="./registro-usuario.html">Crear cuenta</a></p>
 
     </div>
@@ -84,14 +83,12 @@
       const numDoc    = document.getElementById('numero-documento').value.trim();
       const password  = document.getElementById('contrasena').value;
 
-      // Validaciones
       if (!tipoDoc) { showError('Por favor selecciona el tipo de documento.'); return; }
       if (!numDoc)  { showError('Por favor ingresa tu número de documento.'); return; }
       if (numDoc.length < 4) { showError('El número de documento no es válido.'); return; }
       if (!password) { showError('Por favor ingresa tu contraseña.'); return; }
       if (password.length < 6) { showError('La contraseña debe tener al menos 6 caracteres.'); return; }
 
-      // Verificar si el usuario existe en localStorage (registrado desde registro-usuario.html)
       const usuarios = JSON.parse(localStorage.getItem('petcard_usuarios') || '[]');
       const usuario  = usuarios.find(u => u.documento === numDoc && u.tipoDocumento === tipoDoc && u.password === password);
 
@@ -103,13 +100,11 @@
       showSuccess(`¡Bienvenido/a, ${usuario.nombre}! Redirigiendo...`);
       localStorage.setItem('petcard_sesion', JSON.stringify(usuario));
 
-      // Redirigir tras 1.5 segundos
       setTimeout(() => {
         window.location.href = './inicio.html';
       }, 1500);
     }
 
-    // Permitir Enter para iniciar sesión
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') handleLogin();
     });
