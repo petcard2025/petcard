@@ -1,63 +1,143 @@
-const Storage = (() => {
-  const prefix = 'petcard_';
-  const key = (k) => prefix + k;
+const STORAGE_KEYS = {
+  usuarios: 'petcard_usuarios',
+  currentUser: 'petcard_current_user'
+};
 
-  function save(k, v) { localStorage.setItem(key(k), JSON.stringify(v)); }
-  function load(k, fallback = null) { const v = localStorage.getItem(key(k)); return v ? JSON.parse(v) : fallback; }
+function getCurrentUser() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.currentUser);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
 
-  return {
-    save, load,
-    getUsers() { return load('users', []); },
-    saveUsers(users) { save('users', users); },
-    addOrUpdateUser(user) {
-      const users = this.getUsers();
-      const i = users.findIndex(u => u.email === user.email);
-      if (i >= 0) users[i] = user; else users.push(user);
-      this.saveUsers(users);
-    },
-    findUser(email) { return this.getUsers().find(u => u.email === email) || null; },
-    setCurrent(user) { save('current', user); },
-    getCurrent() { return load('current', null); },
-    clearCurrent() { localStorage.removeItem(key('current')); }
-  };
-})();
+function setCurrentUser(user) {
+  localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user));
+}
+
+function clearCurrentUser() {
+  localStorage.removeItem(STORAGE_KEYS.currentUser);
+}
+
+function updateAuthSection() {
+  const el = document.getElementById('auth-section');
+  if (!el) return;
+
+  // No mostrar botones en páginas de login o registro
+  const currentPage = window.location.pathname.split('/').pop();
+  if (currentPage === 'login-usuario.html' || currentPage === 'registro-usuario.html') {
+    el.innerHTML = '';
+    return;
+  }
+
+  const user = getCurrentUser();
+  if (!user) {
+    el.innerHTML = `
+      <a href="login-usuario.html" class="btn-auth">Iniciar sesión</a>
+      <a href="registro-usuario.html" class="btn-auth">Registrarse</a>
+    `;
+    return;
+  }
+
+  const nombre = user.nombre || user.email || 'Usuario';
+  el.innerHTML = `
+    <span class="auth-welcome">${nombre}</span>
+    <button id="btn-logout" class="btn-logout">Cerrar sesión</button>
+  `;
+
+  const btnLogout = document.getElementById('btn-logout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+      clearCurrentUser();
+      window.location.href = 'login-usuario.html';
+    });
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-login');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  const success = document.getElementById('success-login');
+  if (success) success.style.display = 'none';
+}
+
+function showSuccess(msg) {
+  const el = document.getElementById('success-login');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  const error = document.getElementById('error-login');
+  if (error) error.style.display = 'none';
+}
+
+function togglePassword() {
+  const input = document.getElementById('contrasena');
+  if (!input) return;
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function handleLogin() {
+  const tipoDocEl = document.getElementById('tipo-documento');
+  const numDocEl = document.getElementById('numero-documento');
+  const passwordEl = document.getElementById('contrasena');
+
+  if (!tipoDocEl || !numDocEl || !passwordEl) return;
+
+  const tipoDoc = tipoDocEl.value;
+  const numDoc = numDocEl.value.trim();
+  const password = passwordEl.value;
+
+  if (!tipoDoc) { showError('Por favor selecciona el tipo de documento.'); return; }
+  if (!numDoc) { showError('Por favor ingresa tu número de documento.'); return; }
+  if (numDoc.length < 4) { showError('El número de documento no es válido.'); return; }
+  if (!password) { showError('Por favor ingresa tu contraseña.'); return; }
+  if (password.length < 6) { showError('La contraseña debe tener al menos 6 caracteres.'); return; }
+
+  const usuarios = JSON.parse(localStorage.getItem(STORAGE_KEYS.usuarios) || '[]');
+  const usuario = usuarios.find(u => u.documento === numDoc && u.tipoDocumento === tipoDoc && u.password === password);
+
+  if (!usuario) {
+    showError('Credenciales incorrectas. Verifica tus datos o crea una cuenta.');
+    return;
+  }
+
+  showSuccess(`¡Bienvenido/a, ${usuario.nombre}! Redirigiendo...`);
+  setCurrentUser(usuario);
+  updateAuthSection();
+
+  setTimeout(() => {
+    window.location.href = './inicio.html';
+  }, 1500);
+}
+
+// Si la página tiene un botón de ingresar, podemos asignar el evento aquí.
+function setupLoginPageListeners() {
+  const btnIngresar = document.getElementById('btn-ingresar');
+  if (btnIngresar) {
+    btnIngresar.addEventListener('click', handleLogin);
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      // Solo ejecutar en páginas de login donde exista el formulario.
+      const hasLoginFields = document.getElementById('tipo-documento') && document.getElementById('numero-documento');
+      if (hasLoginFields) handleLogin();
+    }
+  });
+
+  const toggle = document.querySelector('.eye-btn');
+  if (toggle) {
+    toggle.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      togglePassword();
+    });
+  }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
-  const loginForm = document.querySelector('form[data-auth="login"]') || document.getElementById('loginForm');
-  if (loginForm) {
-    const emailEl = loginForm.querySelector('input[type="email"]');
-    const pwEl = loginForm.querySelector('input[type="password"]');
-
-    loginForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const email = (emailEl.value || '').trim();
-      const password = pwEl.value || '';
-
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Correo inválido');
-      if (password.length < 6) return alert('Contraseña mínimo 6 caracteres');
-
-      const existing = Storage.findUser(email);
-      if (existing) {
-        if (existing.password !== password) return alert('Contraseña incorrecta');
-        Storage.setCurrent(existing);
-        try{ window.showToast && window.showToast('Sesión iniciada', 'success', 1200); }catch(e){}
-        setTimeout(()=>{ location.href = 'inicio.html'; }, 900);
-      } else {
-        const user = { email, password, createdAt: Date.now(), profile: {} };
-        Storage.addOrUpdateUser(user);
-        Storage.setCurrent(user);
-        try{ window.showToast && window.showToast('Cuenta creada y sesión iniciada', 'success', 1200); }catch(e){}
-        setTimeout(()=>{ location.href = 'inicio.html'; }, 900);
-      }
-    });
-
-    const toggle = loginForm.querySelector('#togglePassword') || loginForm.querySelector('[data-toggle-password]');
-    if (toggle && pwEl) {
-      toggle.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        pwEl.type = pwEl.type === 'password' ? 'text' : 'password';
-        if (toggle.tagName.toLowerCase() === 'button') toggle.textContent = pwEl.type === 'password' ? '👁️' : '🙈';
-      });
-    }
-  }
+  updateAuthSection();
+  setupLoginPageListeners();
 });

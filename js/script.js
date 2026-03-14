@@ -221,13 +221,14 @@ function clearErrors() {
 }
 
 const btn = document.getElementById("crear");
-btn.onclick = () => {
-  clearErrors();
+if (btn) {
+  btn.onclick = () => {
+    clearErrors();
 
-  const nombre = document.getElementById("nombre").value.trim();
-  const apellido = document.getElementById("apellido").value.trim();
-  const email = document.getElementById("email").value.trim();
-  const telefono = document.getElementById("telefono").value.trim();
+    const nombre = document.getElementById("nombre").value.trim();
+    const apellido = document.getElementById("apellido").value.trim();
+    const email = document.getElementById("email").value.trim();
+    const telefono = document.getElementById("telefono").value.trim();
   const password = document.getElementById("password").value.trim();
   const confirm = document.getElementById("confirm").value.trim();
   const terminos = document.getElementById("terminos");
@@ -292,3 +293,4 @@ btn.onclick = () => {
     setTimeout(() => { location.href = "./inicio.html"; }, 900);
   }, 1200);
 };
+}

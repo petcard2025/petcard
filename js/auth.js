@@ -2,7 +2,7 @@
   'use strict';
 
   const ADMIN_SESION_KEY = 'petcard_admin_sesion';
-  const USUARIO_SESION_KEY = 'petcard_sesion';
+  const USUARIO_SESION_KEY = 'petcard_current_user';
 
   // Sistema global de autenticación
   window.PetCardAuth = {

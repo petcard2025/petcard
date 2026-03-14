@@ -23,10 +23,9 @@
       <li><a href="mis-mascotas.html">Mis Mascotas</a></li>
       <li><a href="perfil.html" class="active">Perfil</a></li>
     </ul>
-    <div class="nav-actions">
-      <button class="btn-icon" onclick="window.location.href='notificaciones.html'" ><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></button>
-      <button class="btn btn-danger btn-sm" onclick="window.location.href='login-usuario.html'" id="btn-cerrar-sesion">Iniciar Sesión</button>
-      <button class="btn btn-danger btn-sm" onclick="window.location.href='registro-usuario.html'" id="btn-cerrar-sesion">Registrarse</button>
+    <div id="auth-section" class="auth-section">
+      <a href="login-usuario.html" class="btn-auth">Iniciar sesión</a>
+      <a href="registro-usuario.html" class="btn-auth">Registrarse</a>
     </div>
   </nav>
 
@@ -144,5 +143,6 @@
   </footer>
 <script src="../js/script.js"></script><script src="../js/perfil.js"></script>
 <script src="../js/auth.js"></script><script src="../js/perfil.js"></script>
+<script src="../js/login.js"></script>
 </body>
 </html>

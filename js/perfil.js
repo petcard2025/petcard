@@ -3,7 +3,7 @@
 
     // Claves de localStorage
     const USUARIOS_KEY = 'petcard_usuarios';
-    const SESION_KEY = 'petcard_sesion';
+    const SESION_KEY = 'petcard_current_user';
 
     // Elementos del DOM
     let usuarioActual = null;

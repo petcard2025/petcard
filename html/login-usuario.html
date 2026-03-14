@@ -11,6 +11,10 @@
 <body>
   <nav class="navbar">
     <a href="./inicio.html" class="nav-logo">PETCARD</a>
+    <div id="auth-section" class="auth-section">
+      <a href="./login-usuario.html" class="btn-auth">Iniciar sesión</a>
+      <a href="./registro-usuario.html" class="btn-auth">Registrarse</a>
+    </div>
   </nav>
 
   <div class="right-panel">
@@ -37,7 +41,7 @@
 
       <div class="form-group password-wrapper">
         <input type="password" id="contrasena" placeholder="Contraseña *" />
-        <button class="eye-btn" onclick="togglePassword()" aria-label="Mostrar contraseña">
+        <button class="eye-btn" aria-label="Mostrar contraseña">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
             <circle cx="12" cy="12" r="3"/>
@@ -47,7 +51,7 @@
 
       <a href="#" class="forgot-link">¿Olvidaste tu Contraseña?</a>
 
-      <button class="btn-ingresar" id="btn-ingresar" onclick="handleLogin()">Ingresar</button>
+      <button class="btn-ingresar" id="btn-ingresar">Ingresar</button>
 
       <p class="create-account">¿No tienes cuenta? <a href="./registro-usuario.html">Crear cuenta</a></p>
 
@@ -58,56 +62,6 @@
     <div class="illustration-container"></div>
   </div>
 
-  <script>
-    function togglePassword() {
-      const input = document.getElementById('contrasena');
-      input.type = input.type === 'password' ? 'text' : 'password';
-    }
-
-    function showError(msg) {
-      const el = document.getElementById('error-login');
-      el.textContent = msg;
-      el.style.display = 'block';
-      document.getElementById('success-login').style.display = 'none';
-    }
-
-    function showSuccess(msg) {
-      const el = document.getElementById('success-login');
-      el.textContent = msg;
-      el.style.display = 'block';
-      document.getElementById('error-login').style.display = 'none';
-    }
-
-    function handleLogin() {
-      const tipoDoc   = document.getElementById('tipo-documento').value;
-      const numDoc    = document.getElementById('numero-documento').value.trim();
-      const password  = document.getElementById('contrasena').value;
-
-      if (!tipoDoc) { showError('Por favor selecciona el tipo de documento.'); return; }
-      if (!numDoc)  { showError('Por favor ingresa tu número de documento.'); return; }
-      if (numDoc.length < 4) { showError('El número de documento no es válido.'); return; }
-      if (!password) { showError('Por favor ingresa tu contraseña.'); return; }
-      if (password.length < 6) { showError('La contraseña debe tener al menos 6 caracteres.'); return; }
-
-      const usuarios = JSON.parse(localStorage.getItem('petcard_usuarios') || '[]');
-      const usuario  = usuarios.find(u => u.documento === numDoc && u.tipoDocumento === tipoDoc && u.password === password);
-
-      if (!usuario) {
-        showError('Credenciales incorrectas. Verifica tus datos o crea una cuenta.');
-        return;
-      }
-
-      showSuccess(`¡Bienvenido/a, ${usuario.nombre}! Redirigiendo...`);
-      localStorage.setItem('petcard_sesion', JSON.stringify(usuario));
-
-      setTimeout(() => {
-        window.location.href = './inicio.html';
-      }, 1500);
-    }
-
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') handleLogin();
-    });
-  </script>
+  <script src="../js/login.js"></script>
 </body>
 </html>
