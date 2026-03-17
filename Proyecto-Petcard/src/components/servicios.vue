@@ -1,3 +1,9 @@
+<script setup>
+import Inicio from './inicio.vue';
+
+</script>
+
+
 <template>
     <!-- NAVBAR -->
   <nav class="navbar">
@@ -11,8 +17,8 @@
       PETCARD
     </a>
     <ul class="nav-links">
-      <li><a href="inicio.html">Inicio</a></li>
-      <li><a href="servicios.html" class="active">Servicios</a></li>
+      <li><a href="inicio">Inicio</a></li>
+      <li><a href="servicios" class="active">Servicios</a></li>
       <li><a href="citas.html">Citas</a></li>
       <li><a href="alimentacion.html">Alimentación</a></li>
       <li><a href="carnet-vacunas.html">Carnet de Vacunas</a></li>
