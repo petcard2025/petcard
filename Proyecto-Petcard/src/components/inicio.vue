@@ -9,7 +9,7 @@ import servicios  from './servicios.vue';
   <a href="./inicio.html" class="nav-logo">PETCARD</a>
 
   <ul class="nav-links">
-    <li><a href="./inicio.html" class="active">Inicio</a></li>
+    <li><a href="inicio" class="active">Inicio</a></li>
     <li><a href=servicios>Servicios</a></li>
     <li><a href="./citas.html">Citas</a></li>
     <li><a href="./alimentacion.html">Alimentación</a></li>
@@ -17,8 +17,6 @@ import servicios  from './servicios.vue';
     <li><a href="./mis-mascotas.html">Mis Mascotas</a></li>
     <li><a href="./perfil.html">Perfil</a></li>
   </ul>
-   <button @click="cambiarVista('servicios')">Servicios</button>
-
   <div id="auth-section" class="auth-section">
     <a href="./login-usuario.html" class="btn-auth">Iniciar sesión</a>
     <a href="./registro-usuario.html" class="btn-auth">Registrarse</a>
