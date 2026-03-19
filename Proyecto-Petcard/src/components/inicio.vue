@@ -1,25 +1,26 @@
 <script setup>
-import servicios  from './servicios.vue';
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 </script>
 
 
 <template>
     <nav class="navbar">
-  <a href="./inicio.html" class="nav-logo">PETCARD</a>
+  <router-link to="/inicio" class="nav-logo">PETCARD</router-link>
 
   <ul class="nav-links">
-    <li><a href="inicio" class="active">Inicio</a></li>
-    <li><a href=servicios>Servicios</a></li>
-    <li><a href="./citas.html">Citas</a></li>
-    <li><a href="./alimentacion.html">Alimentación</a></li>
-    <li><a href="./carnet-vacunas.html">Carnet</a></li>
-    <li><a href="./mis-mascotas.html">Mis Mascotas</a></li>
-    <li><a href="./perfil.html">Perfil</a></li>
+    <li><router-link to="/inicio" class="active">Inicio</router-link></li>
+    <li><router-link to="/servicios">Servicios</router-link></li>
+    <li><router-link to="/citas">Citas</router-link></li>
+    <li><router-link to="/alimentacion">Alimentación</router-link></li>
+    <li><router-link to="/carnet">Carnet</router-link></li>
+    <li><router-link to="/perfil">Mi Perfil</router-link></li>
+    <li><router-link to="/notificaciones">Notificaciones</router-link></li>
   </ul>
   <div id="auth-section" class="auth-section">
-    <a href="./login-usuario.html" class="btn-auth">Iniciar sesión</a>
-    <a href="./registro-usuario.html" class="btn-auth">Registrarse</a>
+    <button class="btn-auth" @click="alert('Login no configurado aún')">Iniciar sesión</button>
+    <button class="btn-auth" @click="alert('Registro no configurado aún')">Registrarse</button>
   </div>
 </nav>
 
@@ -29,8 +30,8 @@ import servicios  from './servicios.vue';
     <p>gestiona citas, historial médico y toda la información de tus mascotas en un solo lugar.</p>
 
     <div class="hero-btns">
-      <button class="btn btn-primary btn-lg" onclick="window.location.href='citas.html'" id="btn-agendar">Agendar cita</button>
-      <button class="btn btn-outline-white btn-lg" onclick="window.location.href='servicios.html'">Ver servicios</button>
+      <router-link to="/citas" class="btn btn-primary btn-lg" id="btn-agendar">Agendar cita</router-link>
+      <router-link to="/servicios" class="btn btn-outline-white btn-lg">Ver servicios</router-link>
     </div>
   </div>
 </section>

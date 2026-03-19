@@ -1,13 +1,14 @@
 <script setup>
-import Inicio from './inicio.vue';
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 </script>
 
 
 <template>
     <!-- NAVBAR -->
   <nav class="navbar">
-    <a href="inicio.html" class="nav-logo">
+    <router-link to="/servicios" class="nav-logo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="currentColor" opacity=".15"/>
         <circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/>
@@ -15,19 +16,19 @@ import Inicio from './inicio.vue';
         <path d="M9 14s1 1.5 3 1.5 3-1.5 3-1.5" stroke-linecap="round"/>
       </svg>
       PETCARD
-    </a>
+    </router-link>
     <ul class="nav-links">
-      <li><a href="inicio">Inicio</a></li>
-      <li><a href="servicios" class="active">Servicios</a></li>
-      <li><a href="citas.html">Citas</a></li>
-      <li><a href="alimentacion.html">Alimentación</a></li>
-      <li><a href="carnet-vacunas.html">Carnet de Vacunas</a></li>
-      <li><a href="mis-mascotas.html">Mis Mascotas</a></li>
-      <li><a href="perfil.html">Perfil</a></li>
+      <li><router-link to="/inicio">Inicio</router-link></li>
+      <li><router-link to="/servicios" class="active">Servicios</router-link></li>
+      <li><router-link to="/citas">Citas</router-link></li>
+      <li><router-link to="/alimentacion">Alimentación</router-link></li>
+      <li><router-link to="/carnet">Carnet de Vacunas</router-link></li>
+      <li><router-link to="/perfil">Mi Perfil</router-link></li>
+      <li><router-link to="/notificaciones">Notificaciones</router-link></li>
     </ul>
     <div id="auth-section" class="auth-section">
-      <a href="login-usuario.html" class="btn-auth">Iniciar sesión</a>
-      <a href="registro-usuario.html" class="btn-auth">Registrarse</a>
+      <button class="btn-auth" @click="alert('Login no configurado aún')">Iniciar sesión</button>
+      <button class="btn-auth" @click="alert('Registro no configurado aún')">Registrarse</button>
     </div>
   </nav>
 
@@ -56,7 +57,7 @@ import Inicio from './inicio.vue';
               <div class="stars">★★★★★ <span>5.0</span></div>
               <span class="servicio-precio">$50 – $80</span>
             </div>
-            <button class="btn btn-primary btn-full" onclick="window.location.href='citas.html'" data-servicio="Consulta General" id="btn-agendar-0">Agendar Cita</button>
+            <router-link to="/citas" class="btn btn-primary btn-full" data-servicio="Consulta General" id="btn-agendar-0" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -74,7 +75,7 @@ import Inicio from './inicio.vue';
               <div class="stars">★★★★★ <span>5.0</span></div>
               <span class="servicio-precio">$30 – $60</span>
             </div>
-            <button class="btn btn-success btn-full" onclick="window.location.href='citas.html'"data-servicio="Vacunación" id="btn-agendar-1">Agendar Cita</button>
+            <router-link to="/citas" class="btn btn-success btn-full" data-servicio="Vacunación" id="btn-agendar-1" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -92,7 +93,7 @@ import Inicio from './inicio.vue';
               <div class="stars">★★★★★ <span>5.0</span></div>
               <span class="servicio-precio">$200 – $800</span>
             </div>
-            <button class="btn btn-primary btn-full" onclick="window.location.href='citas.html'" style="background:#7c3aed;" data-servicio="Cirugías" id="btn-agendar-2">Agendar Cita</button>
+            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#7c3aed;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Cirugías" id="btn-agendar-2">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -110,7 +111,7 @@ import Inicio from './inicio.vue';
               <div class="stars">★★★★★ <span>5.0</span></div>
               <span class="servicio-precio">$150 – $400</span>
             </div>
-            <button class="btn btn-danger btn-full" onclick="window.location.href='citas.html'"  data-servicio="Emergencias" id="btn-agendar-3">Agendar Cita</button>
+            <router-link to="/citas" class="btn btn-danger btn-full" data-servicio="Emergencias" id="btn-agendar-3" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -128,7 +129,7 @@ import Inicio from './inicio.vue';
               <div class="stars">★★★★★ <span>5.0</span></div>
               <span class="servicio-precio">$40 – $120</span>
             </div>
-            <button class="btn btn-primary btn-full" onclick="window.location.href='citas.html'" style="background:#0d9488;" data-servicio="Análisis" id="btn-agendar-4">Agendar Cita</button>
+            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#0d9488;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Análisis" id="btn-agendar-4">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -146,7 +147,7 @@ import Inicio from './inicio.vue';
               <div class="stars">★★★★★ <span>5.0</span></div>
               <span class="servicio-precio">$80 – $150</span>
             </div>
-            <button class="btn btn-primary btn-full" onclick="window.location.href='citas.html'" style="background:#16a34a;" data-servicio="Radiografías" id="btn-agendar-5">Agendar Cita</button>
+            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#16a34a;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Radiografías" id="btn-agendar-5">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -164,7 +165,7 @@ import Inicio from './inicio.vue';
               <div class="stars">★★★★★ <span>5.0</span></div>
               <span class="servicio-precio">$25 – $60</span>
             </div>
-            <button class="btn btn-primary btn-full" onclick="window.location.href='citas.html'"  style="background:#92400e;" data-servicio="Desparasitación" id="btn-agendar-6">Agendar Cita</button>
+            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#92400e;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Desparasitación" id="btn-agendar-6">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -182,7 +183,7 @@ import Inicio from './inicio.vue';
               <div class="stars">★★★★★ <span>5.0</span></div>
               <span class="servicio-precio">$100 – $300</span>
             </div>
-            <button class="btn btn-primary btn-full" onclick="window.location.href='citas.html'"  style="background:#db2777;" data-servicio="Odontología" id="btn-agendar-7">Agendar Cita</button>
+            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#db2777;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Odontología" id="btn-agendar-7">Agendar Cita</router-link>
           </div>
         </div>
 
