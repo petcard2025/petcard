@@ -1,0 +1,7 @@
+/* citas.css — Pantalla de Agendamiento de Citas (Usuario). Requiere: shared.css */
+.servicio-pop { display:flex; justify-content:space-between; align-items:flex-start; padding:.55rem 0; border-bottom:1px solid var(--border); }
+.servicio-pop:last-of-type { border-bottom:none; }
+.sp-nombre { font-weight:700; font-size:.88rem; color:var(--purple); }
+.sp-dur { font-size:.75rem; color:var(--muted); }
+.ver-todas { display:block; text-align:center; margin-top:.75rem; font-size:.83rem; font-weight:700; color:var(--purple); }
+. 
