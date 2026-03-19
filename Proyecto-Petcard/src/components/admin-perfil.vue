@@ -4,45 +4,7 @@ import { ref, onMounted } from 'vue'
 
 const router = useRouter()
 
-// --- ESTADO (Variables reactivas) ---
-const adminActual = ref({
-  nombre: 'Administrador',
-  apellido: '',
-  email: '',
-  telefono: '',
-  direccion: '',
-  id: 'admin_001'
-})
 
-const editando = ref(false)
-const ADMIN_SESION_KEY = 'petcard_admin_sesion'
-
-// --- LÓGICA ---
-onMounted(() => {
-  const sesion = localStorage.getItem(ADMIN_SESION_KEY)
-  if (sesion) {
-    adminActual.value = JSON.parse(sesion)
-  } else {
-    // Si no hay sesión, podrías redirigir: router.push('/login-admin')
-    console.log("No hay sesión activa")
-  }
-})
-
-const toggleEdicion = () => {
-  if (editando.value) {
-    // Guardar cambios
-    localStorage.setItem(ADMIN_SESION_KEY, JSON.stringify(adminActual.value))
-    alert('✅ Perfil actualizado correctamente')
-  }
-  editando.value = !editando.value
-}
-
-const cerrarSesion = () => {
-  if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-    localStorage.removeItem(ADMIN_SESION_KEY)
-    router.push('/') // O a tu página de login
-  }
-}
 </script>
 
 <template>
