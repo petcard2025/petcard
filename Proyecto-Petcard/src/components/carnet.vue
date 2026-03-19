@@ -205,5 +205,4 @@ const router = useRouter()
     </div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>
-
-<template></template>
+</template>
