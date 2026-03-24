@@ -17,6 +17,7 @@ const router = useRouter()
     <li><router-link to="/carnet">Carnet</router-link></li>
     <li><router-link to="/perfil">Mi Perfil</router-link></li>
     <li><router-link to="/notificaciones">Notificaciones</router-link></li>
+    <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
   </ul>
   <div id="auth-section" class="auth-section">
     <button class="btn-auth" @click="alert('Login no configurado aún')">Iniciar sesión</button>
