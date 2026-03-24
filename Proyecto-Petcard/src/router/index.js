@@ -13,7 +13,7 @@ import AdminAlimentacion from '../components/admin-alimentacion.vue'
 import AdminNotificaciones from '../components/admin-notificaciones.vue'
 import AdminServicios from '../components/admin-servicios.vue'
 import AdminPerfil from '../components/admin-perfil.vue'
-
+import MisMascotas from '../components/mis-mascotas.vue'
 const routes = [
   { path: '/', component: Inicio },
   { path: '/inicio', component: Inicio },
@@ -31,6 +31,7 @@ const routes = [
   { path: '/admin-notificaciones', component: AdminNotificaciones },
   { path: '/admin-servicios', component: AdminServicios },
   { path: '/admin-perfil', component: AdminPerfil },
+  { path: '/mis-mascotas', component: MisMascotas },
 ]
 
 const router = createRouter({
