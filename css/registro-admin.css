@@ -1,0 +1,26 @@
+/* ============================================================
+   registro-admin.css — Registro de Administrador
+   Requiere: shared.css
+   ============================================================ */
+
+body { background: #f8fafc; display: flex; flex-direction: column; min-height: 100vh; }
+
+.auth-wrapper { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; }
+.auth-card { width: 100%; max-width: 520px; text-align: center; }
+.auth-title { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.45rem; margin-bottom: .25rem; }
+.auth-sub { font-size: .875rem; color: var(--muted); margin-bottom: 1.25rem; }
+.auth-footer-text { text-align: center; font-size: .85rem; color: var(--muted); margin: 1rem 0 .5rem; }
+
+/* Ícono admin (escudo violeta) */
+.admin-icon {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: #f5f3ff; border: 2px solid #ddd6fe;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 1rem; color: #7c3aed;
+}
+
+.footer-simple {
+  background: #111827; text-align: center; padding: 1.25rem 1rem;
+  display: flex; flex-direction: column; align-items: center; gap: .4rem;
+}
+.footer-simple p { font-size: .78rem; color: #6b7280; }

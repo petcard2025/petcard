@@ -1,0 +1,13 @@
+/* ============================================================
+   login-admin.css — Inicio de Sesión Administrador
+   Requiere: shared.css
+   ============================================================ */
+body { background: #f8fafc; display: flex; flex-direction: column; min-height: 100vh; }
+.auth-wrapper { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; }
+.auth-card { width: 100%; max-width: 480px; }
+.auth-title { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.5rem; text-align: center; margin-bottom: .25rem; }
+.auth-sub { text-align: center; font-size: .875rem; color: var(--muted); margin-bottom: 1.5rem; }
+.remember-row { display: flex; justify-content: space-between; align-items: center; font-size: .85rem; margin-top: -.25rem; }
+.auth-footer-text { text-align: center; font-size: .85rem; color: var(--muted); margin: 1rem 0 .5rem; }
+.footer-simple { background: #111827; text-align: center; padding: 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; gap: .4rem; }
+.footer-simple p { font-size: .78rem; color: #6b7280; }
