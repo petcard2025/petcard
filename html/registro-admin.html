@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PetCard – Registro de Administrador</title>
+
+  <link rel="stylesheet" href="../css/shared.css"/>
+  <link rel="stylesheet" href="../css/registro-admin.css"/>
+
+  <!-- 🔥 spinner profesional -->
+  <style>
+    .spinner{
+      width:18px;
+      height:18px;
+      border:3px solid rgba(255,255,255,.4);
+      border-top:3px solid white;
+      border-radius:50%;
+      animation:spin .8s linear infinite;
+      display:inline-block;
+    }
+    @keyframes spin{100%{transform:rotate(360deg);}}
+
+    .btn-loading{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      pointer-events:none;
+      opacity:.85;
+    }
+  </style>
+</head>
+
+<body>
+<!-- ===== TU HTML ORIGINAL (NO CAMBIADO) ===== -->
+<nav class="navbar">
+<a href="#" class="nav-logo">PETCARD</a>
+</nav>
+
+<main class="auth-wrapper">
+<div class="auth-card card">
+
+<h1 class="auth-title">Registro de Administrador</h1>
+<p class="auth-sub">Gestiona el sistema y usuarios</p>
+
+<button class="btn btn-secondary btn-full" id="btn-cambiar-rol">Cambiar rol</button>
+
+<div style="margin-top:1.5rem;">
+
+<div class="form-row">
+<div class="form-group">
+<label>Nombre</label>
+<input type="text" class="form-control" id="input-nombre"/>
+</div>
+
+<div class="form-group">
+<label>Apellido</label>
+<input type="text" class="form-control" id="input-apellido"/>
+</div>
+</div>
+
+<div class="form-group">
+<label>Correo Electrónico</label>
+<input type="email" class="form-control" id="input-email"/>
+</div>
+
+<div class="form-group">
+<label>Teléfono</label>
+<input type="tel" class="form-control" id="input-telefono"/>
+</div>
+
+<div class="form-group">
+<label>Contraseña</label>
+<div class="input-wrapper">
+<input type="password" class="form-control" id="input-password"/>
+<button class="input-icon" id="toggle-pass">👁</button>
+</div>
+</div>
+
+<div class="form-group">
+<label>Confirmar Contraseña</label>
+<div class="input-wrapper">
+<input type="password" class="form-control" id="input-confirm"/>
+<button class="input-icon" id="toggle-confirm">👁</button>
+</div>
+</div>
+
+<div class="checkbox-group">
+<input type="checkbox" id="chk-terminos"/>
+<label>Acepto los términos</label>
+</div>
+
+<button class="btn btn-primary btn-full btn-lg"
+id="btn-crear-cuenta" style="margin-top:.5rem;">
+Crear Cuenta
+</button>
+
+</div>
+</div>
+</main>
+
+<footer class="footer-simple">
+<p>© 2024 PetCard</p>
+</footer>
+
+<!-- ========================= -->
+<!-- 🔥 JAVASCRIPT PROFESIONAL -->
+<!-- ========================= -->
+<script src="../js/script.js"></script>
+</body>
+</html>

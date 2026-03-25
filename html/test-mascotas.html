@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Mis Mascotas</title>
+</head>
+<body>
+  <h1>Test del script mis-mascotas.js</h1>
+  <button id="btn-agregar-mascota">Agregar Mascota</button>
+  <div id="mascotas-grid"></div>
+  
+  <script>
+    console.log('Test script started');
+    
+    // Test if button exists
+    const btn = document.getElementById('btn-agregar-mascota');
+    console.log('Button found:', btn);
+    
+    if(btn){
+      btn.addEventListener('click', function(){
+        console.log('Button clicked!');
+        alert('Button works!');
+      });
+      console.log('Click handler attached');
+    }
+  </script>
+  
+  <script src="../js/mis-mascotas.js"></script>
+  
+  <script>
+    console.log('After loading mis-mascotas.js');
+    setTimeout(function(){
+      console.log('Final check - button:', document.getElementById('btn-agregar-mascota'));
+    }, 1000);
+  </script>
+</body>
+</html>

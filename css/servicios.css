@@ -1,0 +1,132 @@
+/* ============================================================
+   servicios.css — Pantalla de Servicios (Usuario)
+   Requiere: shared.css
+   ============================================================ */
+
+/* ── TARJETAS DE SERVICIO ── */
+.servicio-card {
+  padding: 0;
+  overflow: hidden;
+  transition: box-shadow .2s, transform .2s;
+}
+
+.servicio-card:hover {
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  transform: translateY(-2px);
+}
+
+.servicio-img-wrap {
+  position: relative;
+  height: 180px;
+  overflow: hidden;
+}
+
+.servicio-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.servicio-badge {
+  position: absolute;
+  top: .75rem;
+  left: .75rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.servicio-badge.blue   { background: #2563eb; }
+.servicio-badge.green  { background: #16a34a; }
+.servicio-badge.purple { background: #7c3aed; }
+.servicio-badge.red    { background: #dc2626; }
+.servicio-badge.teal   { background: #0d9488; }
+.servicio-badge.orange { background: #ea580c; }
+.servicio-badge.amber  { background: #b45309; }
+.servicio-badge.pink   { background: #db2777; }
+
+.servicio-body {
+  padding: 1.25rem;
+}
+
+.servicio-body h3 {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 1rem;
+  margin-bottom: .4rem;
+}
+
+.servicio-body p {
+  font-size: .83rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: .75rem;
+}
+
+.servicio-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: .85rem;
+}
+
+.stars {
+  color: #f59e0b;
+  font-size: .82rem;
+}
+
+.stars span {
+  color: var(--text-secondary);
+  margin-left: .25rem;
+}
+
+.servicio-precio {
+  font-weight: 700;
+  font-size: .9rem;
+  color: var(--text);
+}
+
+/* ── EMERGENCIAS BANNER ── */
+.emergencia-banner {
+  background: #dc2626;
+  color: #fff;
+  text-align: center;
+  padding: 3rem 1.5rem;
+}
+
+.emergencia-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+}
+
+.emergencia-banner h2 {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  font-size: 1.6rem;
+  margin-bottom: .5rem;
+}
+
+.emergencia-banner p {
+  opacity: .9;
+  max-width: 500px;
+  margin: 0 auto 1.5rem;
+  font-size: .95rem;
+  line-height: 1.6;
+}
+
+.emergencia-btns {
+  display: flex;
+  gap: .75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PetCard Admin – Perfil</title>
+  <link rel="stylesheet" href="../css/shared.css"/>
+  <link rel="stylesheet" href="../css/perfil.css"/>
+</head>
+<body>
+
+  <!-- NAVBAR ADMIN -->
+  <nav class="navbar">
+    <a href="admin-inicio.html" class="nav-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="currentColor" opacity=".15"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/><path d="M9 14s1 1.5 3 1.5 3-1.5 3-1.5" stroke-linecap="round"/></svg>
+      PETCARD
+    </a>
+    <ul class="nav-links" style="margin-left:1.5rem;">
+      <li><a href="admin-alimentacion.html">Alimentación</a></li>
+      <li><a href="admin-carnet.html">Carnet de Vacunas</a></li>
+      <li><a href="admin-notificaciones.html">Notificaciones</a></li>
+      <li><a href="admin-servicios.html">Servicios</a></li>
+      <li><a href="admin-citas.html">Citas</a></li>
+    </ul>
+    <div class="nav-actions">
+      <span id="admin-nombre" style="color: white; margin-right: 1rem; font-weight: 500;"></span>
+      <button class="btn btn-danger btn-sm" id="btn-cerrar-sesion">Cerrar Sesión</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+
+    <!-- Banner de perfil -->
+    <div class="perfil-banner">
+      <div class="perfil-avatar">
+        <svg width="40" height="40" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="perfil-info">
+        <h2 id="perfil-nombre-titulo">Administrador</h2>
+        <p>Rol: Administrador de PetCard</p>
+      </div>
+      <div class="perfil-banner-actions">
+        <button class="btn btn-outline-white btn-sm" id="btn-editar-perfil">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Editar
+        </button>
+        <button class="btn btn-outline-white btn-sm" id="btn-cerrar-perfil">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Cerrar Sesión
+        </button>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <!-- Panel izquierdo -->
+      <div class="card">
+        <div class="card-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Información Personal
+        </div>
+        <p style="font-size:.85rem; color:var(--muted); margin-bottom:1.25rem;">Gestiona tu información de administrador</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nombre Completo</label>
+            <input class="form-control" type="text" id="input-nombre"/>
+          </div>
+          <div class="form-group">
+            <label>Correo Electrónico</label>
+            <input class="form-control" type="email" id="input-email"/>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Teléfono</label>
+            <input class="form-control" type="tel" id="input-telefono"/>
+          </div>
+          <div class="form-group">
+            <label>Rol</label>
+            <input class="form-control" type="text" id="input-rol" disabled value="Administrador"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Dirección</label>
+          <input class="form-control" type="text" id="input-direccion"/>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+
+        <!-- Estadísticas -->
+        <div class="card">
+          <div class="card-title" style="font-size:.95rem;">Información del Sistema</div>
+          <div class="estadistica-row">
+            <span>Estado</span>
+            <strong style="color:var(--green);">✓ Activo</strong>
+          </div>
+          <div class="estadistica-row">
+            <span>Última Sesión</span>
+            <strong id="ultima-sesion">Hoy</strong>
+          </div>
+          <div class="estadistica-row">
+            <span>ID Administrador</span>
+            <strong id="admin-id">admin_001</strong>
+          </div>
+        </div>
+
+        <!-- Acciones Rápidas -->
+        <div class="card">
+          <div class="card-title">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Acciones Rápidas
+          </div>
+          <div class="acciones-grid">
+            <button class="accion-btn" id="btn-ir-inicio">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              Ir al Inicio
+            </button>
+            <button class="accion-btn" id="btn-alimentacion">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 13l6 6 6-6M6 7l6 6 6-6"/></svg>
+              Gestionar Alimentación
+            </button>
+            <button class="accion-btn" id="btn-carnet">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Carnet de Vacunas
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer" style="margin-top:2rem;">
+    <div class="footer-grid">
+      <div class="footer-brand"><span class="nav-logo" style="color:#fff; margin-bottom:.5rem; display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div>
+      <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div>
+      <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
+      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
+    </div>
+    <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
+  </footer>
+
+  <script>
+    (function() {
+      'use strict';
+
+      const ADMIN_SESION_KEY = 'petcard_admin_sesion';
+      let adminActual = null;
+
+      function init() {
+        console.log('Inicializando admin-perfil.js');
+
+        // Cargar datos del admin
+        cargarAdminActual();
+
+        // Configurar eventos
+        configurarEventos();
+
+        // Actualizar UI
+        actualizarUI();
+      }
+
+      function cargarAdminActual() {
+        try {
+          const sesion = localStorage.getItem(ADMIN_SESION_KEY);
+          if (sesion) {
+            adminActual = JSON.parse(sesion);
+            console.log('Admin cargado:', adminActual);
+          } else {
+            console.log('No hay sesión activa');
+            window.location.href = 'login-admin.html';
+            return;
+          }
+        } catch (error) {
+          console.error('Error cargando admin:', error);
+          window.location.href = 'login-admin.html';
+        }
+      }
+
+      function configurarEventos() {
+        // Botón editar perfil
+        const btnEditar = document.getElementById('btn-editar-perfil');
+        if (btnEditar) {
+          btnEditar.addEventListener('click', toggleModoEdicion);
+        }
+
+        // Botón cerrar sesión
+        const btnCerrar = document.getElementById('btn-cerrar-perfil');
+        if (btnCerrar) {
+          btnCerrar.addEventListener('click', cerrarSesion);
+        }
+
+        // Botón cerrar sesión navbar
+        const btnCerrarNav = document.getElementById('btn-cerrar-sesion');
+        if (btnCerrarNav) {
+          btnCerrarNav.addEventListener('click', cerrarSesion);
+        }
+
+        // Botones de acción rápida
+        const btnInicio = document.getElementById('btn-ir-inicio');
+        if (btnInicio) {
+          btnInicio.addEventListener('click', () => {
+            window.location.href = 'admin-inicio.html';
+          });
+        }
+
+        const btnAlimentacion = document.getElementById('btn-alimentacion');
+        if (btnAlimentacion) {
+          btnAlimentacion.addEventListener('click', () => {
+            window.location.href = 'admin-alimentacion.html';
+          });
+        }
+
+        const btnCarnet = document.getElementById('btn-carnet');
+        if (btnCarnet) {
+          btnCarnet.addEventListener('click', () => {
+            window.location.href = 'admin-carnet.html';
+          });
+        }
+      }
+
+      function actualizarUI() {
+        if (!adminActual) return;
+
+        // Actualizar nombre en navbar
+        const nombreNav = document.getElementById('admin-nombre');
+        if (nombreNav) {
+          nombreNav.textContent = `${adminActual.nombre} ${adminActual.apellido || ''}`.trim();
+        }
+
+        // Actualizar nombre en banner
+        const nombreTitulo = document.getElementById('perfil-nombre-titulo');
+        if (nombreTitulo) {
+          nombreTitulo.textContent = `${adminActual.nombre} ${adminActual.apellido || ''}`.trim();
+        }
+
+        // Llenar formulario
+        const inputNombre = document.getElementById('input-nombre');
+        const inputEmail = document.getElementById('input-email');
+        const inputTelefono = document.getElementById('input-telefono');
+        const inputDireccion = document.getElementById('input-direccion');
+        const adminId = document.getElementById('admin-id');
+
+        if (inputNombre) inputNombre.value = `${adminActual.nombre} ${adminActual.apellido || ''}`.trim();
+        if (inputEmail) inputEmail.value = adminActual.email || '';
+        if (inputTelefono) inputTelefono.value = adminActual.telefono || '';
+        if (inputDireccion) inputDireccion.value = adminActual.direccion || '';
+        if (adminId) adminId.textContent = adminActual.id || 'admin_001';
+
+        // Deshabilitar inputs inicialmente
+        deshabilitarInputs(true);
+      }
+
+      function toggleModoEdicion() {
+        const inputs = document.querySelectorAll('#input-nombre, #input-email, #input-telefono, #input-direccion');
+        const btnEditar = document.getElementById('btn-editar-perfil');
+
+        const enModoEdicion = inputs[0] && !inputs[0].disabled;
+
+        if (enModoEdicion) {
+          // Guardar cambios
+          guardarCambios();
+          deshabilitarInputs(true);
+          if (btnEditar) {
+            btnEditar.innerHTML = `
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Editar
+            `;
+          }
+        } else {
+          // Entrar en modo edición
+          deshabilitarInputs(false);
+          if (btnEditar) {
+            btnEditar.innerHTML = `
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+              Guardar
+            `;
+          }
+        }
+      }
+
+      function deshabilitarInputs(disabled) {
+        const inputs = document.querySelectorAll('#input-nombre, #input-email, #input-telefono, #input-direccion');
+        inputs.forEach(input => {
+          input.disabled = disabled;
+          input.classList.toggle('form-control-disabled', disabled);
+        });
+      }
+
+      function guardarCambios() {
+        if (!adminActual) return;
+
+        const inputNombre = document.getElementById('input-nombre');
+        const inputEmail = document.getElementById('input-email');
+        const inputTelefono = document.getElementById('input-telefono');
+        const inputDireccion = document.getElementById('input-direccion');
+
+        // Validar datos
+        const nombreCompleto = inputNombre.value.trim();
+        const email = inputEmail.value.trim();
+        const telefono = inputTelefono.value.trim();
+
+        if (!nombreCompleto) {
+          alert('⚠️ El nombre es obligatorio');
+          return;
+        }
+
+        if (!email) {
+          alert('⚠️ El email es obligatorio');
+          return;
+        }
+
+        // Separar nombre y apellido
+        const partesNombre = nombreCompleto.split(' ');
+        const nombre = partesNombre[0] || '';
+        const apellido = partesNombre.slice(1).join(' ') || '';
+
+        // Actualizar datos
+        adminActual.nombre = nombre;
+        adminActual.apellido = apellido;
+        adminActual.email = email;
+        adminActual.telefono = telefono;
+        adminActual.direccion = inputDireccion.value.trim();
+
+        // Guardar en localStorage
+        try {
+          localStorage.setItem(ADMIN_SESION_KEY, JSON.stringify(adminActual));
+          actualizarUI();
+          alert('✅ Perfil actualizado correctamente');
+        } catch (error) {
+          console.error('Error guardando cambios:', error);
+          alert('❌ Error al guardar los cambios');
+        }
+      }
+
+      function cerrarSesion() {
+        if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+          localStorage.removeItem(ADMIN_SESION_KEY);
+          window.location.href = 'login-admin.html';
+        }
+      }
+
+      // Inicializar
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+
+</body>
+</html>
