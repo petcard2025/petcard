@@ -1,11 +1,5 @@
-<script setup>
-import { useRouter } from 'vue-router'  
-
-const router = useRouter()  
-</script>
-
 <template>
-  <div>
+  <div class="page-container">
     <nav class="navbar">
      <router-link to="/inicio" class="nav-logo">PETCARD</router-link>
 
@@ -24,12 +18,9 @@ const router = useRouter()
     <button class="btn-auth" @click="alert('Registro no configurado aún')">Registrarse</button>
   </div>
 </nav>
-      <div id="auth-section" class="auth-section">
-        <button class="btn-auth" @click="alert('Login no configurado aún')">Iniciar sesión</button>
-        <button class="btn-auth" @click="alert('Registro no configurado aún')">Registrarse</button>
-      </div>
+
     <!-- Grid de mascotas -->
-    <div id="mascotas-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
+    <div class="mascotas-grid">
       <div
         v-for="pet in pets"
         :key="pet.id"
@@ -129,7 +120,16 @@ const router = useRouter()
 
         <div style="display:flex;flex-direction:column;gap:.75rem;">
           <input class="form-control" placeholder="Nombre"       v-model="formData.nombre" />
-          <input class="form-control" placeholder="Tipo / Raza"  v-model="formData.tipo" />
+          <select class="form-control" v-model="formData.tipo">
+            <option disabled value="">Tipo / Raza</option>
+            <option>Perro</option>
+            <option>Gato</option>
+            <option>Loro</option>
+            <option>Conejo</option>
+            <option>Hamster</option>
+            <option>Canario</option>
+            <option>Pez</option>
+          </select>
           <input class="form-control" placeholder="Peso"         v-model="formData.peso" />
           <input class="form-control" placeholder="Color"        v-model="formData.color" />
           <input class="form-control" type="date"                v-model="formData.ultima" />
@@ -198,15 +198,15 @@ const router = useRouter()
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // ── Constantes ──────────────────────────────────────────────
 const STORAGE_KEY = 'pc_pets_v1'
 
 const avatarOptions = [
-  '🐶','🐱','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮',
-  '🐷','🐸','🦆','🦅','🦉','🦋','🐢','🐍','🦎','🦗',
-  '🦑','🐙','🐚','🦀','🐡','🐠','🐟','🐬','🐳','🐴',
-  '🦄','🦚','🦜','🦢'
+  '🐶', '🐱', '🦜', '🐰', '🐹', '🐢', '🐠'
 ]
 
 const detailFields = {
@@ -285,7 +285,7 @@ function savePet() {
       savePets(list)
     }
   } else {
-    list.push({ id: 'p_' + Date.now(), ...formData })
+    list.push({ id: 'p_' + Date.now(), vacunas: [], ...formData })
     savePets(list)
   }
 
@@ -303,7 +303,7 @@ function openDetail(pet) {
 }
 
 function goToCita(id) {
-  window.location.href = 'citas.html?mascota=' + encodeURIComponent(id)
+  router.push({ path: '/citas', query: { mascota: id } })
 }
 
 // ── Vacunas ──────────────────────────────────────────────────
@@ -451,5 +451,222 @@ async function downloadPdf(pet) {
 table th, table td {
   padding: .3rem .4rem;
   vertical-align: middle;
+}
+
+.page-container {
+  max-width: 1160px;
+  margin: 1.5rem auto;
+  padding: 0 1rem;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.nav-logo {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-links li a {
+  text-decoration: none;
+  color: #334155;
+  font-weight: 600;
+  padding: .4rem .6rem;
+  border-radius: 8px;
+}
+
+.nav-links li a.active,
+.nav-links li a:hover {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.auth-section {
+  display: flex;
+  gap: .5rem;
+}
+
+.btn-auth, .btn {
+  cursor: pointer;
+  border: 1px solid #3b82f6;
+  background: #3b82f6;
+  color: white;
+  border-radius: 8px;
+  padding: .55rem .95rem;
+  font-weight: 600;
+  transition: all .2s ease;
+}
+
+.btn-auth:hover, .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(59,130,246,0.2);
+}
+
+.btn-outline-primary {
+  background: white;
+  color: #1d4ed8;
+  border: 1px solid #1d4ed8;
+}
+
+.btn-outline-primary:hover {
+  background: #eff6ff;
+}
+
+.btn-secondary {
+  background: #64748b;
+  border-color: #64748b;
+}
+
+.btn-secondary:hover {
+  background: #475569;
+}
+
+.btn-sm {
+  font-size: .8rem;
+  padding: .4rem .7rem;
+}
+
+.mascotas-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:1rem;
+  margin-bottom: 1.2rem;
+}
+
+.mascota-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.06);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.mascota-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.15);
+}
+
+.mascota-top {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .8rem;
+}
+
+.mascota-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: #fef3c7;
+}
+
+.mascota-info {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+
+.mascota-nombre {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mascota-tipo {
+  color: #64748b;
+  font-size: .85rem;
+}
+
+.mascota-actions {
+  margin-left: auto;
+  display: flex;
+  gap: .25rem;
+}
+
+.btn-icon {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #334155;
+}
+
+.btn-icon:hover {
+  background: #f1f5f9;
+}
+
+.microchip-tag {
+  margin: .6rem 0;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  padding: .4rem .6rem;
+  border-radius: 8px;
+  font-size: .85rem;
+}
+
+.mascota-btns {
+  display: flex;
+  gap: .5rem;
+  margin-top: .75rem;
+}
+
+#btn-agregar-mascota {
+  margin-top: 1rem;
+  width: 250px;
+}
+
+.modal-box {
+  max-width: 95%;
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.25);
+}
+
+.form-control {
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  padding: .55rem .7rem;
+  background: white;
+  color: #0f172a;
+  width: 100%;
+}
+
+.form-control:focus {
+  border-color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
 }
 </style>
