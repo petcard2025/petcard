@@ -1,6 +1,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, reactive } from 'vue'
+import { usuariosAPI } from '../api.js'
 
 const router = useRouter()
 
@@ -79,26 +80,16 @@ const handleRegistro = async () => {
   console.log('⏳ Iniciando registro...')
 
   try {
-    console.log('🔗 Haciendo petición POST a: http://localhost:3000/api/usuarios')
-    const response = await fetch('http://localhost:3000/api/usuarios', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        Nombre: formData.nombre.trim(),
-        Correo: formData.correo.trim(),
-        Telefono: formData.telefono.trim(),
-        Contrasena: formData.contrasena,
-        Rol: 'cliente'
-      })
+    console.log('🔗 Creando usuario via API')
+    const data = await usuariosAPI.crear({
+      Nombre: formData.nombre.trim(),
+      Correo: formData.correo.trim(),
+      Telefono: formData.telefono.trim(),
+      Contrasena: formData.contrasena,
+      Rol: 'cliente'
     })
 
-    console.log('📨 Response status:', response.status)
-    const data = await response.json()
-    console.log('📦 Response data:', data)
-
-    if (response.ok && data.ID_usuario) {
+    if (data.ID_usuario) {
       successMessage.value = '¡Cuenta creada exitosamente! Redirigiendo...'
       localStorage.setItem('petcard_usuario_actual', JSON.stringify(data))
       console.log('✅ Registro exitoso')
