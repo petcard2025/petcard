@@ -1,6 +1,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, reactive } from 'vue'
+import { loginAPI } from '../api.js'
 
 const router = useRouter()
 
@@ -34,23 +35,10 @@ const handleLogin = async () => {
   console.log('⏳ Iniciando login...')
 
   try {
-    console.log('🔗 Haciendo petición a: http://localhost:3000/api/login')
-    const response = await fetch('http://localhost:3000/api/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        Correo: correo,
-        Contrasena: contrasena
-      })
-    })
+    console.log('🔗 Haciendo petición a la API')
+    const data = await loginAPI.loginUsuario(correo, contrasena)
 
-    console.log('📨 Response status:', response.status)
-    const data = await response.json()
-    console.log('📦 Response data:', data)
-
-    if (response.ok && data.message === 'Login exitoso') {
+    if (data.message === 'Login exitoso') {
       successMessage.value = `¡Bienvenido/a, ${data.usuario.Nombre}!`
       localStorage.setItem('petcard_usuario_actual', JSON.stringify(data.usuario))
       console.log('✅ Login exitoso')
