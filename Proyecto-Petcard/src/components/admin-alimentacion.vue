@@ -1,11 +1,10 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
+const { usuarioLogueado, cerrarSesion } = useAuth()
 
-const cerrarSesion = () => {
-  alert('Cierre de sesión no configurado aún')
-}
 </script>
 
 <template>
@@ -22,7 +21,7 @@ const cerrarSesion = () => {
       <li><router-link to="/admin-citas">Citas</router-link></li>
     </ul>
     <div class="nav-actions">
-      <span id="admin-nombre" style="color: white; margin-right: 1rem; font-weight: 500;"></span>
+      <span style="color: white; margin-right: 1rem; font-weight: 500;">{{ usuarioLogueado ? usuarioLogueado.Nombre : 'Admin' }}</span>
       <router-link to="/admin-perfil" class="btn btn-outline-white btn-sm" title="Ver Perfil" style="text-decoration:none;display:inline-block;">👤</router-link>
       <button class="btn btn-danger btn-sm" @click="cerrarSesion">Cerrar Sesión</button>
     </div>

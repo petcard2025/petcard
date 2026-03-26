@@ -1,7 +1,9 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
+const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
 </script>
 
 <template>
@@ -22,8 +24,14 @@ const router = useRouter()
       <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
     </ul>
     <div id="auth-section" class="auth-section">
-      <button class="btn-auth" @click="alert('Login no configurado aún')">Iniciar sesión</button>
-      <button class="btn-auth" @click="alert('Registro no configurado aún')">Registrarse</button>
+      <template v-if="usuarioLogueado">
+        <span class="usuario-nombre">{{ usuarioLogueado.Nombre }}</span>
+        <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
+      </template>
+      <template v-else>
+        <button class="btn-auth" @click="irALogin">Iniciar sesión</button>
+        <button class="btn-auth" @click="irARegistro">Registrarse</button>
+      </template>
     </div>
   </nav>
 
@@ -200,3 +208,278 @@ const router = useRouter()
 
 
  </template>
+ 
+ <script>
+document.addEventListener("DOMContentLoaded", function(){
+
+const filtros = document.querySelectorAll(".filtro-item");
+const notificaciones = document.querySelectorAll(".notif-item");
+const btnLeidas = document.getElementById("btn-marcar-leidas");
+
+/* FILTRAR NOTIFICACIONES */
+
+filtros.forEach(filtro=>{
+
+filtro.addEventListener("click",()=>{
+
+filtros.forEach(f=>f.classList.remove("active"));
+filtro.classList.add("active");
+
+let categoria = filtro.dataset.cat;
+
+notificaciones.forEach(notif=>{
+
+if(categoria==="todas"){
+notif.style.display="flex";
+}else{
+notif.style.display =
+notif.dataset.cat === categoria ? "flex":"none";
+}
+
+});
+
+});
+
+});
+
+/* MARCAR TODAS COMO LEIDAS */
+
+if(btnLeidas){
+btnLeidas.addEventListener("click",()=>{
+
+notificaciones.forEach(n=>{
+n.style.opacity="0.6";
+});
+
+alert("Todas las notificaciones fueron marcadas como leídas");
+
+});
+}
+
+/* CLICK EN NOTIFICACION */
+
+notificaciones.forEach(n=>{
+
+n.addEventListener("click",()=>{
+
+n.style.background="#f0f0f0";
+n.style.opacity="0.6";
+
+});
+
+});
+
+});
+
+</script>
+
+<style>
+/* ============================================================
+   notificaciones.css — Pantalla de Notificaciones (Usuario)
+   Requiere: shared.css
+   ============================================================ */
+
+/* ── ÍCONO CON PUNTO ── */
+.active-notif { position: relative; }
+.notif-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+/* ── FILTROS ── */
+.filtros-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  margin-bottom: 1.25rem;
+}
+
+.filtro-item {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem .75rem;
+  border-radius: var(--radius-sm);
+  font-size: .875rem;
+  cursor: pointer;
+  transition: background .2s;
+  color: var(--text-secondary);
+}
+
+.filtro-item:hover { background: var(--bg); }
+
+.filtro-item.active {
+  background: var(--purple-bg);
+  color: var(--purple);
+  font-weight: 700;
+}
+
+.filtro-count {
+  margin-left: auto;
+  background: var(--border);
+  border-radius: 99px;
+  padding: .1rem .45rem;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.filtro-item.active .filtro-count {
+  background: var(--purple);
+  color: #fff;
+}
+
+/* ── CONFIGURACIÓN ── */
+.config-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: .82rem;
+  margin-bottom: .65rem;
+}
+
+/* Toggle switch */
+.toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.toggle input { display: none; }
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 99px;
+  transition: background .2s;
+}
+
+.slider::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform .2s;
+}
+
+.toggle input:checked + .slider { background: var(--purple); }
+.toggle input:checked + .slider::before { transform: translateX(16px); }
+
+/* ── NOTIFICACIONES HEADER ── */
+.notif-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.notif-title {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+/* ── LISTA DE NOTIFICACIONES ── */
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: .85rem;
+  padding: 1rem;
+  background: #fff;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  transition: border-color .2s;
+}
+
+.notif-item:hover { border-color: #d1d5db; }
+
+.notif-item.leida { opacity: .6; }
+
+.notif-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.notif-icon.blue   { background: var(--purple); }
+.notif-icon.yellow { background: var(--yellow); }
+.notif-icon.orange { background: var(--orange); }
+.notif-icon.green  { background: var(--green); }
+.notif-icon.purple { background: #7c3aed; }
+.notif-icon.gray   { background: var(--muted); }
+.notif-icon.red    { background: var(--red); }
+
+.notif-body { flex: 1; }
+
+.notif-titulo {
+  font-weight: 700;
+  font-size: .9rem;
+  margin-bottom: .2rem;
+}
+
+.notif-desc {
+  font-size: .82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: .25rem;
+}
+
+.notif-tiempo {
+  font-size: .75rem;
+  color: var(--muted);
+}
+
+.notif-dots {
+  color: var(--muted);
+  font-size: .85rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Usuario logueado */
+.usuario-nombre {
+  color: #0f172a;
+  font-weight: 600;
+  margin-right: 1rem;
+  font-size: 0.95rem;
+}
+
+.btn-logout {
+  background-color: #dc3545;
+  border: 1px solid #dc3545;
+}
+
+.btn-logout:hover {
+  background-color: #c82333;
+  border-color: #c82333;
+}
+
+</style>

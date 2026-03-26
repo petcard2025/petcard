@@ -14,6 +14,11 @@ import AdminNotificaciones from '../components/admin-notificaciones.vue'
 import AdminServicios from '../components/admin-servicios.vue'
 import AdminPerfil from '../components/admin-perfil.vue'
 import MisMascotas from '../components/mis-mascotas.vue'
+import LoginUsuario from '../components/login-usuario.vue'
+import LoginAdmin from '../components/login-admin.vue'
+import RegistroUsuario from '../components/registro-usuario.vue'
+import RegistroAdmin from '../components/registro-admin.vue'
+import TestAPI from '../components/test-api.vue'
 const routes = [
   { path: '/', component: Inicio },
   { path: '/inicio', component: Inicio },
@@ -32,6 +37,11 @@ const routes = [
   { path: '/admin-servicios', component: AdminServicios },
   { path: '/admin-perfil', component: AdminPerfil },
   { path: '/mis-mascotas', component: MisMascotas },
+  { path: '/login-usuario', component: LoginUsuario },
+  { path: '/login-admin', component: LoginAdmin },
+  { path: '/registro-usuario', component: RegistroUsuario },
+  { path: '/registro-admin', component: RegistroAdmin },
+  { path: '/test-api', component: TestAPI },
 ]
 
 const router = createRouter({
