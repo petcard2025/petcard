@@ -1,7 +1,9 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
+const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
 </script>
 
 <template>
@@ -23,8 +25,14 @@ const router = useRouter()
 
     </ul>
     <div id="auth-section" class="auth-section">
-      <button class="btn-auth" @click="alert('Login no configurado aún')">Iniciar sesión</button>
-      <button class="btn-auth" @click="alert('Registro no configurado aún')">Registrarse</button>
+      <template v-if="usuarioLogueado">
+        <span class="usuario-nombre">{{ usuarioLogueado.Nombre }}</span>
+        <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
+      </template>
+      <template v-else>
+        <button class="btn-auth" @click="irALogin">Iniciar sesión</button>
+        <button class="btn-auth" @click="irARegistro">Registrarse</button>
+      </template>
     </div>
   </nav>
 
@@ -280,7 +288,253 @@ const router = useRouter()
   </footer>
 
 </template>
-<script>/* JS para Alimentación: horarios, historial, alternativas y marcación de comidas */
+
+<style>
+/* ============================================================
+   alimentacion.css — Pantalla de Alimentación (Usuario)
+   Requiere: shared.css
+   ============================================================ */
+
+/* ── TABS ── */
+.tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.25rem;
+  gap: .25rem;
+}
+
+.tab {
+  background: none;
+  border: none;
+  padding: .6rem 1rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color .2s, border-color .2s;
+}
+
+.tab.active {
+  color: var(--purple);
+  border-bottom-color: var(--purple);
+}
+
+.tab:hover { color: var(--purple); }
+
+/* ── STATS ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.stat-box {
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .4rem;
+}
+
+.stat-box.orange { background: #fff7ed; color: var(--orange); }
+.stat-box.blue   { background: var(--purple-bg); color: var(--purple); }
+.stat-box.green  { background: var(--green-bg); color: var(--green); }
+
+.stat-value {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  font-size: 1.4rem;
+}
+
+.stat-label {
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+/* ── ALIMENTO RECOMENDADO ── */
+.alimento-rec {
+  background: #eff6ff;
+  border-radius: var(--radius-sm);
+  border: 1px solid #bfdbfe;
+  padding: .85rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-size: .85rem;
+}
+
+.alimento-nombre {
+  font-weight: 700;
+  color: var(--purple);
+  margin-bottom: .2rem;
+}
+
+.alimento-detalle { color: var(--muted); font-size: .78rem; }
+
+/* ── COMIDAS LIST ── */
+.comidas-list {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin-bottom: 1rem;
+}
+
+.comida-item {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .65rem .85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.comida-item:last-child { border-bottom: none; }
+
+.comida-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.comida-icon.gray      { background: #f3f4f6; color: var(--muted); }
+.comida-icon.green-ic  { background: var(--green-bg); color: var(--green); }
+
+.comida-name {
+  font-weight: 700;
+  font-size: .875rem;
+}
+
+.comida-hora {
+  font-size: .78rem;
+  color: var(--muted);
+}
+
+.comida-cal {
+  margin-left: auto;
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.comida-status {
+  color: var(--muted);
+  display: flex;
+}
+
+.comida-status.green-check { color: var(--green); }
+
+/* ── SUPLEMENTOS ── */
+.suplem-card {
+  background: var(--green-bg);
+  border: 1px solid #86efac;
+  border-radius: var(--radius-sm);
+  padding: .75rem;
+  font-size: .82rem;
+}
+
+.suplem-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  margin-bottom: .25rem;
+  color: var(--green);
+}
+
+/* ── RESTRICCIONES ── */
+.restriccion-item {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .65rem .85rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: .5rem;
+  border-left: 3px solid;
+}
+
+.red-border    { background: var(--red-bg);    border-left-color: var(--red); }
+.yellow-border { background: var(--yellow-bg); border-left-color: var(--yellow); }
+
+.rest-nombre { font-weight: 700; font-size: .875rem; }
+.rest-tipo   { font-size: .75rem; color: var(--muted); }
+
+/* ── OBSERVACIONES ── */
+.observaciones {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-sm);
+  padding: .85rem;
+  font-size: .85rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ── SIDEBAR INFO ── */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: .875rem;
+  padding: .45rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.info-row:last-child { border-bottom: none; }
+.info-row span { color: var(--muted); }
+
+/* ── PRÓXIMAS COMIDAS ── */
+.proxima-comida {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.proxima-comida:last-of-type { border-bottom: none; }
+
+/* ── NUTRIENTE ── */
+.nutriente {
+  margin-bottom: 1rem;
+}
+
+.nutriente-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: .85rem;
+  margin-bottom: .3rem;
+}
+
+/* Usuario logueado */
+.usuario-nombre {
+  color: #0f172a;
+  font-weight: 600;
+  margin-right: 1rem;
+  font-size: 0.95rem;
+}
+
+.btn-logout {
+  background-color: #dc3545;
+  border: 1px solid #dc3545;
+}
+
+.btn-logout:hover {
+  background-color: #c82333;
+  border-color: #c82333;
+}
+
+</style>
+
+<script>
+/* JS para Alimentación: horarios, historial, alternativas y marcación de comidas */
 (function(){
   function qs(id){return document.getElementById(id)}
   function qsa(sel){return Array.from(document.querySelectorAll(sel))}
@@ -320,7 +574,6 @@ const router = useRouter()
         <div class="comida-status ${done? 'green-check':''}">
           ${done? '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>' : '<button class="btn btn-outline-primary btn-sm btn-marcar" data-id="'+h.id+'">Marcar</button>'}
         </div>
-        <button class="btn btn-outline-danger btn-sm" style="margin-left:0.5rem; padding:0.25rem 0.5rem;" data-delete-id="${h.id}" title="Eliminar">✕</button>
       `;
       list.appendChild(item);
     })
@@ -328,11 +581,6 @@ const router = useRouter()
     // attach marcar buttons
     qsa('.btn-marcar').forEach(b=> b.addEventListener('click', function(){
       const id = this.dataset.id; marcarComidaPorId(id);
-    }))
-
-    // attach delete buttons
-    qsa('button[data-delete-id]').forEach(b=> b.addEventListener('click', function(){
-      const id = this.dataset.deleteId; deleteHorarioById(id);
     }))
 
     renderProximas(horarios);
@@ -377,70 +625,13 @@ const router = useRouter()
     if(!nombre || !hora) { alert('Nombre y hora son requeridos'); return }
     const horarios = loadHorarios();
     const item = { id: 'h_'+Date.now(), nombre, hora, cal: cal || '', lastCompleted: null };
-    horarios.push(item); 
-    saveHorarios(horarios);
-    
-    // Registrar en historial
-    const hist = loadHist();
-    const entry = { 
-      fecha: new Date().toLocaleString(), 
-      accion: 'Agregar horario',
-      anterior: '-',
-      nuevo: nombre + ' - ' + hora + ' (' + (cal || '0') + ' cal)',
-      notas: 'Se agregó nuevo horario de comida'
-    };
-    hist.push(entry);
-    saveHist(hist);
-    
-    renderHorarios(); 
-    alert('✓ Horario agregado: ' + nombre + ' a las ' + hora);
+    horarios.push(item); saveHorarios(horarios); renderHorarios();
   }
 
   function marcarComidaPorId(id){
     const horarios = loadHorarios();
     const item = horarios.find(h=>h.id===id); if(!item) return;
-    item.lastCompleted = todayStr(); 
-    saveHorarios(horarios);
-    
-    // Registrar en historial
-    const hist = loadHist();
-    const entry = { 
-      fecha: new Date().toLocaleString(), 
-      accion: 'Marcar comida completada',
-      anterior: 'Pendiente',
-      nuevo: item.nombre + ' - ' + item.hora + ' completada',
-      notas: 'Se marcó como completada hoy'
-    };
-    hist.push(entry);
-    saveHist(hist);
-    
-    renderHorarios(); 
-    alert('✓ ' + item.nombre + ' marcada como completada.');
-  }
-
-  function deleteHorarioById(id){
-    const horarios = loadHorarios();
-    const item = horarios.find(h=>h.id===id);
-    if(!item) return;
-    if(!confirm('¿Eliminar "' + item.nombre + '"?')) return;
-    
-    horarios.splice(horarios.indexOf(item), 1);
-    saveHorarios(horarios);
-    
-    // Registrar en historial
-    const hist = loadHist();
-    const entry = { 
-      fecha: new Date().toLocaleString(), 
-      accion: 'Eliminar horario',
-      anterior: item.nombre + ' - ' + item.hora + ' (' + (item.cal || '0') + ' cal)',
-      nuevo: '-',
-      notas: 'Se eliminó horario de comida'
-    };
-    hist.push(entry);
-    saveHist(hist);
-    
-    renderHorarios();
-    alert('✓ Horario eliminado.');
+    item.lastCompleted = todayStr(); saveHorarios(horarios); renderHorarios(); alert('Comida marcada como completada.');
   }
 
   function marcarProxima(){
@@ -505,46 +696,12 @@ const router = useRouter()
   }
 
   function renderHistorial(){
-    const hist = loadHist(); 
-    const node = qs('historial-list'); 
-    if(!node) return;
-    
-    if(hist.length===0){ 
-      node.innerHTML = '<div style="color:var(--muted); padding:1rem; text-align:center;">No hay cambios registrados.</div>'; 
-      return;
-    }
-    
+    const hist = loadHist(); const node = qs('historial-list'); if(!node) return;
+    if(hist.length===0){ node.innerHTML = '<div style="color:var(--muted)">No hay registros.</div>'; return }
     node.innerHTML = '';
-    hist.slice().reverse().forEach((h, idx)=>{
-      const d = document.createElement('div'); 
-      d.style.padding = '0.75rem'; 
-      d.style.borderBottom='1px solid var(--border)';
-      d.style.borderRadius = '4px';
-      d.style.marginBottom = '0.5rem';
-      d.style.background = idx === 0 ? '#f0f9ff' : 'transparent';
-      
-      let accionIcon = '📝';
-      if(h.accion === 'Agregar horario') accionIcon = '➕';
-      else if(h.accion === 'Marcar comida completada') accionIcon = '✓';
-      else if(h.accion === 'Eliminar horario') accionIcon = '🗑️';
-      else if(h.accion === 'Cambiar alimento') accionIcon = '🔄';
-      
-      d.innerHTML = `
-        <div style="display:flex; align-items:flex-start; gap:0.75rem;">
-          <div style="font-size:1.2rem; flex-shrink:0;">${accionIcon}</div>
-          <div style="flex:1; min-width:0;">
-            <div style="font-weight:700; color:var(--dark); margin-bottom:0.25rem;">${h.accion || 'Cambio'}</div>
-            <div style="font-size:.85rem; color:var(--muted); margin-bottom:0.25rem;">
-              <span style="display:block;"><strong>Anterior:</strong> ${h.anterior}</span>
-              <span style="display:block;"><strong>Nuevo:</strong> ${h.nuevo}</span>
-            </div>
-            <div style="font-size:.75rem; color:#999; display:flex; justify-content:space-between; align-items:center;">
-              <span>${h.fecha}</span>
-              ${h.notas ? '<span style="color:#666; font-style:italic;">' + h.notas + '</span>' : ''}
-            </div>
-          </div>
-        </div>
-      `;
+    hist.slice().reverse().forEach(h=>{
+      const d = document.createElement('div'); d.style.padding = '.5rem 0'; d.style.borderBottom='1px solid var(--border)';
+      d.innerHTML = `<div style="font-weight:700">${h.nuevo}</div><div style="font-size:.85rem;color:var(--muted)">${h.fecha} — ${h.notas||''}</div>`;
       node.appendChild(d);
     })
   }
@@ -554,18 +711,11 @@ const router = useRouter()
       const name = this.dataset.name; if(!name) return;
       // aplicar alternativa: guardar en historial y actualizar alimento recomendado
       const hist = loadHist();
-      const anterior = document.querySelector('.alimento-nombre')?.textContent || 'Anterior';
-      const entry = { 
-        fecha: new Date().toLocaleString(), 
-        accion: 'Cambiar alimento',
-        anterior: anterior,
-        nuevo: name,
-        notas: 'Aplicada desde Alternativas Recomendadas'
-      };
+      const entry = { fecha: new Date().toLocaleString(), anterior: document.querySelector('.alimento-nombre')?.textContent || '', nuevo: name, notas: 'Aplicada desde Alternativas' };
       hist.push(entry); saveHist(hist);
       // actualizar UI
       const alName = document.querySelector('.alimento-nombre'); if(alName) alName.textContent = name;
-      alert('✓ Alternativa aplicada: '+name);
+      alert('Alternativa aplicada: '+name);
       renderHistorial();
     }))
   }
@@ -580,4 +730,5 @@ const router = useRouter()
   });
 
 })();
+
 </script>

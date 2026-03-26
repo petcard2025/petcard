@@ -14,8 +14,14 @@
     <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
   </ul>
   <div id="auth-section" class="auth-section">
-    <button class="btn-auth" @click="alert('Login no configurado aún')">Iniciar sesión</button>
-    <button class="btn-auth" @click="alert('Registro no configurado aún')">Registrarse</button>
+    <template v-if="usuarioLogueado">
+      <span class="usuario-nombre">{{ usuarioLogueado.Nombre }}</span>
+      <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
+    </template>
+    <template v-else>
+      <button class="btn-auth" @click="irALogin">Iniciar sesión</button>
+      <button class="btn-auth" @click="irARegistro">Registrarse</button>
+    </template>
   </div>
 </nav>
 
@@ -197,10 +203,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
+const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 // ── Constantes ──────────────────────────────────────────────
 const STORAGE_KEY = 'pc_pets_v1'
@@ -669,4 +677,23 @@ table th, table td {
   outline: none;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
 }
+
+/* Usuario logueado */
+.usuario-nombre {
+  color: #0f172a;
+  font-weight: 600;
+  margin-right: 1rem;
+  font-size: 0.95rem;
+}
+
+.btn-logout {
+  background-color: #dc3545;
+  border: 1px solid #dc3545;
+}
+
+.btn-logout:hover {
+  background-color: #c82333;
+  border-color: #c82333;
+}
+
 </style>

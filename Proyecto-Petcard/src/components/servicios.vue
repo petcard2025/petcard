@@ -1,7 +1,9 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
+const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
 </script>
 
 
@@ -28,8 +30,14 @@ const router = useRouter()
       <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
     </ul>
     <div id="auth-section" class="auth-section">
-      <button class="btn-auth" @click="alert('Login no configurado aún')">Iniciar sesión</button>
-      <button class="btn-auth" @click="alert('Registro no configurado aún')">Registrarse</button>
+      <template v-if="usuarioLogueado">
+        <span class="usuario-nombre">{{ usuarioLogueado.Nombre }}</span>
+        <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
+      </template>
+      <template v-else>
+        <button class="btn-auth" @click="irALogin">Iniciar sesión</button>
+        <button class="btn-auth" @click="irARegistro">Registrarse</button>
+      </template>
     </div>
   </nav>
 
@@ -357,6 +365,24 @@ const router = useRouter()
   gap: .75rem;
   justify-content: center;
   flex-wrap: wrap;
+}
+
+/* Usuario logueado */
+.usuario-nombre {
+  color: white;
+  font-weight: 600;
+  margin-right: 1rem;
+  font-size: 0.95rem;
+}
+
+.btn-logout {
+  background-color: #dc3545;
+  border: 1px solid #dc3545;
+}
+
+.btn-logout:hover {
+  background-color: #c82333;
+  border-color: #c82333;
 }
 
 </style>

@@ -1,7 +1,9 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
+const { usuarioLogueado, cerrarSesion } = useAuth()
 </script>
 
 <template>
@@ -15,7 +17,7 @@ const router = useRouter()
       <li><router-link to="/admin-servicios">Servicios</router-link></li>
       <li><router-link to="/admin-citas">Citas</router-link></li>
     </ul>
-    <div class="nav-actions"><span id="admin-nombre" style="color: white; margin-right: 1rem; font-weight: 500;"></span><router-link to="/admin-perfil" class="btn btn-outline-white btn-sm" title="Ver Perfil" style="text-decoration:none;display:inline-block;">👤</router-link><button class="btn btn-danger btn-sm" onclick="alert('Cierre de sesión no configurado aún')">Cerrar Sesión</button></div>
+    <div class="nav-actions"><span style="color: white; margin-right: 1rem; font-weight: 500;">{{ usuarioLogueado ? usuarioLogueado.Nombre : 'Admin' }}</span><router-link to="/admin-perfil" class="btn btn-outline-white btn-sm" title="Ver Perfil" style="text-decoration:none;display:inline-block;">👤</router-link><button class="btn btn-danger btn-sm" @click="cerrarSesion">Cerrar Sesión</button></div>
   </nav>
   <div class="page-wrapper">
     <div class="gestion-header">
