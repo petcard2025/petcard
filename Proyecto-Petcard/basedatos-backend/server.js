@@ -1,7 +1,12 @@
 const express = require('express')
 const mysql = require('mysql2')
 const cors = require('cors')
+const bcrypt = require('bcrypt')
 require('dotenv').config()
+
+// ===== ENCRIPTACION =====
+// Usar bcrypt para hashear y verificar contraseñas de forma segura
+const SALT_ROUNDS = 10
 
 const app = express()
 app.use(cors())
@@ -33,17 +38,25 @@ app.get('/api/usuarios', (req, res) => {
   })
 })
 
-app.post('/api/usuarios', (req, res) => {
+app.post('/api/usuarios', async (req, res) => {
   const { Nombre, Correo, Telefono, Contrasena, Rol } = req.body
   if (!Nombre || !Correo || !Contrasena || !Rol) return res.status(400).json({ error: 'Faltan campos obligatorios' })
-  db.query(
-    'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
-    [Nombre, Correo, Telefono, Contrasena, Rol],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ ID_usuario: result.insertId, Nombre, Correo, Telefono, Rol })
-    }
-  )
+  
+  try {
+    // ===== ENCRIPTACION: Hashear contraseña antes de guardar =====
+    const hashedPassword = await bcrypt.hash(Contrasena, SALT_ROUNDS)
+    
+    db.query(
+      'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
+      [Nombre, Correo, Telefono, hashedPassword, Rol],
+      (err, result) => {
+        if (err) return res.status(500).json({ error: err.message })
+        res.json({ ID_usuario: result.insertId, Nombre, Correo, Telefono, Rol })
+      }
+    )
+  } catch (error) {
+    res.status(500).json({ error: 'Error al encriptar la contraseña' })
+  }
 })
 
 app.put('/api/usuarios/:id', (req, res) => {
@@ -66,17 +79,42 @@ app.delete('/api/usuarios/:id', (req, res) => {
 })
 
 // LOGIN
-app.post('/api/login', (req, res) => {
+// ===== ENCRIPTACION: Verificar contraseña hasheada =====
+app.post('/api/login', async (req, res) => {
   const { Correo, Contrasena } = req.body
-  db.query(
-    'SELECT ID_usuario, Nombre, Correo, Telefono, Rol FROM usuario WHERE Correo=? AND Contrasena=?',
-    [Correo, Contrasena],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (results.length === 0) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-      res.json({ message: 'Login exitoso', usuario: results[0] })
-    }
-  )
+  
+  try {
+    db.query(
+      'SELECT ID_usuario, Nombre, Correo, Telefono, Rol, Contrasena FROM usuario WHERE Correo=?',
+      [Correo],
+      async (err, results) => {
+        if (err) return res.status(500).json({ error: err.message })
+        if (results.length === 0) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+        
+        const usuario = results[0]
+        
+        // ===== ENCRIPTACION: Comparar contraseña con el hash almacenado =====
+        const isPasswordValid = await bcrypt.compare(Contrasena, usuario.Contrasena)
+        
+        if (!isPasswordValid) {
+          return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+        }
+        
+        // No enviar la contraseña hasheada al cliente
+        const usuarioSeguro = {
+          ID_usuario: usuario.ID_usuario,
+          Nombre: usuario.Nombre,
+          Correo: usuario.Correo,
+          Telefono: usuario.Telefono,
+          Rol: usuario.Rol
+        }
+        
+        res.json({ message: 'Login exitoso', usuario: usuarioSeguro })
+      }
+    )
+  } catch (error) {
+    res.status(500).json({ error: 'Error al procesar el login' })
+  }
 })
 
 // CLIENTES
