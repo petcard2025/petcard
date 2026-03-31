@@ -26,17 +26,7 @@
       <div class="success-msg" id="success-login"></div>
 
       <div class="form-group">
-        <select id="tipo-documento">
-          <option value="" disabled selected>Tipo de documento *</option>
-          <option value="cc">Cédula de Ciudadanía</option>
-          <option value="ce">Cédula de Extranjería</option>
-          <option value="ti">Tarjeta de Identidad</option>
-          <option value="pp">Pasaporte</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <input type="text" id="numero-documento" placeholder="Número de documento *" />
+        <input type="email" id="numero-documento" placeholder="Correo electrónico *" />
       </div>
 
       <div class="form-group password-wrapper">
@@ -62,6 +52,7 @@
     <div class="illustration-container"></div>
   </div>
 
-  <script src="../js/login.js"></script>
+  <script src="../js/api-client.js"></script>
+  <script src="../js/login-html.js"></script>
 </body>
 </html>
