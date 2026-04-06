@@ -93,14 +93,29 @@ app.post('/api/login', async (req, res) => {
         
         const usuario = results[0]
         
-        // ===== ENCRIPTACION: Comparar contraseña con el hash almacenado =====
-        const isPasswordValid = await bcrypt.compare(Contrasena, usuario.Contrasena)
-        
+        // ===== ENCRIPTACION: Comparar contraseña con hash o texto plano antiguo =====
+        let isPasswordValid = false
+        const storedPassword = usuario.Contrasena || ''
+
+        if (storedPassword.startsWith('$2')) {
+          isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
+        } else {
+          isPasswordValid = Contrasena === storedPassword
+        }
+
         if (!isPasswordValid) {
           return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
         }
+
+        // Si la contraseña estaba en texto claro, actualizar el hash
+        if (!storedPassword.startsWith('$2')) {
+          const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
+          db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
+            if (err) console.error('Error actualizando hash de contraseña:', err.message)
+          })
+        }
         
-        // No enviar la contraseña hasheada al cliente
+        // No enviar la contraseña al cliente
         const usuarioSeguro = {
           ID_usuario: usuario.ID_usuario,
           Nombre: usuario.Nombre,
