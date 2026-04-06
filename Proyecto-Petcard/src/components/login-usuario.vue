@@ -51,7 +51,7 @@ const handleLogin = async () => {
       console.log('❌ Error:', data.error)
     }
   } catch (error) {
-    errorMessage.value = 'Error al conectar con el servidor'
+    errorMessage.value = error.message || 'Error al conectar con el servidor'
     console.error('🔴 Error:', error)
   } finally {
     isLoading.value = false
