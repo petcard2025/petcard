@@ -1,90 +1,200 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import { mascotasAPI, clientesAPI, vacunasAPI } from '../api.js'
 
 const router = useRouter()
 const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
 
-const PETS_KEY = 'pc_pets_v1'
+const pets = ref([])
+const selectedId = ref(null)
+const showModal = ref(false)
+const isEditing = ref(false)
+const editingId = ref(null)
+const clienteActual = ref(null)
+const vacunas = ref([])
+const isLoading = ref(false)
+const errorMessage = ref('')
 
-const pets         = ref([])
-const selectedId   = ref(null)
-const showModal    = ref(false)
-const nuevaMascota = ref({ nombre: '', especie: '', raza: '' })
+const formData = ref({
+  Nombre: '',
+  Especie: '',
+  Raza: '',
+  Sexo: 'Macho',
+  Fecha_nacimiento: '',
+  Peso: '',
+  Foto: ''
+})
 
-const selectedPet = computed(() => pets.value.find(p => p.id === selectedId.value) || null)
-const vacunas     = computed(() => selectedPet.value?.vacunas?.length ? selectedPet.value.vacunas : sampleVacunas)
-const aplicadas   = computed(() => vacunas.value.filter(v => v.estado === 'aplicada').length)
-const pendientes  = computed(() => vacunas.value.length - aplicadas.value)
-const pct         = computed(() => Math.round((aplicadas.value / (vacunas.value.length || 1)) * 100))
-const proximas    = computed(() => vacunas.value.filter(v => v.estado !== 'aplicada').slice(0, 2))
+const selectedPet = computed(() => {
+  const pet = pets.value.find(p => p.ID_mascota === selectedId.value)
+  return pet ? { ...pet, vacunas: vacunas.value } : null
+})
+
+const aplicadas = computed(() => vacunas.value.filter(v => v.Estado === 'Completo' || v.Estado === 'aplicada').length)
+const pendientes = computed(() => vacunas.value.length - aplicadas.value)
+const pct = computed(() => Math.round((aplicadas.value / (vacunas.value.length || 1)) * 100))
+const proximas = computed(() => vacunas.value.filter(v => v.Estado !== 'Completo' && v.Estado !== 'aplicada').slice(0, 2))
 
 function estadoColor(estado) {
-  return estado === 'aplicada' ? 'var(--green)' : estado === 'atrasada' ? 'var(--red)' : 'var(--yellow)'
+  return estado === 'Completo' || estado === 'aplicada' ? 'var(--green)' : estado === 'Atrasada' || estado === 'atrasada' ? 'var(--red)' : 'var(--yellow)'
 }
 function estadoIcono(estado) {
-  return estado === 'aplicada' ? '✓' : estado === 'atrasada' ? '✖' : '⚠'
+  return estado === 'Completo' || estado === 'aplicada' ? '✓' : estado === 'Atrasada' || estado === 'atrasada' ? '✖' : '⚠'
 }
 function badgeClass(estado) {
-  return estado === 'atrasada' ? 'badge badge-red' : 'badge badge-yellow'
+  return estado === 'Atrasada' || estado === 'atrasada' ? 'badge badge-red' : 'badge badge-yellow'
 }
 function badgeLabel(estado) {
-  return estado === 'atrasada' ? 'Atrasada' : estado === 'proxima' ? 'Próxima Dosis' : 'Pendiente'
+  return estado === 'Atrasada' || estado === 'atrasada' ? 'Atrasada' : estado === 'Proxima' || estado === 'proxima' ? 'Próxima Dosis' : 'Pendiente'
 }
+
+function obtenerFechaTexto(fecha) {
+  return fecha ? new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+}
+
 function especieRaza(tipo = '') {
   const parts = tipo.split('•')
   return { especie: parts[0]?.trim() || '', raza: parts[1]?.trim() || '' }
 }
-function loadPets() {
-  try { return JSON.parse(localStorage.getItem(PETS_KEY) || '[]') } catch { return [] }
+
+async function cargarCliente() {
+  if (!usuarioLogueado.value) return
+  try {
+    const clientes = await clientesAPI.obtener()
+    clienteActual.value = clientes.find(c => c.ID_usuario === usuarioLogueado.value.ID_usuario) || null
+  } catch (error) {
+    console.error('Error al cargar cliente:', error)
+    errorMessage.value = 'No se pudo cargar la información del cliente.'
+  }
 }
-function imprimir() { window.print() }
+
+async function cargarMascotas() {
+  if (!clienteActual.value) return
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    const mascotas = await mascotasAPI.obtenerPorCliente(clienteActual.value.ID_cliente)
+    pets.value = mascotas
+    selectedId.value = mascotas[0]?.ID_mascota || null
+    if (selectedId.value) {
+      await cargarVacunas(selectedId.value)
+    }
+  } catch (error) {
+    console.error('Error al cargar mascotas:', error)
+    errorMessage.value = 'Error al cargar mascotas: ' + error.message
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function cargarVacunas(idMascota) {
+  if (!idMascota) return
+  try {
+    vacunas.value = await vacunasAPI.obtenerPorMascota(idMascota)
+  } catch (error) {
+    console.error('Error al cargar vacunas:', error)
+    vacunas.value = []
+  }
+}
+
+watch(selectedId, async (nuevoId) => {
+  if (nuevoId) {
+    await cargarVacunas(nuevoId)
+  }
+})
 
 function abrirModal() {
-  nuevaMascota.value = { nombre: '', especie: '', raza: '' }
+  isEditing.value = false
+  editingId.value = null
+  formData.value = {
+    Nombre: '',
+    Especie: '',
+    Raza: '',
+    Sexo: 'Macho',
+    Fecha_nacimiento: '',
+    Peso: '',
+    Foto: ''
+  }
   showModal.value = true
 }
-function cerrarModal() { showModal.value = false }
 
-function guardarMascota() {
-  const { nombre, especie, raza } = nuevaMascota.value
-  if (!nombre.trim()) return
-  const nueva = {
-    id:     'PET' + Date.now(),
-    nombre: nombre.trim(),
-    tipo:   especie.trim() + (raza.trim() ? ' • ' + raza.trim() : ''),
-    ultima: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }),
-    vacunas: []
-  }
-  const stored = loadPets()
-  stored.push(nueva)
-  localStorage.setItem(PETS_KEY, JSON.stringify(stored))
-  pets.value = stored
-  selectedId.value = nueva.id
-  cerrarModal()
+function cerrarModal() {
+  showModal.value = false
 }
 
-const sampleVacunas = [
-  { nombre: 'Antirrábica',     fechaProgramada: '13 Mar 2024', fechaAplicada: '13 Mar 2024', lote: 'A8-004-001', observaciones: 'Sin novedad',   estado: 'aplicada' },
-  { nombre: 'Múltiple (DHPP)', fechaProgramada: '13 Mar 2024', fechaAplicada: '13 Mar 2024', lote: 'A8-004-001', observaciones: 'Sin novedad',   estado: 'aplicada' },
-  { nombre: 'Bordetella',      fechaProgramada: '13 Mar 2024', fechaAplicada: '4 May 2024',  lote: 'A8-004-001', observaciones: 'Leve reacción', estado: 'atrasada' },
-  { nombre: 'Lyme',            fechaProgramada: '15 Mar 2024', fechaAplicada: '5 Mar 2024',  lote: 'A8-004-001', observaciones: 'Sin novedad',   estado: 'aplicada' },
-  { nombre: 'Parvovirus',      fechaProgramada: '20 Jun 2024', fechaAplicada: '20 Jun 2024', lote: 'A8-004-001', observaciones: 'Sin novedad',   estado: 'aplicada' },
-]
+async function guardarMascota() {
+  if (!formData.value.Nombre.trim()) {
+    alert('Nombre de mascota requerido')
+    return
+  }
+  if (!clienteActual.value) {
+    alert('No se encontró al cliente actual')
+    return
+  }
+  try {
+    const datos = {
+      ID_cliente: clienteActual.value.ID_cliente,
+      Nombre: formData.value.Nombre.trim(),
+      Especie: formData.value.Especie,
+      Sexo: formData.value.Sexo,
+      Fecha_nacimiento: formData.value.Fecha_nacimiento,
+      Peso: formData.value.Peso,
+      Foto: formData.value.Foto,
+      Raza: formData.value.Raza
+    }
+    if (isEditing.value && editingId.value) {
+      await mascotasAPI.actualizar(editingId.value, datos)
+    } else {
+      await mascotasAPI.crear(datos)
+    }
+    showModal.value = false
+    await cargarMascotas()
+  } catch (error) {
+    console.error('Error guardando mascota:', error)
+    alert('Error al guardar mascota: ' + error.message)
+  }
+}
 
-const samplePets = [
-  { id: 'PET001', nombre: 'Max',  tipo: 'Canino • Golden Retriever', ultima: '20 Mar 2024', vacunas: sampleVacunas },
-  { id: 'PET002', nombre: 'Luna', tipo: 'Felino • Gato Persa',       ultima: '10 Ene 2024', vacunas: [] },
-]
+function openEditPet(pet) {
+  isEditing.value = true
+  editingId.value = pet.ID_mascota
+  formData.value = {
+    Nombre: pet.Nombre || '',
+    Especie: pet.Especie || '',
+    Raza: pet.Raza || '',
+    Sexo: pet.Sexo || 'Macho',
+    Fecha_nacimiento: pet.Fecha_nacimiento || '',
+    Peso: pet.Peso || '',
+    Foto: pet.Foto || ''
+  }
+  showModal.value = true
+}
 
-onMounted(() => {
-  const stored = loadPets()
-  pets.value = stored.length ? stored : samplePets
-  const params = new URLSearchParams(window.location.search)
-  const petId  = params.get('pet')
-  selectedId.value = petId && pets.value.find(p => p.id === petId)
-    ? petId : pets.value[0]?.id || null
+async function eliminarMascota(id) {
+  if (!confirm('¿Eliminar esta mascota?')) return
+  try {
+    await mascotasAPI.eliminar(id)
+    await cargarMascotas()
+  } catch (error) {
+    console.error('Error eliminando mascota:', error)
+    alert('Error al eliminar mascota: ' + error.message)
+  }
+}
+
+function imprimir() {
+  window.print()
+}
+
+function abrirVacunas(pet) {
+  selectedId.value = pet.ID_mascota
+  router.push({ path: '/citas', query: { mascota: pet.ID_mascota } })
+}
+
+onMounted(async () => {
+  await cargarCliente()
+  await cargarMascotas()
 })
 </script>
 
@@ -138,8 +248,8 @@ onMounted(() => {
             Elige tu mascota para ver el carnet de vacunas
           </p>
           <select class="form-control" v-model="selectedId" style="max-width:220px;">
-            <option v-for="pet in pets" :key="pet.id" :value="pet.id">
-              {{ pet.nombre }} – {{ pet.tipo }}
+            <option v-for="pet in pets" :key="pet.ID_mascota" :value="pet.ID_mascota">
+              {{ pet.Nombre }} – {{ pet.Especie }}
             </option>
           </select>
         </div>
@@ -161,13 +271,13 @@ onMounted(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="v in vacunas" :key="v.nombre">
-                  <td><span class="status-icon" :style="{ color: estadoColor(v.estado) }">{{ estadoIcono(v.estado) }}</span></td>
-                  <td class="vacuna-nombre" style="color:var(--purple);">{{ v.nombre }}</td>
-                  <td>{{ v.fechaProgramada }}</td>
-                  <td>{{ v.fechaAplicada }}</td>
-                  <td>{{ v.lote }}</td>
-                  <td>{{ v.observaciones }}</td>
+                <tr v-for="v in vacunas" :key="v.ID_carnetVacunas">
+                  <td><span class="status-icon" :style="{ color: estadoColor(v.Estado) }">{{ estadoIcono(v.Estado) }}</span></td>
+                  <td class="vacuna-nombre" style="color:var(--purple);">{{ v.Nombre_vacuna }}</td>
+                  <td>{{ obtenerFechaTexto(v.Proxima_dosis) }}</td>
+                  <td>{{ obtenerFechaTexto(v.Fecha_aplicacion) }}</td>
+                  <td>{{ v.Lote }}</td>
+                  <td>{{ v.Observaciones }}</td>
                 </tr>
               </tbody>
             </table>
@@ -175,7 +285,7 @@ onMounted(() => {
           <div class="obs-medicas">
             <h4>Observaciones Médicas:</h4>
             <ul>
-              <li v-for="v in vacunas" :key="v.nombre">{{ v.nombre }}: {{ v.observaciones }}</li>
+              <li v-for="v in vacunas" :key="v.ID_carnetVacunas">{{ v.Nombre_vacuna }}: {{ v.Observaciones }}</li>
             </ul>
           </div>
         </div>
@@ -211,12 +321,12 @@ onMounted(() => {
             </svg>
             Próximas Vacunas
           </div>
-          <div class="proxima-vac" v-for="v in proximas" :key="v.nombre">
+          <div class="proxima-vac" v-for="v in proximas" :key="v.ID_carnetVacunas">
             <div class="proxima-vac-header">
-              <span class="vacuna-nombre2">{{ v.nombre }}</span>
-              <span :class="badgeClass(v.estado)">{{ badgeLabel(v.estado) }}</span>
+              <span class="vacuna-nombre2">{{ v.Nombre_vacuna }}</span>
+              <span :class="badgeClass(v.Estado)">{{ badgeLabel(v.Estado) }}</span>
             </div>
-            <div style="font-size:.78rem; color:var(--muted);">Próxima: {{ v.fechaProgramada }}</div>
+            <div style="font-size:.78rem; color:var(--muted);">Próxima: {{ obtenerFechaTexto(v.Proxima_dosis) }}</div>
           </div>
           <p v-if="proximas.length === 0" style="font-size:.85rem; color:var(--muted); margin-top:.5rem;">Sin vacunas pendientes.</p>
           <button class="btn btn-success btn-full" style="margin-top:.75rem;" @click="router.push('/citas')">Agendar Vacunación</button>
@@ -229,11 +339,11 @@ onMounted(() => {
             </svg>
             Información del Carnet
           </div>
-          <div class="info-row"><span>Mascota:</span><strong>{{ selectedPet?.nombre }}</strong></div>
-          <div class="info-row"><span>Especie:</span><strong>{{ especieRaza(selectedPet?.tipo).especie }}</strong></div>
-          <div class="info-row"><span>Raza:</span><strong>{{ especieRaza(selectedPet?.tipo).raza }}</strong></div>
-          <div class="info-row"><span>ID:</span><strong>{{ selectedPet?.id }}</strong></div>
-          <div class="info-row"><span>Última actualización:</span><strong>{{ selectedPet?.ultima }}</strong></div>
+          <div class="info-row"><span>Mascota:</span><strong>{{ selectedPet?.Nombre }}</strong></div>
+          <div class="info-row"><span>Especie:</span><strong>{{ selectedPet?.Especie }}</strong></div>
+          <div class="info-row"><span>Raza:</span><strong>{{ selectedPet?.Raza }}</strong></div>
+          <div class="info-row"><span>ID:</span><strong>{{ selectedPet?.ID_mascota }}</strong></div>
+          <div class="info-row"><span>Fecha de nacimiento:</span><strong>{{ selectedPet?.Fecha_nacimiento }}</strong></div>
           <div class="info-row"><span>Próxima cita:</span><strong>{{ proximas[0]?.fechaProgramada || '—' }}</strong></div>
           <div style="display:flex; gap:.5rem; margin-top:1rem;">
             <button class="btn btn-secondary btn-sm" style="flex:1;" @click="imprimir">

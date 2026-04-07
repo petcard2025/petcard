@@ -26,19 +26,22 @@
 </nav>
 
     <!-- Grid de mascotas -->
+    <div v-if="isLoading" class="loading">Cargando mascotas...</div>
+    <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
+
     <div class="mascotas-grid">
       <div
         v-for="pet in pets"
-        :key="pet.id"
+        :key="pet.ID_mascota"
         class="mascota-card card"
         style="cursor:pointer"
         @click.self="openDetail(pet)"
       >
         <div class="mascota-top">
-          <div class="mascota-avatar" style="background:#fef3c7;">{{ pet.avatar || '🐶' }}</div>
+          <div class="mascota-avatar" style="background:#fef3c7;">🐾</div>
           <div class="mascota-info">
-            <div class="mascota-nombre">{{ pet.nombre }}</div>
-            <div class="mascota-tipo">{{ pet.tipo }}</div>
+            <div class="mascota-nombre">{{ pet.Nombre }}</div>
+            <div class="mascota-tipo">{{ pet.Especie }} - {{ pet.Raza }}</div>
           </div>
           <div class="mascota-actions">
             <button class="btn-icon" title="Editar" @click.stop="openEditForm(pet)">
@@ -47,7 +50,7 @@
                 <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
               </svg>
             </button>
-            <button class="btn-icon" title="Eliminar" @click.stop="deletePet(pet.id)">
+            <button class="btn-icon" title="Eliminar" @click.stop="deletePet(pet.ID_mascota)">
               <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
@@ -57,15 +60,14 @@
         </div>
 
         <div class="mascota-datos" @click="openDetail(pet)">
-          <div class="dato-item">Peso: <strong>{{ pet.peso }}</strong></div>
-          <div class="dato-item">Color: <strong>{{ pet.color }}</strong></div>
-          <div class="dato-item">Última visita: <strong>{{ pet.ultima }}</strong></div>
+          <div class="dato-item">Peso: <strong>{{ pet.Peso }} kg</strong></div>
+          <div class="dato-item">Sexo: <strong>{{ pet.Sexo }}</strong></div>
+          <div class="dato-item">Fecha nacimiento: <strong>{{ pet.Fecha_nacimiento }}</strong></div>
         </div>
-        <div class="microchip-tag" @click="openDetail(pet)">Microchip: {{ pet.microchip }}</div>
 
         <div class="mascota-btns">
           <button class="btn btn-secondary btn-sm" @click.stop="openVaccineEditor(pet)">Vacunas</button>
-          <button class="btn btn-primary btn-sm" @click.stop="goToCita(pet.id)">Cita</button>
+          <button class="btn btn-primary btn-sm" @click.stop="goToCita(pet.ID_mascota)">Cita</button>
         </div>
       </div>
     </div>
@@ -79,7 +81,7 @@
     <div v-if="detailPet" class="modal-overlay" @click.self="detailPet = null">
       <div class="modal-box" style="width:520px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
-          <h2 style="margin:0">{{ detailPet.nombre }}</h2>
+          <h2 style="margin:0">{{ detailPet.Nombre }}</h2>
           <div style="display:flex;gap:.5rem">
             <button class="btn btn-outline-primary" @click="printDetail">Imprimir</button>
             <button class="btn btn-primary" @click="downloadPdf(detailPet)">Descargar PDF</button>
@@ -90,11 +92,16 @@
           <div style="flex:1">
             <div v-for="(label, key) in detailFields" :key="key" style="margin-bottom:.5rem;">
               <div style="font-weight:700;margin-bottom:.25rem">{{ label }}</div>
-              <div>{{ detailPet[key] }}</div>
+              <div>{{ detailPet[key] || 'No especificado' }}</div>
+            </div>
+            <div style="margin-bottom:.5rem;">
+              <div style="font-weight:700;margin-bottom:.25rem">Dueño</div>
+              <div>{{ detailPet.Nombre_dueno || 'No disponible' }}</div>
             </div>
           </div>
           <div style="width:140px;text-align:center;">
-            <div style="font-size:48px">{{ detailPet.avatar || '🐶' }}</div>
+            <div v-if="detailPet.Foto" style="width:120px;height:120px;border-radius:8px;background-size:cover;background-position:center;margin:0 auto;" :style="{ backgroundImage: `url(${detailPet.Foto})` }"></div>
+            <div v-else style="font-size:48px">🐾</div>
           </div>
         </div>
       </div>
@@ -105,46 +112,59 @@
       <div class="modal-box" style="width:420px;">
         <h3 style="margin-top:0;margin-bottom:1rem;">{{ isEditing ? 'Editar Mascota' : 'Agregar Mascota' }}</h3>
 
-        <!-- Avatar selector -->
-        <label style="display:block;font-weight:700;margin-bottom:.5rem;">Avatar</label>
-        <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:.5rem;margin-bottom:1rem;">
-          <button
-            v-for="emoji in avatarOptions"
-            :key="emoji"
-            type="button"
-            :style="{
-              padding:'.5rem',
-              border: formData.avatar === emoji ? '2px solid #3b82f6' : '2px solid #ddd',
-              background: formData.avatar === emoji ? '#f0f9ff' : 'transparent',
-              borderRadius:'6px',
-              fontSize:'1.5rem',
-              cursor:'pointer'
-            }"
-            @click="formData.avatar = emoji"
-          >{{ emoji }}</button>
-        </div>
-
         <div style="display:flex;flex-direction:column;gap:.75rem;">
-          <input class="form-control" placeholder="Nombre"       v-model="formData.nombre" />
-          <select class="form-control" v-model="formData.tipo">
-            <option disabled value="">Tipo / Raza</option>
-            <option>Perro</option>
-            <option>Gato</option>
-            <option>Loro</option>
-            <option>Conejo</option>
-            <option>Hamster</option>
-            <option>Canario</option>
-            <option>Pez</option>
-          </select>
-          <input class="form-control" placeholder="Peso"         v-model="formData.peso" />
-          <input class="form-control" placeholder="Color"        v-model="formData.color" />
-          <input class="form-control" type="date"                v-model="formData.ultima" />
-          <input class="form-control" placeholder="Microchip"    v-model="formData.microchip" />
+          <div>
+            <label style="display:block;font-weight:700;margin-bottom:.5rem;">Nombre</label>
+            <input class="form-control" placeholder="Nombre de la mascota" v-model="formData.Nombre" />
+          </div>
+
+          <div>
+            <label style="display:block;font-weight:700;margin-bottom:.5rem;">Especie</label>
+            <select class="form-control" v-model="formData.Especie">
+              <option value="">Selecciona especie</option>
+              <option>Perro</option>
+              <option>Gato</option>
+              <option>Ave</option>
+              <option>Conejo</option>
+              <option>Hamster</option>
+              <option>Pez</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="display:block;font-weight:700;margin-bottom:.5rem;">Raza</label>
+            <input class="form-control" placeholder="Raza de la mascota" v-model="formData.Raza" />
+          </div>
+
+          <div>
+            <label style="display:block;font-weight:700;margin-bottom:.5rem;">Sexo</label>
+            <select class="form-control" v-model="formData.Sexo">
+              <option>Macho</option>
+              <option>Hembra</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="display:block;font-weight:700;margin-bottom:.5rem;">Fecha de nacimiento</label>
+            <input class="form-control" type="date" v-model="formData.Fecha_nacimiento" />
+          </div>
+
+          <div>
+            <label style="display:block;font-weight:700;margin-bottom:.5rem;">Peso (kg)</label>
+            <input class="form-control" type="number" step="0.1" placeholder="Peso en kg" v-model="formData.Peso" />
+          </div>
+
+          <div>
+            <label style="display:block;font-weight:700;margin-bottom:.5rem;">Foto (URL opcional)</label>
+            <input class="form-control" placeholder="URL de la foto" v-model="formData.Foto" />
+          </div>
         </div>
 
         <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;">
           <button class="btn btn-outline-primary" @click="showForm = false">Cancelar</button>
-          <button class="btn btn-primary" @click="savePet">{{ isEditing ? 'Guardar' : 'Agregar' }}</button>
+          <button class="btn btn-primary" @click="savePet" :disabled="isLoading">
+            {{ isLoading ? 'Guardando...' : (isEditing ? 'Guardar' : 'Agregar') }}
+          </button>
         </div>
       </div>
     </div>
@@ -206,27 +226,16 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import { mascotasAPI, clientesAPI } from '../api.js'
 
 const router = useRouter()
 const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
 
-// ── Constantes ──────────────────────────────────────────────
-const STORAGE_KEY = 'pc_pets_v1'
-
-const avatarOptions = [
-  '🐶', '🐱', '🦜', '🐰', '🐹', '🐢', '🐠'
-]
-
-const detailFields = {
-  tipo: 'Tipo',
-  peso: 'Peso',
-  color: 'Color',
-  ultima: 'Última visita',
-  microchip: 'Microchip'
-}
-
 // ── Estado reactivo ─────────────────────────────────────────
-const pets = ref(loadPets())
+const pets = ref([])
+const clienteActual = ref(null)
+const isLoading = ref(false)
+const errorMessage = ref('')
 
 // Modal detalle
 const detailPet = ref(null)
@@ -236,73 +245,126 @@ const showForm = ref(false)
 const isEditing = ref(false)
 const editingId = ref(null)
 const formData = reactive({
-  nombre: '', tipo: '', peso: '', color: '',
-  ultima: '', microchip: '', avatar: '🐶'
+  Nombre: '',
+  Especie: '',
+  Raza: '',
+  Sexo: 'Macho',
+  Fecha_nacimiento: '',
+  Peso: '',
+  Foto: ''
 })
 
 // Modal vacunas
 const vacPet = ref(null)
 const newVac = reactive({ nombre: '', fechaProgramada: '', fechaAplicada: '', lote: '' })
 
-// ── LocalStorage ────────────────────────────────────────────
-function loadPets() {
+// ── Constantes ──────────────────────────────────────────────
+const avatarOptions = [
+  '🐶', '🐱', '🦜', '🐰', '🐹', '🐢', '🐠'
+]
+
+const detailFields = {
+  Especie: 'Especie',
+  Sexo: 'Sexo',
+  Peso: 'Peso',
+  Raza: 'Raza',
+  Fecha_nacimiento: 'Fecha de Nacimiento'
+}
+
+// ── Funciones de carga ──────────────────────────────────────
+async function cargarCliente() {
+  if (!usuarioLogueado.value) return
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
+    const clientes = await clientesAPI.obtener()
+    clienteActual.value = clientes.find(c => c.ID_usuario === usuarioLogueado.value.ID_usuario)
+  } catch (error) {
+    console.error('Error al cargar cliente:', error)
   }
 }
 
-function savePets(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-  pets.value = [...list]
-}
+async function cargarMascotas() {
+  if (!clienteActual.value) return
 
-function getPetById(id) {
-  return pets.value.find(p => p.id === id)
+  isLoading.value = true
+  errorMessage.value = ''
+
+  try {
+    const todasLasMascotas = await mascotasAPI.obtener()
+    // Filtrar mascotas del cliente actual
+    pets.value = todasLasMascotas.filter(m => m.ID_cliente === clienteActual.value.ID_cliente)
+  } catch (error) {
+    errorMessage.value = 'Error al cargar mascotas: ' + error.message
+    console.error('Error al cargar mascotas:', error)
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // ── CRUD mascotas ────────────────────────────────────────────
 function openAddForm() {
   isEditing.value = false
   editingId.value = null
-  Object.assign(formData, { nombre:'', tipo:'', peso:'', color:'', ultima:'', microchip:'', avatar:'🐶' })
+  Object.assign(formData, {
+    Nombre: '',
+    Especie: '',
+    Raza: '',
+    Sexo: 'Macho',
+    Fecha_nacimiento: '',
+    Peso: '',
+    Foto: ''
+  })
   showForm.value = true
 }
 
 function openEditForm(pet) {
   isEditing.value = true
-  editingId.value = pet.id
+  editingId.value = pet.ID_mascota
   Object.assign(formData, { ...pet })
   showForm.value = true
 }
 
-function savePet() {
-  if (!formData.nombre.trim()) {
+async function savePet() {
+  if (!formData.Nombre.trim()) {
     alert('Nombre es requerido')
     return
   }
 
-  const list = loadPets()
-
-  if (isEditing.value) {
-    const idx = list.findIndex(p => p.id === editingId.value)
-    if (idx > -1) {
-      list[idx] = { ...list[idx], ...formData }
-      savePets(list)
-    }
-  } else {
-    list.push({ id: 'p_' + Date.now(), vacunas: [], ...formData })
-    savePets(list)
+  if (!clienteActual.value) {
+    alert('No se pudo identificar al cliente')
+    return
   }
 
-  showForm.value = false
+  try {
+    const datosMascota = {
+      ID_cliente: clienteActual.value.ID_cliente,
+      ...formData
+    }
+
+    if (isEditing.value) {
+      await mascotasAPI.actualizar(editingId.value, formData)
+    } else {
+      await mascotasAPI.crear(datosMascota)
+    }
+
+    showForm.value = false
+    await cargarMascotas() // Recargar la lista
+  } catch (error) {
+    alert('Error al guardar mascota: ' + error.message)
+    console.error('Error al guardar mascota:', error)
+  }
 }
 
-function deletePet(id) {
+async function deletePet(id) {
   if (!confirm('¿Eliminar esta mascota?')) return
-  savePets(loadPets().filter(p => p.id !== id))
+
+  try {
+    await mascotasAPI.eliminar(id)
+    await cargarMascotas() // Recargar la lista
+  } catch (error) {
+    alert('Error al eliminar mascota: ' + error.message)
+    console.error('Error al eliminar mascota:', error)
+  }
 }
 
 // ── Detalle / navegación ─────────────────────────────────────
@@ -316,9 +378,7 @@ function goToCita(id) {
 
 // ── Vacunas ──────────────────────────────────────────────────
 function openVaccineEditor(pet) {
-  // Cargamos desde storage para tener los datos más actualizados
-  const fresh = getPetById(pet.id)
-  vacPet.value = fresh ? reactive({ ...fresh, vacunas: [...(fresh.vacunas || [])] }) : null
+  vacPet.value = reactive({ ...pet, vacunas: [...(pet.vacunas || [])] })
   Object.assign(newVac, { nombre:'', fechaProgramada:'', fechaAplicada:'', lote:'' })
 }
 
@@ -334,7 +394,8 @@ function recalcEstado(v) {
 
 function saveVac(idx) {
   recalcEstado(vacPet.value.vacunas[idx])
-  persistVacunas()
+  // Aquí iría la lógica para guardar en la base de datos
+  // Por ahora solo actualizamos localmente
 }
 
 function toggleVac(idx) {
@@ -345,13 +406,11 @@ function toggleVac(idx) {
     v.estado = 'aplicada'
     if (!v.fechaAplicada) v.fechaAplicada = new Date().toISOString().slice(0, 10)
   }
-  persistVacunas()
 }
 
 function deleteVac(idx) {
   if (!confirm('¿Eliminar vacuna?')) return
   vacPet.value.vacunas.splice(idx, 1)
-  persistVacunas()
 }
 
 function addVac() {
@@ -369,16 +428,6 @@ function addVac() {
     estado: calcEstado(newVac)
   })
   Object.assign(newVac, { nombre:'', fechaProgramada:'', fechaAplicada:'', lote:'' })
-  persistVacunas()
-}
-
-function persistVacunas() {
-  const list = loadPets()
-  const idx = list.findIndex(p => p.id === vacPet.value.id)
-  if (idx > -1) {
-    list[idx] = { ...list[idx], vacunas: vacPet.value.vacunas }
-    savePets(list)
-  }
 }
 
 // ── Imprimir / PDF ───────────────────────────────────────────
@@ -387,10 +436,10 @@ function printDetail() {
   const w = window.open('', '_blank')
   if (!w) { alert('El navegador bloqueó la ventana de impresión.'); return }
   const pet = detailPet.value
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${pet.nombre}</title></head><body>
-    <h1>${pet.nombre}</h1>
-    <p>Tipo: ${pet.tipo}</p><p>Peso: ${pet.peso}</p><p>Color: ${pet.color}</p>
-    <p>Última visita: ${pet.ultima}</p><p>Microchip: ${pet.microchip}</p>
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${pet.Nombre}</title></head><body>
+    <h1>${pet.Nombre}</h1>
+    <p>Especie: ${pet.Especie}</p><p>Raza: ${pet.Raza}</p><p>Sexo: ${pet.Sexo}</p>
+    <p>Peso: ${pet.Peso}</p><p>Fecha de nacimiento: ${pet.Fecha_nacimiento}</p>
   </body></html>`)
   w.document.close()
   setTimeout(() => w.print(), 300)
@@ -401,19 +450,25 @@ async function downloadPdf(pet) {
     const { jsPDF } = window.jspdf
     const doc = new jsPDF({ unit: 'pt', format: 'a4' })
     let y = 40
-    doc.setFontSize(18); doc.text(pet.nombre || 'Mascota', 40, y); y += 28
+    doc.setFontSize(18); doc.text(pet.Nombre || 'Mascota', 40, y); y += 28
     doc.setFontSize(12)
-    doc.text('Tipo: '          + (pet.tipo    || ''), 40, y); y += 18
-    doc.text('Peso: '          + (pet.peso    || ''), 40, y); y += 18
-    doc.text('Color: '         + (pet.color   || ''), 40, y); y += 18
-    doc.text('Última visita: ' + (pet.ultima  || ''), 40, y); y += 18
-    doc.text('Microchip: '     + (pet.microchip || ''), 40, y)
-    doc.save((pet.nombre || 'mascota') + '.pdf')
+    doc.text('Especie: '        + (pet.Especie    || ''), 40, y); y += 18
+    doc.text('Raza: '           + (pet.Raza       || ''), 40, y); y += 18
+    doc.text('Sexo: '           + (pet.Sexo       || ''), 40, y); y += 18
+    doc.text('Peso: '           + (pet.Peso       || ''), 40, y); y += 18
+    doc.text('Fecha nacimiento: ' + (pet.Fecha_nacimiento || ''), 40, y)
+    doc.save((pet.Nombre || 'mascota') + '.pdf')
   } catch (err) {
     console.error(err)
     alert('No se pudo generar el PDF. Usa Imprimir para guardar como PDF.')
   }
 }
+
+// ── Inicialización ───────────────────────────────────────────
+onMounted(async () => {
+  await cargarCliente()
+  await cargarMascotas()
+})
 </script>
 
 <style scoped>
@@ -465,6 +520,22 @@ table th, table td {
   max-width: 1160px;
   margin: 1.5rem auto;
   padding: 0 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.error {
+  background: #fee;
+  color: #c33;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid #fcc;
 }
 
 .navbar {

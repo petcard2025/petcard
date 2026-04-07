@@ -213,6 +213,60 @@ app.delete('/api/mascotas/:id', (req, res) => {
   })
 })
 
+// CONSULTAS DE CLIENTE
+app.get('/api/clientes/usuario/:id_usuario', (req, res) => {
+  db.query('SELECT * FROM cliente WHERE ID_usuario=?', [req.params.id_usuario], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json(results)
+  })
+})
+
+// VACUNAS / CARNET DE VACUNAS
+app.get('/api/vacunas', (req, res) => {
+  db.query('SELECT * FROM carnetvacunas', (err, results) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json(results)
+  })
+})
+
+app.get('/api/vacunas/mascota/:id_mascota', (req, res) => {
+  db.query('SELECT * FROM carnetvacunas WHERE ID_mascota=?', [req.params.id_mascota], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json(results)
+  })
+})
+
+app.post('/api/vacunas', (req, res) => {
+  const { ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones } = req.body
+  db.query(
+    'INSERT INTO carnetvacunas (ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones],
+    (err, result) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ ID_carnetVacunas: result.insertId, ...req.body })
+    }
+  )
+})
+
+app.put('/api/vacunas/:id', (req, res) => {
+  const { ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones } = req.body
+  db.query(
+    'UPDATE carnetvacunas SET ID_mascota=?, ID_servicio=?, Nombre_vacuna=?, Laboratorio=?, Lote=?, Fecha_aplicacion=?, Proxima_dosis=?, Reacciones=?, Estado=?, Observaciones=? WHERE ID_carnetVacunas=?',
+    [ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ message: 'Vacuna actualizada' })
+    }
+  )
+})
+
+app.delete('/api/vacunas/:id', (req, res) => {
+  db.query('DELETE FROM carnetvacunas WHERE ID_carnetVacunas=?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json({ message: 'Vacuna eliminada' })
+  })
+})
+
 // VETERINARIOS
 app.get('/api/veterinarios', (req, res) => {
   db.query(
