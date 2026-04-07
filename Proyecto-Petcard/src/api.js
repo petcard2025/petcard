@@ -63,6 +63,9 @@ export const clientesAPI = {
   // Obtener todos los clientes
   obtener: () => fetchAPI('/clientes'),
 
+  // Obtener cliente por usuario
+  obtenerPorUsuario: (idUsuario) => fetchAPI(`/clientes/usuario/${idUsuario}`),
+
   // Crear nuevo cliente
   crear: (datos) => fetchAPI('/clientes', {
     method: 'POST',
