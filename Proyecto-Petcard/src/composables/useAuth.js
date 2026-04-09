@@ -5,7 +5,7 @@ export function useAuth() {
   const router = useRouter()
   const usuarioLogueado = ref(null)
 
-  onMounted(() => {
+  const loadUsuario = () => {
     const usuario = localStorage.getItem('petcard_usuario_actual')
     if (usuario) {
       try {
@@ -13,8 +13,13 @@ export function useAuth() {
       } catch {
         usuarioLogueado.value = null
       }
+    } else {
+      usuarioLogueado.value = null
     }
-  })
+  }
+
+  loadUsuario()
+  onMounted(loadUsuario)
 
   const cerrarSesion = () => {
     localStorage.removeItem('petcard_usuario_actual')

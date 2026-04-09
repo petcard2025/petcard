@@ -1,7 +1,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, reactive } from 'vue'
-import { usuariosAPI } from '../api.js'
+import { usuariosAPI, clientesAPI } from '../api.js'
 
 const router = useRouter()
 
@@ -90,6 +90,12 @@ const handleRegistro = async () => {
     })
 
     if (data.ID_usuario) {
+      try {
+        await clientesAPI.crear({ Direccion: '', ID_usuario: data.ID_usuario })
+      } catch (clienteError) {
+        console.warn('No se pudo crear el cliente automáticamente:', clienteError)
+      }
+
       successMessage.value = '¡Cuenta creada exitosamente! Redirigiendo...'
       localStorage.setItem('petcard_usuario_actual', JSON.stringify(data))
       console.log('✅ Registro exitoso')

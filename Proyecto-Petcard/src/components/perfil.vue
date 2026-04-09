@@ -1,6 +1,6 @@
 <script setup>
 import { useRouter } from 'vue-router'
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
@@ -28,15 +28,17 @@ const goToRegistro = () => {
 
 const cargarUsuario = () => {
   try {
-    const usuario = JSON.parse(localStorage.getItem('petcard_usuario_actual') || 'null')
+    const usuario = authUsuario?.value || JSON.parse(localStorage.getItem('petcard_usuario_actual') || 'null')
     if (usuario) {
       usuarioActual.value = usuario
-      formData.nombre = usuario.nombre || ''
-      formData.apellido = usuario.apellido || ''
-      formData.email = usuario.email || ''
-      formData.telefono = usuario.telefono || ''
-      formData.direccion = usuario.direccion || ''
-      formData.emergencia = usuario.emergencia || ''
+      formData.nombre = usuario.Nombre || usuario.nombre || ''
+      formData.apellido = usuario.Apellido || usuario.apellido || ''
+      formData.email = usuario.Correo || usuario.email || ''
+      formData.telefono = usuario.Telefono || usuario.telefono || ''
+      formData.direccion = usuario.Direccion || usuario.direccion || ''
+      formData.emergencia = usuario.Emergencia || usuario.emergencia || ''
+    } else {
+      usuarioActual.value = null
     }
   } catch (error) {
     console.error('Error cargando usuario:', error)
@@ -99,6 +101,10 @@ const irCarnet = () => router.push('/carnet')
 const irNotificaciones = () => router.push('/notificaciones')
 
 onMounted(() => {
+  cargarUsuario()
+})
+
+watch(authUsuario, () => {
   cargarUsuario()
 })
 </script>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 import { mascotasAPI, clientesAPI, vacunasAPI } from '../api.js'
@@ -17,7 +17,7 @@ const vacunas = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
 
-const formData = ref({
+const formData = reactive({
   Nombre: '',
   Especie: '',
   Raza: '',
@@ -62,11 +62,27 @@ function especieRaza(tipo = '') {
 async function cargarCliente() {
   if (!usuarioLogueado.value) return
   try {
-    const clientes = await clientesAPI.obtener()
-    clienteActual.value = clientes.find(c => c.ID_usuario === usuarioLogueado.value.ID_usuario) || null
+    const clientes = await clientesAPI.obtenerPorUsuario(usuarioLogueado.value.ID_usuario)
+    clienteActual.value = clientes[0] || null
   } catch (error) {
     console.error('Error al cargar cliente:', error)
     errorMessage.value = 'No se pudo cargar la información del cliente.'
+    clienteActual.value = null
+  }
+}
+
+async function crearClienteSiNoExiste() {
+  if (!usuarioLogueado.value) return null
+  if (clienteActual.value) return clienteActual.value
+
+  try {
+    const cliente = await clientesAPI.crear({ ID_usuario: usuarioLogueado.value.ID_usuario, Direccion: '' })
+    clienteActual.value = cliente
+    return cliente
+  } catch (error) {
+    console.error('Error creando cliente:', error)
+    errorMessage.value = 'No se pudo crear el cliente asociado.'
+    return null
   }
 }
 
@@ -108,7 +124,7 @@ watch(selectedId, async (nuevoId) => {
 function abrirModal() {
   isEditing.value = false
   editingId.value = null
-  formData.value = {
+  Object.assign(formData, {
     Nombre: '',
     Especie: '',
     Raza: '',
@@ -116,7 +132,7 @@ function abrirModal() {
     Fecha_nacimiento: '',
     Peso: '',
     Foto: ''
-  }
+  })
   showModal.value = true
 }
 
@@ -125,7 +141,7 @@ function cerrarModal() {
 }
 
 async function guardarMascota() {
-  if (!formData.value.Nombre.trim()) {
+  if (!formData.Nombre.trim()) {
     alert('Nombre de mascota requerido')
     return
   }
@@ -136,13 +152,13 @@ async function guardarMascota() {
   try {
     const datos = {
       ID_cliente: clienteActual.value.ID_cliente,
-      Nombre: formData.value.Nombre.trim(),
-      Especie: formData.value.Especie,
-      Sexo: formData.value.Sexo,
-      Fecha_nacimiento: formData.value.Fecha_nacimiento,
-      Peso: formData.value.Peso,
-      Foto: formData.value.Foto,
-      Raza: formData.value.Raza
+      Nombre: formData.Nombre.trim(),
+      Especie: formData.Especie,
+      Sexo: formData.Sexo,
+      Fecha_nacimiento: formData.Fecha_nacimiento,
+      Peso: formData.Peso,
+      Foto: formData.Foto,
+      Raza: formData.Raza
     }
     if (isEditing.value && editingId.value) {
       await mascotasAPI.actualizar(editingId.value, datos)
@@ -160,7 +176,7 @@ async function guardarMascota() {
 function openEditPet(pet) {
   isEditing.value = true
   editingId.value = pet.ID_mascota
-  formData.value = {
+  Object.assign(formData, {
     Nombre: pet.Nombre || '',
     Especie: pet.Especie || '',
     Raza: pet.Raza || '',
@@ -168,7 +184,7 @@ function openEditPet(pet) {
     Fecha_nacimiento: pet.Fecha_nacimiento || '',
     Peso: pet.Peso || '',
     Foto: pet.Foto || ''
-  }
+  })
   showModal.value = true
 }
 
@@ -194,6 +210,9 @@ function abrirVacunas(pet) {
 
 onMounted(async () => {
   await cargarCliente()
+  if (!clienteActual.value) {
+    await crearClienteSiNoExiste()
+  }
   await cargarMascotas()
 })
 </script>
@@ -248,6 +267,7 @@ onMounted(async () => {
             Elige tu mascota para ver el carnet de vacunas
           </p>
           <select class="form-control" v-model="selectedId" style="max-width:220px;">
+            <option disabled value="">{{ pets.length ? 'Elige una mascota' : 'No hay mascotas registradas' }}</option>
             <option v-for="pet in pets" :key="pet.ID_mascota" :value="pet.ID_mascota">
               {{ pet.Nombre }} – {{ pet.Especie }}
             </option>
@@ -339,12 +359,12 @@ onMounted(async () => {
             </svg>
             Información del Carnet
           </div>
-          <div class="info-row"><span>Mascota:</span><strong>{{ selectedPet?.Nombre }}</strong></div>
-          <div class="info-row"><span>Especie:</span><strong>{{ selectedPet?.Especie }}</strong></div>
-          <div class="info-row"><span>Raza:</span><strong>{{ selectedPet?.Raza }}</strong></div>
-          <div class="info-row"><span>ID:</span><strong>{{ selectedPet?.ID_mascota }}</strong></div>
-          <div class="info-row"><span>Fecha de nacimiento:</span><strong>{{ selectedPet?.Fecha_nacimiento }}</strong></div>
-          <div class="info-row"><span>Próxima cita:</span><strong>{{ proximas[0]?.fechaProgramada || '—' }}</strong></div>
+          <div class="info-row"><span>Mascota:</span><strong>{{ selectedPet ? selectedPet.Nombre : '—' }}</strong></div>
+          <div class="info-row"><span>Especie:</span><strong>{{ selectedPet ? selectedPet.Especie : '—' }}</strong></div>
+          <div class="info-row"><span>Raza:</span><strong>{{ selectedPet ? selectedPet.Raza : '—' }}</strong></div>
+          <div class="info-row"><span>ID:</span><strong>{{ selectedPet ? selectedPet.ID_mascota : '—' }}</strong></div>
+          <div class="info-row"><span>Fecha de nacimiento:</span><strong>{{ selectedPet ? selectedPet.Fecha_nacimiento : '—' }}</strong></div>
+          <div class="info-row"><span>Próxima cita:</span><strong>{{ proximas.length ? proximas[0].fechaProgramada : '—' }}</strong></div>
           <div style="display:flex; gap:.5rem; margin-top:1rem;">
             <button class="btn btn-secondary btn-sm" style="flex:1;" @click="imprimir">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -369,9 +389,9 @@ onMounted(async () => {
         </div>
         <div class="modal-body">
           <label class="modal-label">Nombre <span style="color:var(--red)">*</span></label>
-          <input class="form-control" v-model="nuevaMascota.nombre" placeholder="Ej: Max" style="margin-bottom:.85rem;" />
+          <input class="form-control" v-model="formData.Nombre" placeholder="Ej: Max" style="margin-bottom:.85rem;" />
           <label class="modal-label">Especie</label>
-          <select class="form-control" v-model="nuevaMascota.especie" style="margin-bottom:.85rem;">
+          <select class="form-control" v-model="formData.Especie" style="margin-bottom:.85rem;">
             <option value="">Seleccionar...</option>
             <option>Canino</option>
             <option>Felino</option>
@@ -380,13 +400,13 @@ onMounted(async () => {
             <option>Otro</option>
           </select>
           <label class="modal-label">Raza</label>
-          <input class="form-control" v-model="nuevaMascota.raza" placeholder="Ej: Golden Retriever" />
+          <input class="form-control" v-model="formData.Raza" placeholder="Ej: Golden Retriever" />
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="cerrarModal">Cancelar</button>
           <button class="btn btn-success btn-sm" @click="guardarMascota"
-            :disabled="!nuevaMascota.nombre.trim()"
-            :style="{ opacity: nuevaMascota.nombre.trim() ? 1 : 0.5 }">
+            :disabled="!formData.Nombre.trim()"
+            :style="{ opacity: formData.Nombre.trim() ? 1 : 0.5 }">
             Guardar
           </button>
         </div>
