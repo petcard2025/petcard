@@ -273,13 +273,25 @@ const detailFields = {
 
 // ── Funciones de carga ──────────────────────────────────────
 async function cargarCliente() {
-  if (!usuarioLogueado.value) return
+  if (!usuarioLogueado.value) {
+    errorMessage.value = 'Por favor inicia sesión para ver tus mascotas.'
+    return
+  }
 
   try {
-    const clientes = await clientesAPI.obtener()
-    clienteActual.value = clientes.find(c => c.ID_usuario === usuarioLogueado.value.ID_usuario)
+    const clientes = await clientesAPI.obtenerPorUsuario(usuarioLogueado.value.ID_usuario)
+    clienteActual.value = Array.isArray(clientes) ? clientes[0] : clientes
+
+    if (!clienteActual.value) {
+      // Crear la fila de cliente si no existe
+      clienteActual.value = await clientesAPI.crear({
+        Direccion: '',
+        ID_usuario: usuarioLogueado.value.ID_usuario
+      })
+    }
   } catch (error) {
     console.error('Error al cargar cliente:', error)
+    errorMessage.value = 'No se pudo identificar al cliente.'
   }
 }
 
@@ -290,9 +302,7 @@ async function cargarMascotas() {
   errorMessage.value = ''
 
   try {
-    const todasLasMascotas = await mascotasAPI.obtener()
-    // Filtrar mascotas del cliente actual
-    pets.value = todasLasMascotas.filter(m => m.ID_cliente === clienteActual.value.ID_cliente)
+    pets.value = await mascotasAPI.obtenerPorCliente(clienteActual.value.ID_cliente)
   } catch (error) {
     errorMessage.value = 'Error al cargar mascotas: ' + error.message
     console.error('Error al cargar mascotas:', error)
@@ -331,8 +341,11 @@ async function savePet() {
   }
 
   if (!clienteActual.value) {
-    alert('No se pudo identificar al cliente')
-    return
+    await cargarCliente()
+    if (!clienteActual.value) {
+      alert('No se pudo identificar al cliente')
+      return
+    }
   }
 
   try {

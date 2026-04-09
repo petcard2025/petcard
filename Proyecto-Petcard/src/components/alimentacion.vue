@@ -2,20 +2,22 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { mascotasAPI, clientesAPI, alimentacionAPI } from '../api.js'
 
 const router = useRouter()
 const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 const mascotas = ref([])
-const selectedId = ref(null)
+const selectedId = ref('')
 const clienteActual = ref(null)
 const plan = ref(null)
 const isLoading = ref(false)
 const errorMessage = ref('')
+const selectedTab = ref('plan')
 const nuevaComida = ref({ nombre: '', hora: '', cal: '' })
 
 const selectedPet = computed(() => mascotas.value.find(p => p.ID_mascota === selectedId.value) || null)
+const planLabel = computed(() => plan.value?.Tipo_dieta ? `Plan: ${plan.value.Tipo_dieta}` : 'Plan actual')
 const planItems = computed(() => {
   if (!plan.value || !plan.value.Comidas) return []
   return String(plan.value.Comidas)
@@ -24,37 +26,70 @@ const planItems = computed(() => {
     .filter(Boolean)
 })
 
-const calorias = computed(() => plan.value?.Calorias || '—')
-const frecuencia = computed(() => plan.value?.Frecuencia || '—')
-const tipoDieta = computed(() => plan.value?.Tipo_dieta || '—')
-const suplementos = computed(() => plan.value?.Suplementos || '—')
-const alergias = computed(() => plan.value?.Alergias || 'Ninguna')
-const observaciones = computed(() => plan.value?.Observaciones || 'Sin observaciones adicionales')
-const diagnostico = computed(() => plan.value?.Diagnostico || 'No disponible')
-const revisionNutricional = computed(() => plan.value?.Revision_nutricional || 'No disponible')
-const periodo = computed(() => {
-  if (!plan.value) return '—'
-  return `${plan.value.Fecha_inicio || '—'} — ${plan.value.Fecha_fin || '—'}`
+const calorias = computed(() => plan.value?.Calorias ?? '—')
+const frecuencia = computed(() => plan.value?.Frecuencia ?? '—')
+const tipoDieta = computed(() => plan.value?.Tipo_dieta ?? '—')
+const suplementos = computed(() => plan.value?.Suplementos ?? '—')
+const alergias = computed(() => plan.value?.Alergias ?? 'Ninguna')
+const observaciones = computed(() => plan.value?.Observaciones ?? 'Sin observaciones adicionales')
+const diagnostico = computed(() => plan.value?.Diagnostico ?? 'No disponible')
+const periodo = computed(() => plan.value ? `${plan.value.Fecha_inicio || '—'} — ${plan.value.Fecha_fin || '—'}` : '—')
+const petPeso = computed(() => selectedPet.value ? `${selectedPet.value.Peso || '—'} kg` : '—')
+const petEdad = computed(() => {
+  if (!selectedPet.value?.Fecha_nacimiento) return '—'
+  const year = new Date(selectedPet.value.Fecha_nacimiento).getFullYear()
+  return `${Math.max(0, new Date().getFullYear() - year)} años`
 })
-
-const planLabel = computed(() => {
-  if (!selectedPet.value) return 'Elige tu mascota para ver el plan nutricional'
-  return `${selectedPet.value.Nombre} – ${selectedPet.value.Raza || selectedPet.value.Especie || 'Mascota'}`
-})
+const petRaza = computed(() => selectedPet.value ? selectedPet.value.Raza || selectedPet.value.Especie || '—' : '—')
+const petActividad = computed(() => plan.value?.Frecuencia || 'Moderada')
 
 function formatoFecha(fecha) {
   if (!fecha) return '—'
   return new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-async function cargarCliente() {
-  if (!usuarioLogueado.value) return
+async function fetchJson(endpoint, options = {}) {
   try {
-    const clientes = await clientesAPI.obtenerPorUsuario(usuarioLogueado.value.ID_usuario)
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      mode: 'cors',
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || `Error ${response.status}`)
+    return data
+  } catch (error) {
+    console.error('Error en fetch:', error)
+    throw error
+  }
+}
+
+async function cargarCliente() {
+  if (!usuarioLogueado.value?.ID_usuario) {
+    clienteActual.value = null
+    return
+  }
+  try {
+    const clientes = await fetchJson(`/clientes/usuario/${usuarioLogueado.value.ID_usuario}`)
     clienteActual.value = clientes[0] || null
   } catch (error) {
     console.error('Error al cargar cliente:', error)
     errorMessage.value = 'No se pudo cargar la información del cliente.'
+    clienteActual.value = null
+  }
+}
+
+async function crearClienteSiNoExiste() {
+  if (!usuarioLogueado.value?.ID_usuario) return null
+  try {
+    const cliente = await fetchJson('/clientes', {
+      method: 'POST',
+      body: JSON.stringify({ ID_usuario: usuarioLogueado.value.ID_usuario, Direccion: '' })
+    })
+    return cliente
+  } catch (error) {
+    console.error('Error al crear cliente:', error)
+    return null
   }
 }
 
@@ -63,9 +98,9 @@ async function cargarMascotas() {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const mascotasCliente = await mascotasAPI.obtenerPorCliente(clienteActual.value.ID_cliente)
+    const mascotasCliente = await fetchJson(`/mascotas/cliente/${clienteActual.value.ID_cliente}`)
     mascotas.value = mascotasCliente
-    selectedId.value = mascotasCliente[0]?.ID_mascota || null
+    selectedId.value = mascotasCliente[0]?.ID_mascota || ''
     if (selectedId.value) await cargarPlan(selectedId.value)
   } catch (error) {
     console.error('Error al cargar mascotas:', error)
@@ -83,7 +118,7 @@ async function cargarPlan(idMascota) {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const planes = await alimentacionAPI.obtenerPorMascota(idMascota)
+    const planes = await fetchJson(`/alimentacion/mascota/${idMascota}`)
     plan.value = planes[0] || null
   } catch (error) {
     console.error('Error al cargar plan de alimentación:', error)
@@ -94,13 +129,85 @@ async function cargarPlan(idMascota) {
   }
 }
 
-watch(selectedId, async (nuevoId) => {
-  if (nuevoId) await cargarPlan(nuevoId)
-})
+async function actualizarPlan(updatedPlan) {
+  if (!updatedPlan?.ID_planAlimentacion) {
+    errorMessage.value = 'No hay plan para actualizar.'
+    return
+  }
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    await fetchJson(`/alimentacion/${updatedPlan.ID_planAlimentacion}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        Tipo_dieta: updatedPlan.Tipo_dieta,
+        Frecuencia: updatedPlan.Frecuencia,
+        Alergias: updatedPlan.Alergias,
+        Horario: updatedPlan.Horario,
+        Calorias: updatedPlan.Calorias,
+        Suplementos: updatedPlan.Suplementos,
+        Comidas: updatedPlan.Comidas,
+        Fecha_inicio: updatedPlan.Fecha_inicio,
+        Fecha_fin: updatedPlan.Fecha_fin,
+        Observaciones: updatedPlan.Observaciones,
+        Diagnostico: updatedPlan.Diagnostico,
+        Revision_nutricional: updatedPlan.Revision_nutricional
+      })
+    })
+    plan.value = { ...updatedPlan }
+  } catch (error) {
+    console.error('Error al actualizar plan:', error)
+    errorMessage.value = 'No se pudo guardar el plan en la base de datos.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function agregarComida() {
+  if (!selectedId.value) {
+    errorMessage.value = 'Selecciona una mascota primero.'
+    return
+  }
+
+  if (!nuevaComida.value.nombre || !nuevaComida.value.hora || !nuevaComida.value.cal) {
+    errorMessage.value = 'Completa nombre, hora y calorías para agregar la comida.'
+    return
+  }
+
+  if (!plan.value) {
+    errorMessage.value = 'No hay plan de alimentación registrado para esta mascota.'
+    return
+  }
+
+  const actualComidas = planItems.value.slice()
+  actualComidas.push(`${nuevaComida.value.nombre} ${nuevaComida.value.hora} ${nuevaComida.value.cal} cal`)
+
+  await actualizarPlan({
+    ...plan.value,
+    Comidas: actualComidas.join(', ')
+  })
+
+  nuevaComida.value = { nombre: '', hora: '', cal: '' }
+}
+
+function cambiarTab(tab) {
+  selectedTab.value = tab
+}
 
 async function initData() {
-  if (!usuarioLogueado.value) return
+  errorMessage.value = ''
+
+  if (!usuarioLogueado.value) {
+    errorMessage.value = 'Debes iniciar sesión para ver esta sección.'
+    return
+  }
+
   await cargarCliente()
+
+  if (!clienteActual.value) {
+    clienteActual.value = await crearClienteSiNoExiste()
+  }
+
   await cargarMascotas()
 }
 
@@ -108,8 +215,12 @@ watch(usuarioLogueado, async (valor) => {
   if (valor) await initData()
 })
 
+watch(selectedId, async (valor) => {
+  if (valor) await cargarPlan(valor)
+})
+
 onMounted(async () => {
-  if (usuarioLogueado.value) await initData()
+  await initData()
 })
 </script>
 
@@ -144,7 +255,12 @@ onMounted(async () => {
   </nav>
 
   <div class="page-wrapper">
-    <div class="two-col">
+    <div v-if="!usuarioLogueado" class="card" style="margin:1.5rem; padding:1.5rem; text-align:center;">
+      <h2 style="margin-bottom:1rem;">Necesitas iniciar sesión</h2>
+      <p style="margin-bottom:1rem; color:var(--muted);">Inicia sesión para ver tus mascotas y planes de alimentación guardados.</p>
+      <button class="btn btn-primary" @click="irALogin">Iniciar sesión</button>
+    </div>
+    <div v-else class="two-col">
 
       <!-- PANEL IZQUIERDO -->
       <div>
@@ -157,7 +273,7 @@ onMounted(async () => {
           </div>
           <p style="font-size:.85rem; color:var(--muted); margin-bottom:.75rem;">Elige tu mascota para ver el plan nutricional</p>
           <select class="form-control" v-model="selectedId" style="max-width:220px;">
-            <option disabled value="">Elige una mascota</option>
+            <option disabled value="">{{ mascotas.length ? 'Elige una mascota' : 'No hay mascotas registradas' }}</option>
             <option v-for="pet in mascotas" :key="pet.ID_mascota" :value="pet.ID_mascota">
               {{ pet.Nombre }} – {{ pet.Especie || pet.Raza || 'Mascota' }}
             </option>
@@ -169,13 +285,13 @@ onMounted(async () => {
         <!-- Tabs -->
         <div class="card">
           <div class="tabs" id="tabs">
-            <button class="tab active" data-tab="plan">Plan Nutricional</button>
-            <button class="tab" data-tab="historial">Historial de Cambios</button>
-            <button class="tab" data-tab="alternativas">Alternativas Recomendadas</button>
+            <button class="tab" :class="{ active: selectedTab === 'plan' }" @click="cambiarTab('plan')">Plan Nutricional</button>
+            <button class="tab" :class="{ active: selectedTab === 'historial' }" @click="cambiarTab('historial')">Historial de Cambios</button>
+            <button class="tab" :class="{ active: selectedTab === 'alternativas' }" @click="cambiarTab('alternativas')">Alternativas Recomendadas</button>
           </div>
 
           <!-- TAB PLAN NUTRICIONAL -->
-          <div id="plan-content" style="display:block;">
+          <div id="plan-content" v-show="selectedTab === 'plan'">
             <!-- Stats -->
             <div class="stats-row">
             <div class="stat-box orange">
@@ -199,7 +315,7 @@ onMounted(async () => {
           <div class="alimento-rec">
             <div>
               <div class="alimento-nombre">Plan de dieta: {{ tipoDieta }}</div>
-              <div class="alimento-detalle">Horario: {{ plan.value?.Horario || 'No definido' }}</div>
+              <div class="alimento-detalle">Horario: {{ plan && plan.Horario ? plan.Horario : 'No definido' }}</div>
             </div>
             <div style="text-align:right;">
               <div style="font-size:.75rem; color:var(--muted);">Suplementos:</div>
@@ -212,17 +328,17 @@ onMounted(async () => {
             <h5 style="font-family:'Nunito',sans-serif; font-weight:700; margin:0 0 .75rem; color:var(--dark);">Agregar nuevo horario</h5>
             <div class="form-group" style="margin-bottom:.5rem;">
               <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Nombre</label>
-              <input type="text" id="input-comida-nombre" class="form-control" placeholder="Ej: Desayuno" style="font-size:.85rem;"/>
+              <input type="text" class="form-control" v-model="nuevaComida.nombre" placeholder="Ej: Desayuno" style="font-size:.85rem;"/>
             </div>
             <div class="form-group" style="margin-bottom:.5rem;">
               <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Hora</label>
-              <input type="time" id="input-comida-hora" class="form-control" style="font-size:.85rem;"/>
+              <input type="time" class="form-control" v-model="nuevaComida.hora" style="font-size:.85rem;"/>
             </div>
             <div class="form-group" style="margin-bottom:.75rem;">
               <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Calorías</label>
-              <input type="text" id="input-comida-cal" class="form-control" placeholder="Ej: 400" style="font-size:.85rem;"/>
+              <input type="text" class="form-control" v-model="nuevaComida.cal" placeholder="Ej: 400" style="font-size:.85rem;"/>
             </div>
-            <button class="btn btn-primary btn-full" id="btn-add-comida">Agregar Comida</button>
+            <button class="btn btn-primary btn-full" @click.prevent="agregarComida">Agregar Comida</button>
           </div>
 
           <!-- Horarios -->
@@ -235,7 +351,7 @@ onMounted(async () => {
                 </div>
                 <div>
                   <div class="comida-name">{{ item }}</div>
-                  <div class="comida-hora">{{ plan.value?.Horario || 'Horario no definido' }}</div>
+                  <div class="comida-hora">{{ plan && plan.Horario ? plan.Horario : 'Horario no definido' }}</div>
                 </div>
                 <div class="comida-cal">{{ calorias }} cal</div>
                 <div class="comida-status" :class="item === planItems[1] ? 'green-check' : ''">
@@ -251,7 +367,7 @@ onMounted(async () => {
           <div class="cards-grid-2">
             <div class="suplem-card">
               <div class="suplem-header"><span>{{ suplementos }}</span><span class="badge badge-green">Activo</span></div>
-              <p>{{ plan.value?.Frecuencia || 'Revisión de frecuencia pendiente' }}</p>
+              <p>{{ plan && plan.Frecuencia ? plan.Frecuencia : 'Revisión de frecuencia pendiente' }}</p>
             </div>
             <div class="suplem-card">
               <div class="suplem-header"><span>Plan nutricional</span><span class="badge badge-blue">Registro</span></div>
@@ -278,7 +394,7 @@ onMounted(async () => {
           </div><!-- Cierre plan-content -->
 
           <!-- TAB HISTORIAL DE CAMBIOS -->
-          <div id="historial-content" style="display:none;">
+          <div id="historial-content" v-show="selectedTab === 'historial'">
             <h5 style="font-family:'Nunito',sans-serif; font-weight:700; margin:0 0 1rem; color:var(--dark);">Cambios Realizados en la Alimentación</h5>
             <div id="historial-list" style="max-height:500px; overflow-y:auto;">
               <div style="color:var(--muted); padding:1rem; text-align:center;">No hay cambios registrados aún.</div>
@@ -286,7 +402,7 @@ onMounted(async () => {
           </div><!-- Cierre historial-content -->
 
           <!-- TAB ALTERNATIVAS RECOMENDADAS -->
-          <div id="alternativas-content" style="display:none;">
+          <div id="alternativas-content" v-show="selectedTab === 'alternativas'">
             <h5 style="font-family:'Nunito',sans-serif; font-weight:700; margin:0 0 1rem; color:var(--dark);">Cambiar a un Alimento Alternativo</h5>
             <div class="cards-grid-2">
               <div style="background:#f5f5f5; padding:1rem; border-radius:6px;">
@@ -322,12 +438,12 @@ onMounted(async () => {
         <div class="card">
           <div class="card-title" style="color:var(--purple);">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-            Información de Max
+            Información de {{ selectedPet ? selectedPet.Nombre : 'Mascota' }}
           </div>
-          <div class="info-row"><span>Peso Actual:</span><strong>{{ selectedPet?.Peso ? selectedPet.Peso + ' kg' : '—' }}</strong></div>
-          <div class="info-row"><span>Edad:</span><strong>{{ selectedPet?.Fecha_nacimiento ? Math.max(0, new Date().getFullYear() - new Date(selectedPet.Fecha_nacimiento).getFullYear()) + ' años' : '—' }}</strong></div>
-          <div class="info-row"><span>Raza:</span><strong>{{ selectedPet?.Raza || selectedPet?.Especie || '—' }}</strong></div>
-          <div class="info-row"><span>Actividad:</span><strong>{{ plan.value?.Frecuencia || 'Moderada' }}</strong></div>
+          <div class="info-row"><span>Peso Actual:</span><strong>{{ petPeso }}</strong></div>
+          <div class="info-row"><span>Edad:</span><strong>{{ petEdad }}</strong></div>
+          <div class="info-row"><span>Raza:</span><strong>{{ petRaza }}</strong></div>
+          <div class="info-row"><span>Actividad:</span><strong>{{ petActividad }}</strong></div>
         </div>
 
         <!-- Próximas Comidas -->
