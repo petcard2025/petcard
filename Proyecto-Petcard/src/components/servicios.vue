@@ -106,59 +106,6 @@ const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
           </div>
         </div>
 
-        <div class="servicio-card card">  
-          <div class="servicio-img-wrap">
-            <img src="https://images.unsplash.com/photo-1551601651-2a8555f1a136?w=400&q=80" alt="Emergencias"/>
-            <span class="servicio-badge red">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            </span>
-          </div>
-          <div class="servicio-body">
-            <h3>Emergencias 24/7</h3>
-            <p>Atención de urgencia las 24 horas. Disponibles para tipos de lesiones, accidentes y emergencias médicas.</p>
-            <div class="servicio-footer">
-              <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$150 – $400</span>
-            </div>
-            <router-link to="/citas" class="btn btn-danger btn-full" data-servicio="Emergencias" id="btn-agendar-3" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
-          </div>
-        </div>
-
-        <div class="servicio-card card">
-          <div class="servicio-img-wrap">
-            <img src="https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400&q=80" alt="Análisis"/>
-            <span class="servicio-badge teal">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18"/></svg>
-            </span>
-          </div>
-          <div class="servicio-body">
-            <h3>Análisis Clínicos</h3>
-            <p>Exámenes de sangre, orina y otros análisis para diagnósticos precisos y seguimiento de tratamientos.</p>
-            <div class="servicio-footer">
-              <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$40 – $120</span>
-            </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#0d9488;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Análisis" id="btn-agendar-4">Agendar Cita</router-link>
-          </div>
-        </div>
-
-        <div class="servicio-card card">
-          <div class="servicio-img-wrap">
-            <img src="https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=400&q=80" alt="Radiografías"/>
-            <span class="servicio-badge orange">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
-            </span>
-          </div>
-          <div class="servicio-body">
-            <h3>Radiografías</h3>
-            <p>Imágenes diagnósticas digitales para detectar fracturas, problemas internos y monitoreo.</p>
-            <div class="servicio-footer">
-              <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$80 – $150</span>
-            </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#16a34a;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Radiografías" id="btn-agendar-5">Agendar Cita</router-link>
-          </div>
-        </div>
 
         <div class="servicio-card card">
           <div class="servicio-img-wrap">
@@ -200,21 +147,6 @@ const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
     </div>
   </section>
 
-  <!-- EMERGENCIAS BANNER -->
-  <section class="emergencia-banner">
-    <div class="emergencia-icon">
-      <svg width="36" height="36" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-      </svg>
-    </div>
-    <h2>Emergencias 24/7</h2>
-    <p>Si tu mascota tiene una emergencia médica, no dudes en contactarnos. Estamos disponibles las 24 horas del día, los 365 días del año.</p>
-    <div class="emergencia-btns">
-      <button class="btn btn-outline-white btn-lg" id="btn-llamar">Llamar Emergencia</button>
-      <button class="btn btn-outline-white btn-lg" id="btn-chat">Chat de Urgencia</button>
-    </div>
-  </section>
-
   <!-- FOOTER -->
   <footer class="footer">
     <div class="footer-grid">
@@ -225,7 +157,7 @@ const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
         </span>
         <p>Comprometidos con brindar toda la atención profesional que tu mascota.</p>
       </div>
-      <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div>
+      <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li></ul></div>
       <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
       <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
     </div>
