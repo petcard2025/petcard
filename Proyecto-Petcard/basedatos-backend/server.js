@@ -2,11 +2,15 @@ const express = require('express')
 const mysql = require('mysql2')
 const cors = require('cors')
 const bcrypt = require('bcrypt')
+const crypto = require('crypto')
 require('dotenv').config()
 
 // ===== ENCRIPTACION =====
 // Usar bcrypt para hashear y verificar contraseñas de forma segura
 const SALT_ROUNDS = 10
+
+// Mapa para tokens de reset de contraseña (en memoria, para desarrollo)
+const resetTokens = new Map()
 
 const app = express()
 app.use(cors())
@@ -132,6 +136,57 @@ app.post('/api/login', async (req, res) => {
   }
 })
 
+// FORGOT PASSWORD
+app.post('/api/forgot-password', (req, res) => {
+  const { Correo } = req.body
+  if (!Correo) return res.status(400).json({ error: 'Correo requerido' })
+
+  db.query('SELECT ID_usuario, Nombre FROM usuario WHERE Correo=?', [Correo], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message })
+    if (results.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' })
+
+    const usuario = results[0]
+    const token = crypto.randomBytes(32).toString('hex')
+    const expires = Date.now() + 3600000 // 1 hora
+
+    resetTokens.set(token, { ID_usuario: usuario.ID_usuario, expires })
+
+    // En producción, enviar email con token
+    // Por ahora, devolver el token para desarrollo
+    res.json({ 
+      message: 'Token de reset generado. En producción se enviaría por email.',
+      token: token, // Solo para desarrollo
+      info: 'Usa este token en /api/reset-password con la nueva contraseña'
+    })
+  })
+})
+
+// RESET PASSWORD
+app.post('/api/reset-password', async (req, res) => {
+  const { token, nuevaContrasena } = req.body
+  if (!token || !nuevaContrasena) return res.status(400).json({ error: 'Token y nueva contraseña requeridos' })
+  if (nuevaContrasena.length < 6) return res.status(400).json({ error: 'Contraseña debe tener al menos 6 caracteres' })
+
+  const tokenData = resetTokens.get(token)
+  if (!tokenData) return res.status(400).json({ error: 'Token inválido' })
+  if (Date.now() > tokenData.expires) {
+    resetTokens.delete(token)
+    return res.status(400).json({ error: 'Token expirado' })
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(nuevaContrasena, SALT_ROUNDS)
+    db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [hashedPassword, tokenData.ID_usuario], (err) => {
+      if (err) return res.status(500).json({ error: err.message })
+      
+      resetTokens.delete(token)
+      res.json({ message: 'Contraseña actualizada exitosamente' })
+    })
+  } catch (error) {
+    res.status(500).json({ error: 'Error al actualizar contraseña' })
+  }
+})
+
 // CLIENTES
 app.get('/api/clientes', (req, res) => {
   db.query(
@@ -221,44 +276,6 @@ app.get('/api/clientes/usuario/:id_usuario', (req, res) => {
   })
 })
 
-// VACUNAS / CARNET DE VACUNAS
-app.get('/api/vacunas', (req, res) => {
-  db.query('SELECT * FROM carnetvacunas', (err, results) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json(results)
-  })
-})
-
-app.get('/api/vacunas/mascota/:id_mascota', (req, res) => {
-  db.query('SELECT * FROM carnetvacunas WHERE ID_mascota=?', [req.params.id_mascota], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json(results)
-  })
-})
-
-app.post('/api/vacunas', (req, res) => {
-  const { ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones } = req.body
-  db.query(
-    'INSERT INTO carnetvacunas (ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    [ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ ID_carnetVacunas: result.insertId, ...req.body })
-    }
-  )
-})
-
-app.put('/api/vacunas/:id', (req, res) => {
-  const { ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones } = req.body
-  db.query(
-    'UPDATE carnetvacunas SET ID_mascota=?, ID_servicio=?, Nombre_vacuna=?, Laboratorio=?, Lote=?, Fecha_aplicacion=?, Proxima_dosis=?, Reacciones=?, Estado=?, Observaciones=? WHERE ID_carnetVacunas=?',
-    [ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones, req.params.id],
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ message: 'Vacuna actualizada' })
-    }
-  )
-})
 
 app.delete('/api/vacunas/:id', (req, res) => {
   db.query('DELETE FROM carnetvacunas WHERE ID_carnetVacunas=?', [req.params.id], (err) => {
@@ -322,7 +339,8 @@ app.delete('/api/servicios/:id', (req, res) => {
 // CITAS
 app.get('/api/citas', (req, res) => {
   db.query(
-    `SELECT ci.ID_cita, ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones,
+    `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
+            ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones,
             m.Nombre AS Nombre_mascota,
             u.Nombre AS Nombre_cliente,
             s.Nombre AS Nombre_servicio,
@@ -399,10 +417,10 @@ app.get('/api/vacunas/mascota/:id_mascota', (req, res) => {
 })
 
 app.post('/api/vacunas', (req, res) => {
-  const { ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones } = req.body
+  const { ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones } = req.body
   db.query(
-    'INSERT INTO carnetvacunas (ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    [ID_mascota, ID_servicio, Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones],
+    'INSERT INTO carnetvacunas (ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones) VALUES (?,?,?,?,?,?,?,?)',
+    [ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ ID_carnetVacunas: result.insertId, ...req.body })
@@ -411,10 +429,10 @@ app.post('/api/vacunas', (req, res) => {
 })
 
 app.put('/api/vacunas/:id', (req, res) => {
-  const { Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones } = req.body
+  const { Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones } = req.body
   db.query(
-    'UPDATE carnetvacunas SET Nombre_vacuna=?, Laboratorio=?, Lote=?, Fecha_aplicacion=?, Proxima_dosis=?, Reacciones=?, Estado=?, Observaciones=? WHERE ID_carnetVacunas=?',
-    [Nombre_vacuna, Laboratorio, Lote, Fecha_aplicacion, Proxima_dosis, Reacciones, Estado, Observaciones, req.params.id],
+    'UPDATE carnetvacunas SET Nombre_vacuna=?, Lote=?, Fecha_aplicacion=?, Proxima_dosis=?, Estado=?, Observaciones=? WHERE ID_carnetVacunas=?',
+    [Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones, req.params.id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ message: 'Vacuna actualizada' })

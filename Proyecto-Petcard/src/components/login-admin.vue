@@ -15,6 +15,14 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const isLoading = ref(false)
 const showPassword = ref(false)
+const showForgotModal = ref(false)
+const forgotEmail = ref('')
+const resetToken = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const modalStep = ref('email') // 'email' or 'reset'
+const message = ref('')
+const isResetting = ref(false)
 
 const handleLogin = async () => {
   errorMessage.value = ''
@@ -75,6 +83,86 @@ const irARegistro = () => {
   router.push('/registro-admin')
 }
 
+const openForgotModal = () => {
+  showForgotModal.value = true
+  forgotEmail.value = ''
+  resetToken.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
+  modalStep.value = 'email'
+  message.value = ''
+}
+
+const closeForgotModal = () => {
+  showForgotModal.value = false
+}
+
+const requestReset = async () => {
+  if (!forgotEmail.value.trim()) {
+    message.value = 'Ingresa tu correo electrónico'
+    return
+  }
+
+  message.value = 'Enviando solicitud...'
+
+  try {
+    const response = await fetch('http://localhost:3001/api/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Correo: forgotEmail.value.trim() })
+    })
+    const data = await response.json()
+    
+    if (response.ok) {
+      message.value = `Token generado: ${data.token}\n\nCopia este token para resetear tu contraseña.`
+      modalStep.value = 'reset'
+    } else {
+      message.value = data.error || 'Error al solicitar reset'
+    }
+  } catch (error) {
+    message.value = 'Error de conexión'
+  }
+}
+
+const resetPassword = async () => {
+  if (!resetToken.value.trim() || !newPassword.value || !confirmPassword.value) {
+    message.value = 'Completa todos los campos'
+    return
+  }
+
+  if (newPassword.value !== confirmPassword.value) {
+    message.value = 'Las contraseñas no coinciden'
+    return
+  }
+
+  if (newPassword.value.length < 6) {
+    message.value = 'La contraseña debe tener al menos 6 caracteres'
+    return
+  }
+
+  message.value = 'Reseteando contraseña...'
+
+  try {
+    const response = await fetch('http://localhost:3001/api/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })
+    })
+    const data = await response.json()
+    
+    if (response.ok) {
+      message.value = 'Contraseña actualizada exitosamente'
+      setTimeout(() => {
+        closeForgotModal()
+      }, 2000)
+    } else {
+      message.value = data.error || 'Error al resetear contraseña'
+    }
+  } catch (error) {
+    message.value = 'Error de conexión'
+  }
+}
+
 const irAlInicio = () => {
   router.push('/inicio')
 }
@@ -125,7 +213,7 @@ const irAlInicio = () => {
         <label class="checkbox-group">
           <input type="checkbox" v-model="formData.recordar"/> Recordarme
         </label>
-        <a href="javascript:void(0)" class="link">¿Olvidaste tu contraseña?</a>
+        <a href="javascript:void(0)" class="link" @click="openForgotModal">¿Olvidaste tu contraseña?</a>
       </div>
 
       <button class="btn btn-primary btn-full btn-lg" @click="handleLogin" :disabled="isLoading">
@@ -146,6 +234,31 @@ const irAlInicio = () => {
 
     </div>
   </main>
+
+  <!-- Modal Forgot Password -->
+  <div v-if="showForgotModal" class="modal-overlay" @click="closeForgotModal">
+    <div class="modal-content" @click.stop>
+      <div class="modal-header">
+        <h3>Recuperar Contraseña</h3>
+        <button class="modal-close" @click="closeForgotModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div v-if="modalStep === 'email'">
+          <p>Ingresa tu correo electrónico para recibir instrucciones de recuperación.</p>
+          <input type="email" v-model="forgotEmail" placeholder="Correo electrónico" class="form-control" />
+          <button class="btn btn-primary" @click="requestReset" style="width: 100%; margin-top: 1rem;">Enviar Código de Recuperación</button>
+        </div>
+        <div v-else-if="modalStep === 'reset'">
+          <p>Ingresa el código de recuperación y tu nueva contraseña.</p>
+          <input type="text" v-model="resetToken" placeholder="Código de recuperación" class="form-control" style="margin-bottom: 1rem;" />
+          <input type="password" v-model="newPassword" placeholder="Nueva contraseña" class="form-control" style="margin-bottom: 1rem;" />
+          <input type="password" v-model="confirmPassword" placeholder="Confirmar nueva contraseña" class="form-control" style="margin-bottom: 1rem;" />
+          <button class="btn btn-primary" @click="resetPassword" style="width: 100%;">Resetear Contraseña</button>
+        </div>
+        <p v-if="message" style="margin-top: 1rem; color: #666; font-size: 0.9rem;">{{ message }}</p>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style>
@@ -159,5 +272,57 @@ body { background: #f8fafc; display: flex; flex-direction: column; min-height: 1
 .auth-footer-text { text-align: center; font-size: .85rem; color: var(--muted); margin: 1rem 0 .5rem; }
 .footer-simple { background: #111827; text-align: center; padding: 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; gap: .4rem; }
 .footer-simple p { font-size: .78rem; color: #6b7280; }
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-body p {
+  margin-bottom: 15px;
+  color: #666;
+}
 
 </style>

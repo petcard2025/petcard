@@ -226,7 +226,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { mascotasAPI, clientesAPI } from '../api.js'
+import { mascotasAPI, clientesAPI, vacunasAPI } from '../api.js'
 
 const router = useRouter()
 const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -262,6 +262,8 @@ const newVac = reactive({ nombre: '', fechaProgramada: '', fechaAplicada: '', lo
 const avatarOptions = [
   '🐶', '🐱', '🦜', '🐰', '🐹', '🐢', '🐠'
 ]
+
+const defaultVacunaServicioId = 2
 
 const detailFields = {
   Especie: 'Especie',
@@ -390,9 +392,27 @@ function goToCita(id) {
 }
 
 // ── Vacunas ──────────────────────────────────────────────────
-function openVaccineEditor(pet) {
-  vacPet.value = reactive({ ...pet, vacunas: [...(pet.vacunas || [])] })
+async function openVaccineEditor(pet) {
+  const mascotaId = pet.ID_mascota || pet.id || pet.id_mascota || pet.ID
+  vacPet.value = reactive({ ...pet, ID_mascota: mascotaId, vacunas: [] })
   Object.assign(newVac, { nombre:'', fechaProgramada:'', fechaAplicada:'', lote:'' })
+
+  try {
+    if (!mascotaId) throw new Error('ID de mascota no disponible')
+    const vacunas = await vacunasAPI.obtenerPorMascota(mascotaId)
+    vacPet.value.vacunas = vacunas.map(v => ({
+      id: v.ID_carnetVacunas,
+      nombre: v.Nombre_vacuna,
+      fechaProgramada: v.Proxima_dosis,
+      fechaAplicada: v.Fecha_aplicacion,
+      lote: v.Lote,
+      observaciones: v.Observaciones || '',
+      estado: v.Estado || (v.Fecha_aplicacion ? 'aplicada' : 'proxima')
+    }))
+  } catch (error) {
+    console.error('Error al cargar vacunas:', error, { pet })
+    vacPet.value.vacunas = []
+  }
 }
 
 function calcEstado(v) {
@@ -405,10 +425,36 @@ function recalcEstado(v) {
   v.estado = calcEstado(v)
 }
 
-function saveVac(idx) {
-  recalcEstado(vacPet.value.vacunas[idx])
-  // Aquí iría la lógica para guardar en la base de datos
-  // Por ahora solo actualizamos localmente
+async function saveVac(idx) {
+  const v = vacPet.value.vacunas[idx]
+  recalcEstado(v)
+  const mascotaId = vacPet.value.ID_mascota || vacPet.value.id || vacPet.value.id_mascota || vacPet.value.ID
+
+  const payload = {
+    ID_mascota: mascotaId,
+    ID_servicio: v.ID_servicio || defaultVacunaServicioId,
+    Nombre_vacuna: v.nombre,
+    Lote: v.lote || '',
+    Fecha_aplicacion: v.fechaAplicada || null,
+    Proxima_dosis: v.fechaProgramada || null,
+    Estado: v.estado || 'proxima',
+    Observaciones: v.observaciones || ''
+  }
+
+  try {
+    if (!mascotaId) throw new Error('ID de mascota no disponible para guardar vacuna')
+
+    if (v.id) {
+      await vacunasAPI.actualizar(v.id, payload)
+    } else {
+      const created = await vacunasAPI.crear(payload)
+      v.id = created.ID_carnetVacunas
+    }
+    alert('Vacuna guardada en el carnet correctamente.')
+  } catch (error) {
+    console.error('Error al guardar vacuna:', error, { payload, vacPet: vacPet.value })
+    alert('No se pudo guardar la vacuna en el carnet. ' + (error.message || ''))
+  }
 }
 
 function toggleVac(idx) {
@@ -421,26 +467,62 @@ function toggleVac(idx) {
   }
 }
 
-function deleteVac(idx) {
+async function deleteVac(idx) {
+  const v = vacPet.value.vacunas[idx]
   if (!confirm('¿Eliminar vacuna?')) return
-  vacPet.value.vacunas.splice(idx, 1)
+
+  try {
+    if (v.id) {
+      await vacunasAPI.eliminar(v.id)
+    }
+    vacPet.value.vacunas.splice(idx, 1)
+  } catch (error) {
+    console.error('Error al eliminar vacuna:', error)
+    alert('No se pudo eliminar la vacuna del carnet.')
+  }
 }
 
-function addVac() {
+async function addVac() {
   if (!newVac.nombre.trim()) {
     alert('Nombre de vacuna requerido')
     return
   }
   if (!vacPet.value.vacunas) vacPet.value.vacunas = []
-  vacPet.value.vacunas.push({
+  const mascotaId = vacPet.value.ID_mascota || vacPet.value.id || vacPet.value.id_mascota || vacPet.value.ID
+  if (!mascotaId) {
+    alert('No se pudo identificar la mascota para el carnet.')
+    return
+  }
+
+  const nuevaVacuna = {
     nombre: newVac.nombre,
     fechaProgramada: newVac.fechaProgramada,
     fechaAplicada: newVac.fechaAplicada,
     lote: newVac.lote,
     observaciones: '',
     estado: calcEstado(newVac)
-  })
-  Object.assign(newVac, { nombre:'', fechaProgramada:'', fechaAplicada:'', lote:'' })
+  }
+
+  try {
+    const payload = {
+      ID_mascota: mascotaId,
+      ID_servicio: defaultVacunaServicioId,
+      Nombre_vacuna: nuevaVacuna.nombre,
+      Lote: nuevaVacuna.lote,
+      Fecha_aplicacion: nuevaVacuna.fechaAplicada || null,
+      Proxima_dosis: nuevaVacuna.fechaProgramada || null,
+      Estado: nuevaVacuna.estado,
+      Observaciones: nuevaVacuna.observaciones
+    }
+
+    const created = await vacunasAPI.crear(payload)
+    nuevaVacuna.id = created.ID_carnetVacunas
+    vacPet.value.vacunas.push(nuevaVacuna)
+    Object.assign(newVac, { nombre:'', fechaProgramada:'', fechaAplicada:'', lote:'' })
+  } catch (error) {
+    console.error('Error al crear vacuna:', error, { payload: { mascotaId, ...newVac } })
+    alert('No se pudo agregar la vacuna al carnet. ' + (error.message || ''))
+  }
 }
 
 // ── Imprimir / PDF ───────────────────────────────────────────
