@@ -110,6 +110,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const btnAgregar = document.getElementById('btn-agregar-mascota');
   if (btnAgregar) {
-    btnAgregar.addEventListener('click', agregarMascota);
+    btnAgregar.addEventListener('click', abrirFormularioMascota);
+  }
+
+  const btnGuardar = document.getElementById('btn-guardar-mascota');
+  if (btnGuardar) {
+    btnGuardar.addEventListener('click', agregarMascota);
+  }
+
+  const btnCancelar = document.getElementById('btn-cancelar-mascota');
+  if (btnCancelar) {
+    btnCancelar.addEventListener('click', abrirFormularioMascota);
   }
 });

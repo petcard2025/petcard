@@ -36,8 +36,11 @@
           Agendar Nueva Cita
         </div>
         <div class="form-row">
-          <div class="form-group"><label>Seleccionar Mascota <span class="req">*</span></label><select class="form-control" id="select-mascota"><option value="" disabled selected>Selecciona mascota</option><option>Max</option><option>Luna</option><option>Coco</option></select></div>
-          <div class="form-group"><label>Servicio <span class="req">*</span></label><select class="form-control" id="select-servicio"><option value="" disabled selected>Seleccionar servicio</option><option>Consulta General</option><option>Vacunación</option><option>Cirugía</option><option>Emergencia</option><option>Análisis Clínicos</option></select></div>
+          <div class="form-group"><label>Seleccionar Mascota <span class="req">*</span></label><select class="form-control" id="select-mascota"><option value="" disabled selected>Selecciona mascota</option></select></div>
+          <div class="form-group"><label>Servicio <span class="req">*</span></label><select class="form-control" id="select-servicio"><option value="" disabled selected>Seleccionar servicio</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Veterinario <span class="req">*</span></label><select class="form-control" id="veterinario"><option value="" disabled selected>Selecciona veterinario</option></select></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label>Fecha <span class="req">*</span></label><input type="date" class="form-control" id="input-fecha"/></div>
@@ -45,9 +48,13 @@
         </div>
         <div class="form-group"><label>Notas adicionales</label><textarea class="form-control" id="textarea-notas" placeholder="Describe los síntomas o información relevante para el veterinario..."></textarea></div>
         <div style="display:flex; gap:1rem; margin-top:1rem;">
-          <button class="btn btn-primary btn-full" onclick="window.location.href='citas.html'" id="btn-agendar">Agendar Cita</button>
-          <button class="btn btn-outline-primary" onclick="window.location.href='mis-mascotas.html'" id="btn-ver-mascotas">Ver Mascotas</button>
+          <button class="btn btn-primary btn-full" type="button" id="btn-agendar">Agendar Cita</button>
+          <button class="btn btn-outline-primary" type="button" id="btn-ver-mascotas">Ver Mascotas</button>
         </div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color:var(--purple);">Tus Citas</div>
+        <div id="citas-container" style="padding:1rem;"><p>Cargando tus citas...</p></div>
       </div>
 
       <!-- SIDEBAR -->

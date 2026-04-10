@@ -67,27 +67,30 @@ async function cargarCitas() {
 }
 
 function mostrarCitas(citas) {
-  // Las citas se mostrarían en un contenedor si existe
   const container = document.getElementById('citas-container');
   if (!container) {
     console.log('Citas cargadas:', citas);
     return;
   }
 
-  if (citas.length === 0) {
-    container.innerHTML = '<p>No hay citas disponibles</p>';
+  const citasUsuario = usuarioActual && citas
+    ? citas.filter(cita => String(cita.ID_cliente || cita.ID_usuario || cita.ID_usuario_cliente) === String(usuarioActual.ID_usuario))
+    : citas;
+
+  if (!citasUsuario || citasUsuario.length === 0) {
+    container.innerHTML = '<p>No tienes citas registradas.</p>';
     return;
   }
 
-  container.innerHTML = citas.map(cita => `
-    <div class="cita-card card">
-      <h3>${cita.Nombre_mascota}</h3>
-      <p><strong>Cliente:</strong> ${cita.Nombre_cliente}</p>
-      <p><strong>Fecha:</strong> ${cita.Fecha}</p>
-      <p><strong>Hora:</strong> ${cita.Hora}</p>
-      <p><strong>Servicio:</strong> ${cita.Nombre_servicio}</p>
-      <p><strong>Veterinario:</strong> ${cita.Nombre_veterinario}</p>
-      <p><strong>Motivo:</strong> ${cita.Motivo}</p>
+  container.innerHTML = citasUsuario.map(cita => `
+    <div class="cita-card card" style="margin-bottom:1rem;">
+      <h3>${cita.Nombre_mascota || cita.Mascota || 'Mascota'}</h3>
+      <p><strong>Cliente:</strong> ${cita.Nombre_cliente || cita.Cliente || '-'}</p>
+      <p><strong>Fecha:</strong> ${cita.Fecha || cita.Fecha_cita || '-'}</p>
+      <p><strong>Hora:</strong> ${cita.Hora || cita.Hora_cita || '-'}</p>
+      <p><strong>Servicio:</strong> ${cita.Nombre_servicio || cita.Servicio || '-'}</p>
+      <p><strong>Veterinario:</strong> ${cita.Nombre_veterinario || cita.Veterinario || '-'}</p>
+      <p><strong>Motivo:</strong> ${cita.Motivo || cita.Notas || '-'}</p>
     </div>
   `).join('');
 }
@@ -158,5 +161,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnAgendar = document.getElementById('btn-agendar');
   if (btnAgendar) {
     btnAgendar.addEventListener('click', agendarCita);
+  }
+
+  const btnVerMascotas = document.getElementById('btn-ver-mascotas');
+  if (btnVerMascotas) {
+    btnVerMascotas.addEventListener('click', () => {
+      window.location.href = 'mis-mascotas.html';
+    });
   }
 });

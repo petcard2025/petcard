@@ -1,6 +1,16 @@
 // ===== CARNET DE VACUNAS HTML =====
 
 let usuarioActual = null;
+let mascotasCarnet = [];
+
+function obtenerUsuarioActual() {
+  try {
+    const raw = localStorage.getItem('petcard_current_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 function obtenerUsuarioActual() {
   try {
@@ -20,10 +30,11 @@ async function cargarMascotasParaCarnet() {
     }
 
     const mascotas = await obtenerMascotasPorCliente(usuarioActual.ID_usuario);
+    mascotasCarnet = mascotas || [];
     const select = document.getElementById('mascota-carnet');
     if (select) {
       select.innerHTML = '<option value="">Selecciona una mascota</option>' + 
-        mascotas.map(m => `<option value="${m.ID_mascota}">${m.Nombre}</option>`).join('');
+        mascotasCarnet.map(m => `<option value="${m.ID_mascota}">${m.Nombre} - ${m.Especie || ''}</option>`).join('');
       
       select.addEventListener('change', cargarVacunas);
     }
@@ -38,9 +49,13 @@ async function cargarVacunas() {
     const select = document.getElementById('mascota-carnet');
     if (!select?.value) {
       const container = document.getElementById('vacunas-container');
-      if (container) container.innerHTML = '<p>Selecciona una mascota</p>';
+      if (container) container.innerHTML = '<p>Selecciona una mascota para ver su historial de vacunas.</p>';
+      mostrarDatosMascota(null);
       return;
     }
+
+    const mascota = mascotasCarnet.find(m => String(m.ID_mascota) === String(select.value));
+    mostrarDatosMascota(mascota);
 
     const vacunas = await obtenerVacunasPorMascota(select.value);
     mostrarVacunas(vacunas);
@@ -54,8 +69,8 @@ function mostrarVacunas(vacunas) {
   const container = document.getElementById('vacunas-container');
   if (!container) return;
 
-  if (vacunas.length === 0) {
-    container.innerHTML = '<p>No hay vacunas registradas para esta mascota</p>';
+  if (!vacunas || vacunas.length === 0) {
+    container.innerHTML = '<p>No hay vacunas registradas para esta mascota.</p>';
     return;
   }
 
@@ -73,16 +88,44 @@ function mostrarVacunas(vacunas) {
       <tbody>
         ${vacunas.map(v => `
           <tr>
-            <td style="border: 1px solid #ddd; padding: 8px;">${v.Nombre_vacuna}</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${v.Laboratorio}</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${v.Fecha_aplicacion}</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${v.Proxima_dosis}</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${v.Estado}</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${v.Nombre_vacuna || v.Vacuna || ''}</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${v.Laboratorio || ''}</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${v.Fecha_aplicacion || v.FechaAplicacion || '-'}</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${v.Proxima_dosis || v.ProximaDosis || '-'}</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${v.Estado || (v.Fecha_aplicacion ? 'Aplicada' : 'Pendiente')}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>
   `;
+}
+
+function mostrarDatosMascota(mascota) {
+  const nombre = document.getElementById('info-mascota-nombre');
+  const especie = document.getElementById('info-mascota-especie');
+  const raza = document.getElementById('info-mascota-raza');
+  const idElemento = document.getElementById('info-mascota-id');
+  const actualizacion = document.getElementById('info-mascota-actualizacion');
+  const proxima = document.getElementById('info-mascota-proxima');
+
+  if (!nombre || !especie || !raza || !idElemento || !actualizacion || !proxima) return;
+
+  if (!mascota) {
+    nombre.textContent = '-';
+    especie.textContent = '-';
+    raza.textContent = '-';
+    idElemento.textContent = '-';
+    actualizacion.textContent = '-';
+    proxima.textContent = '-';
+    return;
+  }
+
+  nombre.textContent = mascota.Nombre || '-';
+  especie.textContent = mascota.Especie || '-';
+  raza.textContent = mascota.Raza || '-';
+  idElemento.textContent = mascota.ID_mascota || '-';
+  actualizacion.textContent = mascota.Ultima_actualizacion || '-';
+  proxima.textContent = mascota.Proxima_cita || '-';
 }
 
 function mostrarError(msg) {
