@@ -1,9 +1,20 @@
 const express = require('express')
 const mysql = require('mysql2')
+const jwt = require('jsonwebtoken')
 const cors = require('cors')
 const bcrypt = require('bcrypt')
 const crypto = require('crypto')
+const helmet = require('helmet')
 require('dotenv').config()
+
+const app = express()
+
+
+app.use(helmet())
+app.use(cors())
+app.use(express.json())
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ===== ENCRIPTACION =====
 // Usar bcrypt para hashear y verificar contraseñas de forma segura
@@ -12,7 +23,6 @@ const SALT_ROUNDS = 10
 // Mapa para tokens de reset de contraseña (en memoria, para desarrollo)
 const resetTokens = new Map()
 
-const app = express()
 app.use(cors())
 app.use(express.json())
 
@@ -84,23 +94,30 @@ app.delete('/api/usuarios/:id', (req, res) => {
 
 // LOGIN
 // ===== ENCRIPTACION: Verificar contraseña hasheada =====
+// LOGIN
 app.post('/api/login', async (req, res) => {
   const { Correo, Contrasena } = req.body
-  
+
   try {
     db.query(
       'SELECT ID_usuario, Nombre, Correo, Telefono, Rol, Contrasena FROM usuario WHERE Correo=?',
       [Correo],
       async (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        if (results.length === 0) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-        
+
+        if (err) {
+          return res.status(500).json({ error: err.message })
+        }
+
+        if (results.length === 0) {
+          return res.status(401).json({ error: 'Correo o contraseña incorrectos' })
+        }
+
         const usuario = results[0]
-        
-        // ===== ENCRIPTACION: Comparar contraseña con hash o texto plano antiguo =====
+
         let isPasswordValid = false
         const storedPassword = usuario.Contrasena || ''
 
+        // Verificar contraseña
         if (storedPassword.startsWith('$2')) {
           isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
         } else {
@@ -108,18 +125,35 @@ app.post('/api/login', async (req, res) => {
         }
 
         if (!isPasswordValid) {
-          return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+          return res.status(401).json({ error: 'Correo o contraseña incorrectos' })
         }
 
-        // Si la contraseña estaba en texto claro, actualizar el hash
+        // Si estaba en texto plano, actualizar hash
         if (!storedPassword.startsWith('$2')) {
           const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
-          db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
-            if (err) console.error('Error actualizando hash de contraseña:', err.message)
-          })
+
+          db.query(
+            'UPDATE usuario SET Contrasena=? WHERE ID_usuario=?',
+            [newHash, usuario.ID_usuario],
+            (err) => {
+              if (err) {
+                console.error('Error actualizando hash:', err.message)
+              }
+            }
+          )
         }
-        
-        // No enviar la contraseña al cliente
+
+        // Crear token JWT
+        const token = jwt.sign(
+          {
+            id: usuario.ID_usuario,
+            rol: usuario.Rol
+          },
+          process.env.JWT_SECRET || 'secreto',
+          { expiresIn: '8h' }
+        )
+
+        // Usuario seguro
         const usuarioSeguro = {
           ID_usuario: usuario.ID_usuario,
           Nombre: usuario.Nombre,
@@ -127,11 +161,17 @@ app.post('/api/login', async (req, res) => {
           Telefono: usuario.Telefono,
           Rol: usuario.Rol
         }
-        
-        res.json({ message: 'Login exitoso', usuario: usuarioSeguro })
+
+        res.json({
+          message: 'Login exitoso',
+          token,
+          usuario: usuarioSeguro
+        })
       }
     )
+
   } catch (error) {
+    console.error(error)
     res.status(500).json({ error: 'Error al procesar el login' })
   }
 })

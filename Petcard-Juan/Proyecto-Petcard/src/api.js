@@ -13,10 +13,23 @@ const fetchAPI = async (endpoint, options = {}) => {
       ...options
     })
 
-    const data = await response.json()
+    // Obtener texto primero
+    const text = await response.text()
+
+    // Intentar convertir a JSON
+    let data
+
+    try {
+      data = JSON.parse(text)
+      console.log('RESPUESTA DEL SERVIDOR:')
+console.log(text)
+    } catch {
+      console.error('La respuesta no es JSON:', text)
+      throw new Error('El servidor devolvió una respuesta inválida')
+    }
 
     if (!response.ok) {
-      throw new Error(data.error || `Error ${response.status}: ${response.statusText}`)
+      throw new Error(data.error || `Error ${response.status}`)
     }
 
     return data
