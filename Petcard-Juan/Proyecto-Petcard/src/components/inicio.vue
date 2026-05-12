@@ -55,7 +55,11 @@ const irALoginAdmin = () => router.push('/login-admin')
         <div class="feature-icon blue">📅</div>
         <h3>Agendar Citas</h3>
         <p>Programa citas veterinarias fácilmente.</p>
+<<<<<<< HEAD
       </div>  
+=======
+      </div>
+>>>>>>> f4aaac926cbd23ad340f308519cda5e0ed2208ac
       <div class="feature-card card">
         <div class="feature-icon green">❤️</div>
         <h3>Servicios Veterinarios</h3>
@@ -111,6 +115,10 @@ const irALoginAdmin = () => router.push('/login-admin')
 .hero-btns { display: flex; gap: .75rem; flex-wrap: wrap; }
 
 /* ── FEATURE CARDS (reutilizado de inicio usuario) ── */
+<<<<<<< HEAD
+=======
+.feature-card { text-align: center; padding: 2rem 1.5rem; }
+>>>>>>> f4aaac926cbd23ad340f308519cda5e0ed2208ac
 .feature-card:hover { box-shadow: 0 8px 24px rgba(37,99,235,.12); }
 
 .feature-icon { width: 60px; height: 60px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; }
@@ -249,6 +257,7 @@ const irALoginAdmin = () => router.push('/login-admin')
   border-color: #5a3a7f;
 }
 
+<<<<<<< HEAD
 .features-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -264,4 +273,6 @@ const irALoginAdmin = () => router.push('/login-admin')
   border-radius: 16px;
 }
 
+=======
+>>>>>>> f4aaac926cbd23ad340f308519cda5e0ed2208ac
 </style>

@@ -1,5 +1,8 @@
 <template>
+<<<<<<< HEAD
   
+=======
+>>>>>>> f4aaac926cbd23ad340f308519cda5e0ed2208ac
   <div class="modal-overlay" @click.self="$emit('cancelar')">
     <div class="modal-dialog">
       <div class="modal-header">
