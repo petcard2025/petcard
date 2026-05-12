@@ -1,0 +1,267 @@
+<script setup>
+import { useRouter } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
+
+const router = useRouter()
+const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
+
+const irALoginAdmin = () => router.push('/login-admin')
+</script>
+
+<template>
+    <nav class="navbar">
+  <router-link to="/inicio" class="nav-logo">PETCARD</router-link>
+
+  <ul class="nav-links">
+    <li><router-link to="/inicio" class="active">Inicio</router-link></li>
+    <li><router-link to="/servicios">Servicios</router-link></li>
+    <li><router-link to="/citas">Citas</router-link></li>
+    <li><router-link to="/alimentacion">Alimentación</router-link></li>
+    <li><router-link to="/carnet">Carnet</router-link></li>
+    <li><router-link to="/perfil">Mi Perfil</router-link></li>
+    <li><router-link to="/notificaciones">Notificaciones</router-link></li>
+    <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
+  </ul>
+  <div id="auth-section" class="auth-section">
+    <template v-if="usuarioLogueado">
+      <span class="usuario-nombre">{{ usuarioLogueado.Nombre }}</span>
+      <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
+    </template>
+    <template v-else>
+      <button class="btn-auth" @click="irALogin">Iniciar sesión</button>
+      <button class="btn-auth" @click="irARegistro">Registrarse</button>
+    </template>
+    <button class="btn-auth btn-admin" @click="irALoginAdmin" title="Acceso para administradores">👨‍💼 Admin</button>
+  </div>
+</nav>
+
+<section class="hero-inicio">
+  <div class="hero-content">
+    <h1>Cuidado Veterinario de Excelencia</h1>
+    <p>gestiona citas, historial médico y toda la información de tus mascotas en un solo lugar.</p>
+
+    <div class="hero-btns">
+      <router-link to="/citas" class="btn btn-primary btn-lg" id="btn-agendar">Agendar cita</router-link>
+      <router-link to="/servicios" class="btn btn-outline-white btn-lg">Ver servicios</router-link>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="background:#fff;">
+  <div class="container">
+    <h2 class="section-title">Servicios para tu Mascota</h2>
+    <div class="cards-grid-3">
+      <div class="feature-card card">
+        <div class="feature-icon blue">📅</div>
+        <h3>Agendar Citas</h3>
+        <p>Programa citas veterinarias fácilmente.</p>
+      </div>  
+      <div class="feature-card card">
+        <div class="feature-icon green">❤️</div>
+        <h3>Servicios Veterinarios</h3>
+        <p>Consultas, vacunas y tratamientos completos.</p>
+      </div>
+      <div class="feature-card card">
+        <div class="feature-icon purple">🐾</div>
+        <h3>Gestión de Mascotas</h3>
+        <p>Administra perfiles e historial médico.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section">
+  <h2>¿Tu mascota necesita atención?</h2>
+  <p>Agenda una cita y dale el mejor cuidado.</p>
+</section>
+
+<footer class="footer">
+  <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
+</footer>
+</template>
+
+<style>
+    /* ============================================================
+   admin-pages.css — Estilos para páginas del panel Admin
+   Requiere: shared.css
+   ============================================================ */
+
+/* ── HERO ── */
+.hero-inicio {
+  background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)),
+              url('https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=1200&q=80') center/cover no-repeat;
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  padding: 3rem 2rem;
+  color: #fff;
+}
+
+.hero-content { max-width: 520px; }
+
+.hero-content h1 {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  font-size: 2rem;
+  margin-bottom: .75rem;
+}
+
+.hero-content p { font-size: .95rem; opacity: .9; margin-bottom: 1.5rem; line-height: 1.6; }
+
+.hero-btns { display: flex; gap: .75rem; flex-wrap: wrap; }
+
+/* ── FEATURE CARDS (reutilizado de inicio usuario) ── */
+.feature-card:hover { box-shadow: 0 8px 24px rgba(37,99,235,.12); }
+
+.feature-icon { width: 60px; height: 60px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; }
+.feature-icon.blue   { background: #eff6ff; color: #2563eb; }
+.feature-icon.green  { background: #f0fdf4; color: #16a34a; }
+.feature-icon.purple { background: #f5f3ff; color: #7c3aed; }
+
+.feature-card h3 { font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 1rem; margin-bottom: .5rem; }
+.feature-card p  { font-size: .85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem; }
+.feature-link { font-weight: 700; font-size: .85rem; color: var(--purple); }
+
+/* ── TWO FEATURES ── */
+.two-features { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
+.features-list { list-style: none; display: flex; flex-direction: column; gap: 1rem; }
+.features-list li { display: flex; gap: .75rem; align-items: flex-start; }
+.feat-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.feat-dot.blue { background: var(--purple); }
+.features-list strong { display: block; font-size: .9rem; margin-bottom: .15rem; }
+.features-list p { font-size: .82rem; color: var(--text-secondary); margin: 0; }
+
+/* ── CTA ── */
+.cta-section { background: var(--purple); color: #fff; text-align: center; padding: 3rem 1.5rem; }
+.cta-section h2 { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.5rem; margin-bottom: .5rem; }
+.cta-section p { opacity: .9; margin-bottom: 1.5rem; font-size: .95rem; }
+.cta-btns { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
+
+/* ── GESTIÓN HEADER ── */
+.gestion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.gestion-title {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  font-size: 1.6rem;
+  color: var(--purple);
+}
+
+.gestion-sub {
+  font-size: .85rem;
+  color: var(--muted);
+  margin-top: .2rem;
+}
+
+.gestion-btns { display: flex; gap: .5rem; }
+
+/* ── TARJETA ADMIN (gestión) ── */
+.admin-card {
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  background: #fff;
+  transition: box-shadow .2s;
+}
+
+.admin-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+
+.admin-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: .5rem;
+}
+
+.admin-card-title {
+  font-weight: 700;
+  font-size: .95rem;
+  color: var(--purple);
+}
+
+.admin-card-tipo {
+  font-size: .78rem;
+  color: var(--muted);
+}
+
+.admin-card-body {
+  margin: .5rem 0 .75rem;
+}
+
+.admin-card-body .detail {
+  font-weight: 700;
+  font-size: .9rem;
+  margin-bottom: .2rem;
+}
+
+.admin-card-meta {
+  font-size: .78rem;
+  color: var(--text-secondary);
+  margin-bottom: .2rem;
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+}
+
+.admin-card-actions {
+  display: flex;
+  gap: .5rem;
+  margin-top: .85rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .two-features { grid-template-columns: 1fr; }
+}
+
+/* Usuario logueado */
+.usuario-nombre {
+  color: white;
+  font-weight: 600;
+  margin-right: 1rem;
+  font-size: 0.95rem;
+}
+
+.btn-logout {
+  background-color: #dc3545;
+  border: 1px solid #dc3545;
+}
+
+.btn-logout:hover {
+  background-color: #c82333;
+  border-color: #c82333;
+}
+
+.btn-admin {
+  background-color: #764ba2;
+  border: 1px solid #764ba2;
+}
+
+.btn-admin:hover {
+  background-color: #5a3a7f;
+  border-color: #5a3a7f;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+
+.feature-card {
+  text-align: center;
+  padding: 2rem 1.5rem;
+  height: fit-content;
+  background: #fff;
+  border-radius: 16px;
+}
+
+</style>
