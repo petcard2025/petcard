@@ -434,4 +434,5 @@ cargarRegistrosIniciales()
   padding: 0.4rem 0.7rem;
 }
 
+
 </style>
