@@ -12,15 +12,53 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 )
 
+// Normaliza un número de teléfono colombiano al formato E.164 (+57XXXXXXXXXX)
+function normalizarTelefono(telefono) {
+  // Eliminar espacios, guiones, paréntesis y puntos
+  let num = telefono.toString().replace(/[\s\-().]/g, '')
+
+  // Si ya tiene +57, verificar que tenga 10 dígitos después
+  if (num.startsWith('+57')) {
+    const digitos = num.slice(3)
+    if (digitos.length === 10) return num
+    // Si tiene más/menos dígitos, retornar como está y que Twilio dé el error
+    return num
+  }
+
+  // Si empieza con 57 sin +, agregar +
+  if (num.startsWith('57') && num.length === 12) {
+    return '+' + num
+  }
+
+  // Si es un número colombiano de 10 dígitos (empieza con 3 = celular)
+  if (num.length === 10) {
+    return '+57' + num
+  }
+
+  // Si empieza con 0 y tiene 11 dígitos (ej: 0312...) — quitar el 0
+  if (num.startsWith('0') && num.length === 11) {
+    return '+57' + num.slice(1)
+  }
+
+  // Si ya trae +, respetar el formato tal como viene
+  if (num.startsWith('+')) return num
+
+  // Fallback: agregar +57 y dejar que Twilio valide
+  return '+57' + num
+}
+
 async function enviarSMS(telefono, mensaje) {
   try {
+    const telefonoFormateado = normalizarTelefono(telefono)
+    console.log(`📞 Enviando SMS a: ${telefono} → ${telefonoFormateado}`)
+
     const message = await twilioClient.messages.create({
       body: mensaje,
       from: process.env.TWILIO_PHONE_NUMBER,
-      to: telefono
+      to: telefonoFormateado
     })
     console.log('✓ SMS enviado. SID:', message.sid)
-    return { success: true, sid: message.sid }
+    return { success: true, sid: message.sid, to: telefonoFormateado }
   } catch (error) {
     console.error('✗ Error enviando SMS:', error.message)
     return { success: false, error: error.message }
@@ -485,14 +523,37 @@ app.get('/api/notificaciones', (req, res) => {
   )
 })
 
-app.post('/api/notificaciones', (req, res) => {
+app.post('/api/notificaciones', async (req, res) => {
   const { ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal } = req.body
+
+  // Guardar la notificacion en la base de datos
   db.query(
     'INSERT INTO notificacion (ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal, Fecha_envio) VALUES (?,?,?,?,?,NOW())',
     [ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal],
-    (err, result) => {
+    async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
-      res.json({ ID_notificacion: result.insertId, ...req.body })
+
+      const respuesta = { ID_notificacion: result.insertId, ...req.body, sms_enviado: false }
+
+      // Si el canal es SMS, intentar enviar automaticamente
+      if (Canal === 'SMS' && ID_usuario) {
+        db.query(
+          'SELECT Telefono, Nombre FROM usuario WHERE ID_usuario = ?',
+          [ID_usuario],
+          async (errU, usuarios) => {
+            if (!errU && usuarios.length > 0 && usuarios[0].Telefono) {
+              const smsResultado = await enviarSMS(usuarios[0].Telefono, Mensaje)
+              respuesta.sms_enviado = smsResultado.success
+              if (!smsResultado.success) {
+                respuesta.sms_error = smsResultado.error
+              }
+            }
+            res.json(respuesta)
+          }
+        )
+      } else {
+        res.json(respuesta)
+      }
     }
   )
 })
