@@ -6,6 +6,37 @@ const crypto = require('crypto')
 const twilio = require('twilio')
 require('dotenv').config()
 
+// ===== GOOGLE CALENDAR =====
+const { google } = require('googleapis')
+
+async function getCalendarClient() {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: process.env.GOOGLE_CREDENTIALS_PATH,
+    scopes: ['https://www.googleapis.com/auth/calendar']
+  })
+  const authClient = await auth.getClient()
+  return google.calendar({ version: 'v3', auth: authClient })
+}
+
+async function crearEventoCalendar(cita) {
+  const calendar = await getCalendarClient()
+  const fechaInicio = new Date(`${cita.Fecha}T${cita.Hora}`)
+  const fechaFin = new Date(fechaInicio.getTime() + 60 * 60 * 1000) // +1 hora
+
+  const event = {
+    summary: `Cita PetCard — ${cita.Nombre_mascota || 'Mascota'}`,
+    description: `Motivo: ${cita.Motivo || ''}\nServicio: ${cita.Nombre_servicio || ''}\nObservaciones: ${cita.Observaciones || ''}`,
+    start: { dateTime: fechaInicio.toISOString(), timeZone: 'America/Bogota' },
+    end:   { dateTime: fechaFin.toISOString(),   timeZone: 'America/Bogota' }
+  }
+
+  const response = await calendar.events.insert({
+    calendarId: process.env.GOOGLE_CALENDAR_ID,
+    resource: event
+  })
+  return response.data.id // guardamos este ID en la BD
+}
+
 // ===== TWILIO - SERVICIO DE SMS =====
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -336,14 +367,27 @@ app.get('/api/citas', (req, res) => {
   )
 })
 
-app.post('/api/citas', (req, res) => {
+app.post('/api/citas', async (req, res) => {
   const { ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
   db.query(
     'INSERT INTO cita (ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones) VALUES (?,?,?,?,?,?,?,?)',
     [ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones],
-    (err, result) => {
+    async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
-      res.json({ ID_cita: result.insertId, ...req.body })
+
+      const ID_cita = result.insertId
+
+      try {
+        const googleEventId = await crearEventoCalendar({
+          Fecha, Hora, Motivo, Observaciones
+        })
+        db.query('UPDATE cita SET Google_Event_ID=? WHERE ID_cita=?',
+                 [googleEventId, ID_cita])
+        res.json({ ID_cita, googleEventId, ...req.body })
+      } catch (calError) {
+        console.error('Error Google Calendar:', calError.message)
+        res.json({ ID_cita, ...req.body, calendarError: calError.message })
+      }
     }
   )
 })
