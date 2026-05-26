@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
-const { usuarioLogueado, cerrarSesion } = useAuth()
+const { usuarioLogueado, isAuthenticated, cerrarSesion } = useAuth()
 const API = 'http://localhost:3001/api/usuarios'
 
 const editando = ref(false)
@@ -58,7 +58,7 @@ function toggleEdicion() {
       <li><router-link to="/admin-citas">Citas</router-link></li>
     </ul>
     <div class="nav-actions">
-      <span style="color:white;margin-right:1rem;font-weight:500;">{{ usuarioLogueado?.Nombre || 'Admin' }}</span>
+      <span style="color:white;margin-right:1rem;font-weight:500;">{{ isAuthenticated ? usuarioLogueado?.Nombre : 'Admin' }}</span>
       <button class="btn btn-danger btn-sm" @click="cerrarSesion">Cerrar Sesión</button>
     </div>
   </nav>

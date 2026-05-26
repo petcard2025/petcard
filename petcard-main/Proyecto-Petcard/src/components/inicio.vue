@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
-const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
+const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 const irALoginAdmin = () => router.push('/login-admin')
 </script>
@@ -23,15 +23,14 @@ const irALoginAdmin = () => router.push('/login-admin')
     <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
   </ul>
   <div id="auth-section" class="auth-section">
-    <template v-if="usuarioLogueado">
-      <span class="usuario-nombre">{{ usuarioLogueado.Nombre }}</span>
+    <template v-if="isAuthenticated">
+      <span class="usuario-nombre">{{ usuarioLogueado?.Nombre }}</span>
       <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
     </template>
     <template v-else>
       <button class="btn-auth" @click="irALogin">Iniciar sesión</button>
       <button class="btn-auth" @click="irARegistro">Registrarse</button>
     </template>
-    <button class="btn-auth btn-admin" @click="irALoginAdmin" title="Acceso para administradores">👨‍💼 Admin</button>
   </div>
 </nav>
 

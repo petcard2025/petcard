@@ -5,7 +5,7 @@ import { useAuth } from '../composables/useAuth'
 import { mascotasAPI, clientesAPI, vacunasAPI } from '../api.js'
 
 const router = useRouter()
-const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
+const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 const pets = ref([])
 const selectedId = ref(null)
@@ -239,8 +239,8 @@ onMounted(async () => {
       <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
     </ul>
     <div class="auth-section">
-      <template v-if="usuarioLogueado">
-        <span class="usuario-nombre">{{ usuarioLogueado.Nombre }}</span>
+      <template v-if="isAuthenticated">
+        <span class="usuario-nombre">{{ usuarioLogueado?.Nombre }}</span>
         <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
       </template>
       <template v-else>

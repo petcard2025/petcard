@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
-const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
+const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 const mascotas = ref([])
@@ -344,8 +344,8 @@ onMounted(async () => {
 
     </ul>
     <div id="auth-section" class="auth-section">
-      <template v-if="usuarioLogueado">
-        <span class="usuario-nombre">{{ usuarioLogueado.Nombre }}</span>
+      <template v-if="isAuthenticated">
+        <span class="usuario-nombre">{{ usuarioLogueado?.Nombre }}</span>
         <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
       </template>
       <template v-else>
@@ -356,7 +356,7 @@ onMounted(async () => {
   </nav>
 
   <div class="page-wrapper">
-    <div v-if="!usuarioLogueado" class="card" style="margin:1.5rem; padding:1.5rem; text-align:center;">
+    <div v-if="!isAuthenticated" class="card" style="margin:1.5rem; padding:1.5rem; text-align:center;">
       <h2 style="margin-bottom:1rem;">Necesitas iniciar sesión</h2>
       <p style="margin-bottom:1rem; color:var(--muted);">Inicia sesión para ver tus mascotas y planes de alimentación guardados.</p>
       <button class="btn btn-primary" @click="irALogin">Iniciar sesión</button>

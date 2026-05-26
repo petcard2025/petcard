@@ -1,7 +1,8 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, reactive } from 'vue'
-import { loginAPI } from '../api.js'
+import { loginAPI, authAPI } from '../api.js'
+import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
 
@@ -22,6 +23,8 @@ const confirmPassword = ref('')
 const modalStep = ref('email') // 'email' or 'reset'
 const message = ref('')
 const isResetting = ref(false)
+
+const { setSession } = useAuth()
 
 const handleLogin = async () => {
   console.log('📝 handleLogin llamado')
@@ -48,11 +51,17 @@ const handleLogin = async () => {
 
     if (data.message === 'Login exitoso') {
       successMessage.value = `¡Bienvenido/a, ${data.usuario.Nombre}!`
-      localStorage.setItem('petcard_usuario_actual', JSON.stringify(data.usuario))
-      console.log('✅ Login exitoso')
+      // store user + token (if backend returns token)
+      const token = data.token || data.jwt || data.accessToken || null
+      setSession(data.usuario, token)
+      console.log('✅ Login exitoso, sesión guardada')
 
       setTimeout(() => {
-        router.push('/inicio')
+        if (data.usuario.Rol === 'administrador') {
+          router.push('/admin-inicio')
+        } else {
+          router.push('/inicio')
+        }
       }, 1500)
     } else {
       errorMessage.value = data.error || 'Credenciales incorrectas'
@@ -105,21 +114,17 @@ const requestReset = async () => {
   message.value = 'Enviando solicitud...'
 
   try {
-    const response = await fetch('http://localhost:3001/api/forgot-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Correo: forgotEmail.value.trim() })
-    })
-    const data = await response.json()
-    
-    if (response.ok) {
+    const data = await authAPI.requestForgotPassword(forgotEmail.value.trim())
+    // authAPI will throw on non-OK responses, so if we get here it's OK
+    if (data && data.token) {
       message.value = `Token generado: ${data.token}\n\nCopia este token para resetear tu contraseña.`
       modalStep.value = 'reset'
     } else {
-      message.value = data.error || 'Error al solicitar reset'
+      message.value = 'Solicitud enviada. Revisa tu correo.'
+      modalStep.value = 'reset'
     }
   } catch (error) {
-    message.value = 'Error de conexión'
+    message.value = error.message || 'Error al solicitar reset'
   }
 }
 
@@ -142,23 +147,20 @@ const resetPassword = async () => {
   message.value = 'Reseteando contraseña...'
 
   try {
-    const response = await fetch('http://localhost:3001/api/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })
-    })
-    const data = await response.json()
-    
-    if (response.ok) {
+    const data = await authAPI.resetPassword(resetToken.value.trim(), newPassword.value)
+    if (data) {
       message.value = 'Contraseña actualizada exitosamente'
       setTimeout(() => {
         closeForgotModal()
       }, 2000)
     } else {
-      message.value = data.error || 'Error al resetear contraseña'
+      message.value = 'Contraseña actualizada exitosamente'
+      setTimeout(() => {
+        closeForgotModal()
+      }, 2000)
     }
   } catch (error) {
-    message.value = 'Error de conexión'
+    message.value = error.message || 'Error al resetear contraseña'
   }
 }
 </script>

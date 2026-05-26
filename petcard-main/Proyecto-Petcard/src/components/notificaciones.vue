@@ -5,7 +5,7 @@ import { useAuth } from '../composables/useAuth'
 import { notificacionesAPI } from '../api'
 
 const router = useRouter()
-const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
+const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 const categoriaActiva = ref('todas')
 const notificaciones = ref([])
@@ -125,8 +125,8 @@ onMounted(() => {
       <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
     </ul>
     <div id="auth-section" class="auth-section">
-      <template v-if="usuarioLogueado">
-        <span class="usuario-nombre">{{ usuarioLogueado.Nombre }}</span>
+      <template v-if="isAuthenticated">
+        <span class="usuario-nombre">{{ usuarioLogueado?.Nombre }}</span>
         <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
       </template>
       <template v-else>
@@ -193,7 +193,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="!usuarioLogueado" class="notif-list">
+        <div v-if="!isAuthenticated" class="notif-list">
           <div class="notif-item">
             <div class="notif-body">
               <div class="notif-titulo">Inicia sesión para ver tus notificaciones</div>

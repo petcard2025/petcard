@@ -160,6 +160,18 @@ export const notificacionesAPI = {
   })
 }
 
+// ========== AUTENTICACIÓN (Olvidé contraseña / Reset) ==========
+export const authAPI = {
+  requestForgotPassword: (correo) => fetchAPI('/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ Correo: correo })
+  }),
+  resetPassword: (token, nuevaContrasena) => fetchAPI('/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, nuevaContrasena })
+  })
+}
+
 // ========== ADMINISTRADORES ==========
 export const administradoresAPI = {
   obtener: () => fetchAPI('/administradores')

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
-const { usuarioLogueado, cerrarSesion } = useAuth()
+const { usuarioLogueado, isAuthenticated, cerrarSesion } = useAuth()
 const API = 'http://localhost:3001/api/servicios'
 
 const servicios = ref([])
@@ -94,7 +94,7 @@ async function crearServicio() {
       <li><router-link to="/admin-citas">Citas</router-link></li>
     </ul>
     <div class="nav-actions">
-      <span style="color:white;margin-right:1rem;font-weight:500;">{{ usuarioLogueado?.Nombre || 'Admin' }}</span>
+      <span style="color:white;margin-right:1rem;font-weight:500;">{{ isAuthenticated ? usuarioLogueado?.Nombre : 'Admin' }}</span>
       <router-link to="/admin-perfil" class="btn btn-outline-white btn-sm" style="text-decoration:none;display:inline-block;">👤</router-link>
       <button class="btn btn-danger btn-sm" @click="cerrarSesion">Cerrar Sesión</button>
     </div>
