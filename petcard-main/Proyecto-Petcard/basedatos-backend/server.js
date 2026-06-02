@@ -4,6 +4,7 @@ const cors = require('cors')
 const bcrypt = require('bcrypt')
 const crypto = require('crypto')
 const twilio = require('twilio')
+const jwt = require('jsonwebtoken')
 require('dotenv').config()
 
 // ===== GOOGLE CALENDAR =====
@@ -104,6 +105,27 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+// ===== MIDDLEWARE JWT =====
+const verificarToken = (req, res, next) => {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+  if (!token) return res.status(401).json({ error: 'Token requerido.' })
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    req.usuario = decoded
+    next()
+  } catch (err) {
+    return res.status(403).json({ error: 'Token inválido o expirado.' })
+  }
+}
+
+const soloAdmin = (req, res, next) => {
+  if (req.usuario.Rol !== 'Admin') {
+    return res.status(403).json({ error: 'Solo administradores.' })
+  }
+  next()
+}
+
 // CONEXION
 const db = mysql.createConnection({
   host: process.env.DB_HOST || '127.0.0.1',
@@ -123,7 +145,7 @@ db.connect(err => {
 })
 
 // USUARIOS
-app.get('/api/usuarios', (req, res) => {
+app.get('/api/usuarios', verificarToken, soloAdmin, (req, res) => {
   db.query('SELECT ID_usuario, Nombre, Correo, Telefono, Rol FROM usuario', (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
@@ -148,7 +170,7 @@ app.post('/api/usuarios', async (req, res) => {
   }
 })
 
-app.put('/api/usuarios/:id', (req, res) => {
+app.put('/api/usuarios/:id', verificarToken, (req, res) => {
   const { Nombre, Correo, Telefono } = req.body
   db.query(
     'UPDATE usuario SET Nombre=?, Correo=?, Telefono=? WHERE ID_usuario=?',
@@ -160,7 +182,7 @@ app.put('/api/usuarios/:id', (req, res) => {
   )
 })
 
-app.delete('/api/usuarios/:id', (req, res) => {
+app.delete('/api/usuarios/:id', verificarToken, soloAdmin, (req, res) => {
   db.query('DELETE FROM usuario WHERE ID_usuario=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Usuario eliminado' })
@@ -201,7 +223,17 @@ app.post('/api/login', async (req, res) => {
           Telefono: usuario.Telefono,
           Rol: usuario.Rol
         }
-        res.json({ message: 'Login exitoso', usuario: usuarioSeguro })
+        const token = jwt.sign(
+          {
+            ID_usuario: usuario.ID_usuario,
+            Nombre: usuario.Nombre,
+            Correo: usuario.Correo,
+            Rol: usuario.Rol
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+        )
+        res.json({ message: 'Login exitoso', token, usuario: usuarioSeguro })
       }
     )
   } catch (error) {
@@ -252,7 +284,7 @@ app.post('/api/reset-password', async (req, res) => {
 })
 
 // CLIENTES
-app.get('/api/clientes', (req, res) => {
+app.get('/api/clientes', verificarToken, (req, res) => {
   db.query(
     `SELECT c.ID_cliente, c.Direccion, u.Nombre, u.Correo, u.Telefono
      FROM cliente c JOIN usuario u ON c.ID_usuario = u.ID_usuario`,
@@ -263,7 +295,7 @@ app.get('/api/clientes', (req, res) => {
   )
 })
 
-app.post('/api/clientes', (req, res) => {
+app.post('/api/clientes', verificarToken, (req, res) => {
   const { Direccion, ID_usuario } = req.body
   db.query('INSERT INTO cliente (Direccion, ID_usuario) VALUES (?,?)', [Direccion, ID_usuario], (err, result) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -271,7 +303,7 @@ app.post('/api/clientes', (req, res) => {
   })
 })
 
-app.get('/api/clientes/usuario/:id_usuario', (req, res) => {
+app.get('/api/clientes/usuario/:id_usuario', verificarToken, (req, res) => {
   db.query('SELECT * FROM cliente WHERE ID_usuario=?', [req.params.id_usuario], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
@@ -279,7 +311,7 @@ app.get('/api/clientes/usuario/:id_usuario', (req, res) => {
 })
 
 // MASCOTAS
-app.get('/api/mascotas', (req, res) => {
+app.get('/api/mascotas', verificarToken, (req, res) => {
   db.query(
     `SELECT m.*, u.Nombre AS Nombre_dueno
      FROM mascota m
@@ -292,14 +324,14 @@ app.get('/api/mascotas', (req, res) => {
   )
 })
 
-app.get('/api/mascotas/cliente/:id_cliente', (req, res) => {
+app.get('/api/mascotas/cliente/:id_cliente', verificarToken, (req, res) => {
   db.query('SELECT * FROM mascota WHERE ID_cliente=?', [req.params.id_cliente], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
 
-app.post('/api/mascotas', (req, res) => {
+app.post('/api/mascotas', verificarToken, (req, res) => {
   const { ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
   db.query(
     'INSERT INTO mascota (ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso) VALUES (?,?,?,?,?,?,?,?)',
@@ -311,7 +343,7 @@ app.post('/api/mascotas', (req, res) => {
   )
 })
 
-app.put('/api/mascotas/:id', (req, res) => {
+app.put('/api/mascotas/:id', verificarToken, (req, res) => {
   const { Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
   db.query(
     'UPDATE mascota SET Fecha_nacimiento=?, Nombre=?, Especie=?, Sexo=?, Foto=?, Raza=?, Peso=? WHERE ID_mascota=?',
@@ -323,7 +355,7 @@ app.put('/api/mascotas/:id', (req, res) => {
   )
 })
 
-app.delete('/api/mascotas/:id', (req, res) => {
+app.delete('/api/mascotas/:id', verificarToken, (req, res) => {
   db.query('DELETE FROM mascota WHERE ID_mascota=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Mascota eliminada' })
@@ -331,7 +363,7 @@ app.delete('/api/mascotas/:id', (req, res) => {
 })
 
 // VETERINARIOS
-app.get('/api/veterinarios', (req, res) => {
+app.get('/api/veterinarios', verificarToken, (req, res) => {
   db.query(
     `SELECT v.ID_veterinario, v.Cargo, v.Especialidad, u.Nombre, u.Correo, u.Telefono
      FROM veterinario v JOIN usuario u ON v.ID_usuario = u.ID_usuario`,
@@ -343,14 +375,14 @@ app.get('/api/veterinarios', (req, res) => {
 })
 
 // SERVICIOS
-app.get('/api/servicios', (req, res) => {
+app.get('/api/servicios', verificarToken, (req, res) => {
   db.query('SELECT * FROM servicio', (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
 
-app.post('/api/servicios', (req, res) => {
+app.post('/api/servicios', verificarToken, soloAdmin, (req, res) => {
   const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
     'INSERT INTO servicio (Nombre, Descripcion, Categoria, Precio) VALUES (?,?,?,?)',
@@ -362,7 +394,7 @@ app.post('/api/servicios', (req, res) => {
   )
 })
 
-app.put('/api/servicios/:id', (req, res) => {
+app.put('/api/servicios/:id', verificarToken, soloAdmin, (req, res) => {
   const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
     'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=?, Precio=? WHERE ID_servicio=?',
@@ -374,7 +406,7 @@ app.put('/api/servicios/:id', (req, res) => {
   )
 })
 
-app.delete('/api/servicios/:id', (req, res) => {
+app.delete('/api/servicios/:id', verificarToken, soloAdmin, (req, res) => {
   db.query('DELETE FROM servicio WHERE ID_servicio=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Servicio eliminado' })
@@ -382,7 +414,7 @@ app.delete('/api/servicios/:id', (req, res) => {
 })
 
 // CITAS
-app.get('/api/citas', (req, res) => {
+app.get('/api/citas', verificarToken, (req, res) => {
   db.query(
     `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
             ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones,
@@ -405,7 +437,7 @@ app.get('/api/citas', (req, res) => {
   )
 })
 
-app.post('/api/citas', async (req, res) => {
+app.post('/api/citas', verificarToken, async (req, res) => {
   const { ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
   db.query(
     'INSERT INTO cita (ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones) VALUES (?,?,?,?,?,?,?,?)',
@@ -430,7 +462,7 @@ app.post('/api/citas', async (req, res) => {
   )
 })
 
-app.put('/api/citas/:id', (req, res) => {
+app.put('/api/citas/:id', verificarToken, (req, res) => {
   const { ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
   db.query(
     'UPDATE cita SET ID_servicio=?, ID_veterinario=?, Fecha=?, Hora=?, Motivo=?, Observaciones=? WHERE ID_cita=?',
@@ -442,7 +474,7 @@ app.put('/api/citas/:id', (req, res) => {
   )
 })
 
-app.delete('/api/citas/:id', (req, res) => {
+app.delete('/api/citas/:id', verificarToken, (req, res) => {
   db.query('DELETE FROM cita WHERE ID_cita=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Cita eliminada' })
@@ -450,7 +482,7 @@ app.delete('/api/citas/:id', (req, res) => {
 })
 
 // CARNET DE VACUNAS
-app.get('/api/vacunas', (req, res) => {
+app.get('/api/vacunas', verificarToken, (req, res) => {
   db.query(
     `SELECT cv.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
      FROM carnetvacunas cv
@@ -463,14 +495,14 @@ app.get('/api/vacunas', (req, res) => {
   )
 })
 
-app.get('/api/vacunas/mascota/:id_mascota', (req, res) => {
+app.get('/api/vacunas/mascota/:id_mascota', verificarToken, (req, res) => {
   db.query('SELECT * FROM carnetvacunas WHERE ID_mascota=?', [req.params.id_mascota], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
 
-app.post('/api/vacunas', (req, res) => {
+app.post('/api/vacunas', verificarToken, (req, res) => {
   const { ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones } = req.body
   db.query(
     'INSERT INTO carnetvacunas (ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones) VALUES (?,?,?,?,?,?,?,?)',
@@ -482,7 +514,7 @@ app.post('/api/vacunas', (req, res) => {
   )
 })
 
-app.put('/api/vacunas/:id', (req, res) => {
+app.put('/api/vacunas/:id', verificarToken, (req, res) => {
   const { Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones } = req.body
   db.query(
     'UPDATE carnetvacunas SET Nombre_vacuna=?, Lote=?, Fecha_aplicacion=?, Proxima_dosis=?, Estado=?, Observaciones=? WHERE ID_carnetVacunas=?',
@@ -494,7 +526,7 @@ app.put('/api/vacunas/:id', (req, res) => {
   )
 })
 
-app.delete('/api/vacunas/:id', (req, res) => {
+app.delete('/api/vacunas/:id', verificarToken, (req, res) => {
   db.query('DELETE FROM carnetvacunas WHERE ID_carnetVacunas=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Vacuna eliminada' })
@@ -502,7 +534,7 @@ app.delete('/api/vacunas/:id', (req, res) => {
 })
 
 // PLAN DE ALIMENTACION
-app.get('/api/alimentacion', (req, res) => {
+app.get('/api/alimentacion', verificarToken, (req, res) => {
   db.query(
     `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
      FROM planalimentacion pa
@@ -515,14 +547,14 @@ app.get('/api/alimentacion', (req, res) => {
   )
 })
 
-app.get('/api/alimentacion/mascota/:id_mascota', (req, res) => {
+app.get('/api/alimentacion/mascota/:id_mascota', verificarToken, (req, res) => {
   db.query('SELECT * FROM planalimentacion WHERE ID_mascota=?', [req.params.id_mascota], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
 
-app.post('/api/alimentacion', (req, res) => {
+app.post('/api/alimentacion', verificarToken, (req, res) => {
   const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'INSERT INTO planalimentacion (ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -534,7 +566,7 @@ app.post('/api/alimentacion', (req, res) => {
   )
 })
 
-app.put('/api/alimentacion/:id', (req, res) => {
+app.put('/api/alimentacion/:id', verificarToken, (req, res) => {
   const { Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'UPDATE planalimentacion SET Tipo_dieta=?, Frecuencia=?, Alergias=?, Horario=?, Calorias=?, Suplementos=?, Comidas=?, Fecha_inicio=?, Fecha_fin=?, Observaciones=?, Diagnostico=?, Revision_nutricional=? WHERE ID_planAlimentacion=?',
@@ -546,7 +578,7 @@ app.put('/api/alimentacion/:id', (req, res) => {
   )
 })
 
-app.delete('/api/alimentacion/:id', (req, res) => {
+app.delete('/api/alimentacion/:id', verificarToken, (req, res) => {
   db.query('DELETE FROM planalimentacion WHERE ID_planAlimentacion=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Plan eliminado' })
@@ -554,7 +586,7 @@ app.delete('/api/alimentacion/:id', (req, res) => {
 })
 
 // NOTIFICACIONES
-app.get('/api/notificaciones', (req, res) => {
+app.get('/api/notificaciones', verificarToken, (req, res) => {
   db.query(
     `SELECT n.*, u.Nombre AS Nombre_usuario
      FROM notificacion n
@@ -567,7 +599,7 @@ app.get('/api/notificaciones', (req, res) => {
   )
 })
 
-app.post('/api/notificaciones', async (req, res) => {
+app.post('/api/notificaciones', verificarToken, async (req, res) => {
   const { ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal } = req.body
 
   // Guardar la notificacion en la base de datos
@@ -602,15 +634,150 @@ app.post('/api/notificaciones', async (req, res) => {
   )
 })
 
-app.delete('/api/notificaciones/:id', (req, res) => {
+app.delete('/api/notificaciones/:id', verificarToken, (req, res) => {
   db.query('DELETE FROM notificacion WHERE ID_notificacion=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Notificacion eliminada' })
   })
 })
 
+// GET - Notificaciones por usuario
+app.get('/api/notificaciones/usuario/:idUsuario', verificarToken, (req, res) => {
+  db.query(
+    'SELECT * FROM notificacion WHERE ID_usuario = ? ORDER BY Fecha_envio DESC',
+    [req.params.idUsuario],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json(results)
+    }
+  )
+})
+
+// GET - Notificaciones no leídas de un usuario
+app.get('/api/notificaciones/usuario/:idUsuario/no-leidas', verificarToken, (req, res) => {
+  db.query(
+    'SELECT * FROM notificacion WHERE ID_usuario = ? AND Leida = 0 ORDER BY Fecha_envio DESC',
+    [req.params.idUsuario],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json(results)
+    }
+  )
+})
+
+// GET - Notificación por ID
+app.get('/api/notificaciones/:id', verificarToken, (req, res) => {
+  db.query(
+    'SELECT * FROM notificacion WHERE ID_notificacion = ?',
+    [req.params.id],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (results.length === 0) return res.status(404).json({ error: 'Notificación no encontrada' })
+      res.json(results[0])
+    }
+  )
+})
+
+// PUT - Actualizar notificación
+app.put('/api/notificaciones/:id', verificarToken, (req, res) => {
+  const { Mensaje, Tipo, Canal } = req.body
+  db.query(
+    'UPDATE notificacion SET Mensaje=?, Tipo=?, Canal=? WHERE ID_notificacion=?',
+    [Mensaje, Tipo, Canal, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ message: 'Notificación actualizada', ID_notificacion: req.params.id })
+    }
+  )
+})
+
+// PATCH - Marcar como leída
+app.patch('/api/notificaciones/:id/marcar-como-leida', verificarToken, (req, res) => {
+  db.query(
+    'UPDATE notificacion SET Leida = 1, Fecha_lectura = NOW() WHERE ID_notificacion = ?',
+    [req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ message: 'Notificación marcada como leída', ID_notificacion: req.params.id })
+    }
+  )
+})
+
+// PATCH - Marcar múltiples como leídas
+app.patch('/api/notificaciones/marcar-como-leidas/bulk', verificarToken, (req, res) => {
+  const { ids } = req.body
+  if (!Array.isArray(ids) || ids.length === 0)
+    return res.status(400).json({ error: 'ids debe ser un array no vacío' })
+  const placeholders = ids.map(() => '?').join(',')
+  db.query(
+    `UPDATE notificacion SET Leida = 1, Fecha_lectura = NOW() WHERE ID_notificacion IN (${placeholders})`,
+    ids,
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ actualizadas: ids.length })
+    }
+  )
+})
+
+// DELETE - Eliminar múltiples
+app.delete('/api/notificaciones/bulk', verificarToken, (req, res) => {
+  const { ids } = req.body
+  if (!Array.isArray(ids) || ids.length === 0)
+    return res.status(400).json({ error: 'ids debe ser un array no vacío' })
+  const placeholders = ids.map(() => '?').join(',')
+  db.query(
+    `DELETE FROM notificacion WHERE ID_notificacion IN (${placeholders})`,
+    ids,
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ eliminadas: ids.length })
+    }
+  )
+})
+
+// DELETE - Eliminar todas las de un usuario
+app.delete('/api/notificaciones/usuario/:idUsuario/todas', verificarToken, (req, res) => {
+  db.query(
+    'DELETE FROM notificacion WHERE ID_usuario = ?',
+    [req.params.idUsuario],
+    (err, result) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ eliminadas: result.affectedRows })
+    }
+  )
+})
+
+// GET - Estadísticas generales
+app.get('/api/notificaciones/estadisticas', verificarToken, (req, res) => {
+  db.query(
+    `SELECT COUNT(*) as total,
+     SUM(CASE WHEN Leida = 1 THEN 1 ELSE 0 END) as leidas,
+     SUM(CASE WHEN Leida = 0 THEN 1 ELSE 0 END) as no_leidas
+     FROM notificacion`,
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json(results[0])
+    }
+  )
+})
+
+// GET - Estadísticas por usuario
+app.get('/api/notificaciones/usuario/:idUsuario/estadisticas', verificarToken, (req, res) => {
+  db.query(
+    `SELECT COUNT(*) as total,
+     SUM(CASE WHEN Leida = 1 THEN 1 ELSE 0 END) as leidas,
+     SUM(CASE WHEN Leida = 0 THEN 1 ELSE 0 END) as no_leidas
+     FROM notificacion WHERE ID_usuario = ?`,
+    [req.params.idUsuario],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json(results[0])
+    }
+  )
+})
+
 // ADMINISTRADOR
-app.get('/api/administradores', (req, res) => {
+app.get('/api/administradores', verificarToken, soloAdmin, (req, res) => {
   db.query(
     `SELECT a.ID_administrador, a.Cargo, a.Area, a.Permisos, u.Nombre, u.Correo
      FROM administrador a JOIN usuario u ON a.ID_usuario = u.ID_usuario`,
@@ -624,7 +791,7 @@ app.get('/api/administradores', (req, res) => {
 // ===== ENDPOINTS SMS TWILIO =====
 
 // Enviar SMS manual
-app.post('/api/sms/enviar', async (req, res) => {
+app.post('/api/sms/enviar', verificarToken, async (req, res) => {
   const { telefono, mensaje } = req.body
   if (!telefono || !mensaje) return res.status(400).json({ error: 'Se requieren telefono y mensaje' })
   const resultado = await enviarSMS(telefono, mensaje)
@@ -636,7 +803,7 @@ app.post('/api/sms/enviar', async (req, res) => {
 })
 
 // Confirmar cita por SMS
-app.post('/api/sms/confirmar-cita', async (req, res) => {
+app.post('/api/sms/confirmar-cita', verificarToken, async (req, res) => {
   const { ID_cita } = req.body
   if (!ID_cita) return res.status(400).json({ error: 'ID_cita requerido' })
   db.query(
@@ -673,7 +840,7 @@ app.post('/api/sms/confirmar-cita', async (req, res) => {
 })
 
 // Recordatorio de vacuna por SMS
-app.post('/api/sms/recordatorio-vacuna', async (req, res) => {
+app.post('/api/sms/recordatorio-vacuna', verificarToken, async (req, res) => {
   const { ID_carnetVacunas } = req.body
   if (!ID_carnetVacunas) return res.status(400).json({ error: 'ID_carnetVacunas requerido' })
   db.query(
