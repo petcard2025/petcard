@@ -1,10 +1,11 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, reactive } from 'vue'
-import { loginAPI, authAPI } from '../api.js'
+import { loginAPI } from '../api.js'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
+const { setSession } = useAuth()
 
 const formData = reactive({
   correo: '',
@@ -23,8 +24,6 @@ const confirmPassword = ref('')
 const modalStep = ref('email') // 'email' or 'reset'
 const message = ref('')
 const isResetting = ref(false)
-
-const { setSession } = useAuth()
 
 const handleLogin = async () => {
   console.log('📝 handleLogin llamado')
@@ -50,18 +49,12 @@ const handleLogin = async () => {
     const data = await loginAPI.loginUsuario(correo, contrasena)
 
     if (data.message === 'Login exitoso') {
-      successMessage.value = `¡Bienvenido/a, ${data.usuario.Nombre}!`
-      // store user + token (if backend returns token)
-      const token = data.token || data.jwt || data.accessToken || null
-      setSession(data.usuario, token)
-      console.log('✅ Login exitoso, sesión guardada')
+      successMessage.value = `¡Bienvenido/a, ${data.usuario.Nombre}! Token guardado en localStorage.`
+      setSession(data.usuario, data.token)
+      console.log('✅ Login exitoso', localStorage.getItem('petcard_token'))
 
       setTimeout(() => {
-        if (data.usuario.Rol === 'administrador') {
-          router.push('/admin-inicio')
-        } else {
-          router.push('/inicio')
-        }
+        router.push('/inicio')
       }, 1500)
     } else {
       errorMessage.value = data.error || 'Credenciales incorrectas'
@@ -114,17 +107,21 @@ const requestReset = async () => {
   message.value = 'Enviando solicitud...'
 
   try {
-    const data = await authAPI.requestForgotPassword(forgotEmail.value.trim())
-    // authAPI will throw on non-OK responses, so if we get here it's OK
-    if (data && data.token) {
+    const response = await fetch('http://localhost:3001/api/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Correo: forgotEmail.value.trim() })
+    })
+    const data = await response.json()
+    
+    if (response.ok) {
       message.value = `Token generado: ${data.token}\n\nCopia este token para resetear tu contraseña.`
       modalStep.value = 'reset'
     } else {
-      message.value = 'Solicitud enviada. Revisa tu correo.'
-      modalStep.value = 'reset'
+      message.value = data.error || 'Error al solicitar reset'
     }
   } catch (error) {
-    message.value = error.message || 'Error al solicitar reset'
+    message.value = 'Error de conexión'
   }
 }
 
@@ -147,20 +144,23 @@ const resetPassword = async () => {
   message.value = 'Reseteando contraseña...'
 
   try {
-    const data = await authAPI.resetPassword(resetToken.value.trim(), newPassword.value)
-    if (data) {
+    const response = await fetch('http://localhost:3001/api/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })
+    })
+    const data = await response.json()
+    
+    if (response.ok) {
       message.value = 'Contraseña actualizada exitosamente'
       setTimeout(() => {
         closeForgotModal()
       }, 2000)
     } else {
-      message.value = 'Contraseña actualizada exitosamente'
-      setTimeout(() => {
-        closeForgotModal()
-      }, 2000)
+      message.value = data.error || 'Error al resetear contraseña'
     }
   } catch (error) {
-    message.value = error.message || 'Error al resetear contraseña'
+    message.value = 'Error de conexión'
   }
 }
 </script>
@@ -170,21 +170,27 @@ const resetPassword = async () => {
     <a href="javascript:void(0)" @click="irAlInicio" class="nav-logo">PETCARD</a>
   </nav>
 
-  <div class="right-panel">
-    <div class="form-wrapper">
+  <div class="login-wrapper">
+    <div class="login-box">
       <h1>Bienvenido a PetCard</h1>
       <p class="subtitle">Completa los siguientes campos</p>
 
       <div class="error-msg" v-if="errorMessage">{{ errorMessage }}</div>
       <div class="success-msg" v-if="successMessage">{{ successMessage }}</div>
 
-      <div class="form-group">
+      <div class="form-group input-wrapper">
         <input type="email" v-model="formData.correo" placeholder="Correo electrónico *" />
+        <button class="input-icon" aria-label="Correo electrónico">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+        </button>
       </div>
 
-      <div class="form-group password-wrapper">
+      <div class="form-group input-wrapper">
         <input :type="showPassword ? 'text' : 'password'" v-model="formData.contrasena" placeholder="Contraseña *" />
-        <button class="eye-btn" @click="togglePassword" aria-label="Mostrar contraseña">
+        <button class="input-icon" @click="togglePassword" aria-label="Mostrar contraseña">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
             <circle cx="12" cy="12" r="3"/>
@@ -203,12 +209,7 @@ const resetPassword = async () => {
       <p class="admin-access" style="margin-top: 1rem; text-align: center; font-size: 0.9rem;">
         <a href="javascript:void(0)" @click="irALoginAdmin" style="color: #764ba2; font-weight: 600; text-decoration: none;">👨‍💼 Acceso de Administrador</a>
       </p>
-
     </div>
-  </div>
-
-  <div class="left-panel">
-    <div class="illustration-container"></div>
   </div>
 
   <!-- Modal Forgot Password -->
@@ -246,68 +247,19 @@ const resetPassword = async () => {
       font-family: 'DM Sans', sans-serif;
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       background: #fff;
     }
 
-    /* LEFT PANEL */
-    .left-panel {
-      background: url('https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=1200&q=80') center/cover no-repeat;
-      width: 50%;
+    .login-wrapper {
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
-      overflow: hidden;
+      padding: 40px 20px;
     }
 
-    .illustration-container {
-      position: relative;
-      width: 420px;
-      height: 420px;
-    }
-
-    /* Orange blobs */
-    .blob {
-      position: absolute;
-      border-radius: 50%;
-      background: #2095f4;
-    }
-    .blob-1 {
-      width: 280px; height: 280px;
-      bottom: 60px; right: 60px;
-      border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%;
-    }
-    .blob-2 {
-      width: 60px; height: 60px;
-      top: 60px; left: 90px;
-      opacity: 0.85;
-    }
-    .blob-3 {
-      width: 30px; height: 30px;
-      top: 100px; left: 160px;
-      opacity: 0.5;
-    }
-
-    /* SVG family illustration */
-    .family-svg {
-      position: absolute;
-      bottom: 20px;
-      left: 10px;
-      width: 400px;
-      height: 400px;
-    }
-
-    /* RIGHT PANEL */
-    .right-panel {
-      width: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 80px;
-      
-    }
-
-    .form-wrapper {
+    .login-box {
       width: 100%;
       max-width: 420px;
     }
@@ -331,9 +283,9 @@ const resetPassword = async () => {
       position: relative;
     }
 
-    select, input[type="text"], input[type="password"] {
+    select, input[type="text"], input[type="password"], input[type="email"] {
       width: 100%;
-      padding: 16px 18px;
+      padding: 16px 48px 16px 18px;
       border: 1.5px solid #ddd;
       border-radius: 8px;
       font-size: 0.95rem;
@@ -360,15 +312,15 @@ const resetPassword = async () => {
 
     select option[value=""] { color: #999; }
 
-    .password-wrapper {
+    .input-wrapper {
       position: relative;
     }
 
-    .password-wrapper input {
+    .input-wrapper input {
       padding-right: 48px;
     }
 
-    .eye-btn {
+    .input-icon {
       position: absolute;
       right: 14px;
       top: 50%;
@@ -382,7 +334,7 @@ const resetPassword = async () => {
       padding: 4px;
     }
 
-    .eye-btn:hover { color: #0769da; }
+    .input-icon:hover { color: #0769da; }
 
     .forgot-link {
       display: block;
@@ -475,9 +427,7 @@ const resetPassword = async () => {
     ::placeholder { color: #aaa; }
 
     @media (max-width: 768px) {
-      body { flex-direction: column; }
-      .left-panel { width: 100%; height: 300px; }
-      .right-panel { width: 100%; padding: 40px 24px; }
+      .login-wrapper { padding: 30px 16px; }
     }
 
   /* Modal Styles */

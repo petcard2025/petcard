@@ -4,16 +4,29 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 // Función auxiliar para hacer peticiones
 const fetchAPI = async (endpoint, options = {}) => {
   try {
+    // ✅ Leer el token JWT guardado al hacer login
+    const token = localStorage.getItem('petcard_token')
+
     const response = await fetch(`${API_URL}${endpoint}`, {
       mode: 'cors',
       headers: {
         'Content-Type': 'application/json',
+        // ✅ Enviar el token en cada petición si existe
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         ...options.headers
       },
       ...options
     })
 
     const data = await response.json()
+
+    // ✅ Si el token expiró, limpiar sesión y redirigir al login
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem('petcard_token')
+      localStorage.removeItem('petcard_usuario_actual')
+      window.location.href = '/login-usuario'
+      throw new Error('Sesión expirada. Por favor inicia sesión nuevamente.')
+    }
 
     if (!response.ok) {
       throw new Error(data.error || `Error ${response.status}: ${response.statusText}`)
@@ -151,13 +164,36 @@ export const alimentacionAPI = {
 // ========== NOTIFICACIONES ==========
 export const notificacionesAPI = {
   obtener: () => fetchAPI('/notificaciones'),
+  obtenerPorUsuario: (idUsuario) => fetchAPI(`/notificaciones/usuario/${idUsuario}`),
+  obtenerNoLeidas: (idUsuario) => fetchAPI(`/notificaciones/usuario/${idUsuario}/no-leidas`),
+  obtenerPorId: (id) => fetchAPI(`/notificaciones/${id}`),
   crear: (datos) => fetchAPI('/notificaciones', {
     method: 'POST',
     body: JSON.stringify(datos)
   }),
+  actualizar: (id, datos) => fetchAPI(`/notificaciones/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(datos)
+  }),
+  marcarComoLeida: (id) => fetchAPI(`/notificaciones/${id}/marcar-como-leida`, {
+    method: 'PATCH'
+  }),
+  marcarMultiplesComoLeidas: (ids) => fetchAPI('/notificaciones/marcar-como-leidas/bulk', {
+    method: 'PATCH',
+    body: JSON.stringify({ ids })
+  }),
   eliminar: (id) => fetchAPI(`/notificaciones/${id}`, {
     method: 'DELETE'
-  })
+  }),
+  eliminarMultiples: (ids) => fetchAPI('/notificaciones/bulk', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids })
+  }),
+  eliminarTodas: (idUsuario) => fetchAPI(`/notificaciones/usuario/${idUsuario}/todas`, {
+    method: 'DELETE'
+  }),
+  obtenerEstadisticas: () => fetchAPI('/notificaciones/estadisticas'),
+  obtenerEstadisticasUsuario: (idUsuario) => fetchAPI(`/notificaciones/usuario/${idUsuario}/estadisticas`)
 }
 
 // ========== AUTENTICACIÓN (Olvidé contraseña / Reset) ==========

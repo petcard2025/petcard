@@ -4,7 +4,7 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
-const { usuarioLogueado: authUsuario, cerrarSesion, irALogin, irARegistro } = useAuth()
+const { usuarioLogueado: authUsuario, token, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 const usuarioActual = ref(null)
 const enEdicion = ref(false)
@@ -233,6 +233,12 @@ watch(authUsuario, () => {
         </div>
 
         <!-- Estadísticas -->
+        <div class="card">
+          <div class="card-title" style="font-size:.95rem;">Estado de la sesión</div>
+          <div class="estadistica-row"><span>JWT activo</span><strong>{{ token ? 'Sí' : 'No' }}</strong></div>
+          <div class="estadistica-row" v-if="token"><span>Token (inicio)</span><strong>{{ token.slice(0, 18) + '...' }}</strong></div>
+        </div>
+
         <div class="card">
           <div class="card-title" style="font-size:.95rem;">Estadísticas</div>
           <div class="estadistica-row"><span>Mascotas registradas</span><strong>3</strong></div>
