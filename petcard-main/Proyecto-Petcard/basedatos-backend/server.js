@@ -1,14 +1,44 @@
+
 const express = require('express')
 const mysql = require('mysql2')
 const cors = require('cors')
 const bcrypt = require('bcrypt')
 const crypto = require('crypto')
 const twilio = require('twilio')
+const jwt = require('jsonwebtoken')
 require('dotenv').config()
-
+ 
+// ===== JWT - AUTENTICACION POR TOKEN =====
+ 
+// Clave secreta para firmar los tokens (se lee del .env)
+const JWT_SECRET = process.env.JWT_SECRET || 'petcard_secret_key_2024'
+ 
+// Middleware que verifica el token JWT en rutas protegidas
+// Para proteger una ruta agregar verifyToken como segundo argumento:
+// Ejemplo: app.get('/api/mascotas', verifyToken, (req, res) => { ... })
+function verifyToken(req, res, next) {
+  // El token llega en el header: Authorization: Bearer <token>
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+ 
+  if (!token) {
+    return res.status(401).json({ error: 'Acceso denegado. Token no proporcionado.' })
+  }
+ 
+  try {
+    // Verificar y decodificar el token — si expiro o es invalido lanza error
+    const decoded = jwt.verify(token, JWT_SECRET)
+    req.usuario = decoded // El payload queda disponible en req.usuario
+    next()
+  } catch (error) {
+    return res.status(403).json({ error: 'Token invalido o expirado.' })
+  }
+}
+ 
+ 
 // ===== GOOGLE CALENDAR =====
 const { google } = require('googleapis')
-
+ 
 async function getCalendarClient() {
   const auth = new google.auth.GoogleAuth({
     keyFile: process.env.GOOGLE_CREDENTIALS_PATH,
@@ -17,37 +47,37 @@ async function getCalendarClient() {
   const authClient = await auth.getClient()
   return google.calendar({ version: 'v3', auth: authClient })
 }
-
+ 
 async function crearEventoCalendar(cita) {
   const calendar = await getCalendarClient()
   const fechaInicio = new Date(`${cita.Fecha}T${cita.Hora}`)
   const fechaFin = new Date(fechaInicio.getTime() + 60 * 60 * 1000) // +1 hora
-
+ 
   const event = {
     summary: `Cita PetCard — ${cita.Nombre_mascota || 'Mascota'}`,
     description: `Motivo: ${cita.Motivo || ''}\nServicio: ${cita.Nombre_servicio || ''}\nObservaciones: ${cita.Observaciones || ''}`,
     start: { dateTime: fechaInicio.toISOString(), timeZone: 'America/Bogota' },
     end:   { dateTime: fechaFin.toISOString(),   timeZone: 'America/Bogota' }
   }
-
+ 
   const response = await calendar.events.insert({
     calendarId: process.env.GOOGLE_CALENDAR_ID,
     resource: event
   })
   return response.data.id // guardamos este ID en la BD
 }
-
+ 
 // ===== TWILIO - SERVICIO DE SMS =====
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 )
-
+ 
 // Normaliza un número de teléfono colombiano al formato E.164 (+57XXXXXXXXXX)
 function normalizarTelefono(telefono) {
   // Eliminar espacios, guiones, paréntesis y puntos
   let num = telefono.toString().replace(/[\s\-().]/g, '')
-
+ 
   // Si ya tiene +57, verificar que tenga 10 dígitos después
   if (num.startsWith('+57')) {
     const digitos = num.slice(3)
@@ -55,34 +85,34 @@ function normalizarTelefono(telefono) {
     // Si tiene más/menos dígitos, retornar como está y que Twilio dé el error
     return num
   }
-
+ 
   // Si empieza con 57 sin +, agregar +
   if (num.startsWith('57') && num.length === 12) {
     return '+' + num
   }
-
+ 
   // Si es un número colombiano de 10 dígitos (empieza con 3 = celular)
   if (num.length === 10) {
     return '+57' + num
   }
-
+ 
   // Si empieza con 0 y tiene 11 dígitos (ej: 0312...) — quitar el 0
   if (num.startsWith('0') && num.length === 11) {
     return '+57' + num.slice(1)
   }
-
+ 
   // Si ya trae +, respetar el formato tal como viene
   if (num.startsWith('+')) return num
-
+ 
   // Fallback: agregar +57 y dejar que Twilio valide
   return '+57' + num
 }
-
+ 
 async function enviarSMS(telefono, mensaje) {
   try {
     const telefonoFormateado = normalizarTelefono(telefono)
     console.log(`📞 Enviando SMS a: ${telefono} → ${telefonoFormateado}`)
-
+ 
     const message = await twilioClient.messages.create({
       body: mensaje,
       from: process.env.TWILIO_PHONE_NUMBER,
@@ -95,15 +125,15 @@ async function enviarSMS(telefono, mensaje) {
     return { success: false, error: error.message }
   }
 }
-
+ 
 // ===== ENCRIPTACION =====
 const SALT_ROUNDS = 10
 const resetTokens = new Map()
-
+ 
 const app = express()
 app.use(cors())
 app.use(express.json())
-
+ 
 // CONEXION
 const db = mysql.createConnection({
   host: process.env.DB_HOST || '127.0.0.1',
@@ -112,7 +142,7 @@ const db = mysql.createConnection({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'petcard'
 })
-
+ 
 db.connect(err => {
   if (err) {
     console.error('ERROR conectando a MySQL:', err.message)
@@ -121,7 +151,7 @@ db.connect(err => {
   }
   console.log('✓ Conectado a MySQL correctamente')
 })
-
+ 
 // USUARIOS
 app.get('/api/usuarios', (req, res) => {
   db.query('SELECT ID_usuario, Nombre, Correo, Telefono, Rol FROM usuario', (err, results) => {
@@ -129,7 +159,7 @@ app.get('/api/usuarios', (req, res) => {
     res.json(results)
   })
 })
-
+ 
 app.post('/api/usuarios', async (req, res) => {
   const { Nombre, Correo, Telefono, Contrasena, Rol } = req.body
   if (!Nombre || !Correo || !Contrasena || !Rol) return res.status(400).json({ error: 'Faltan campos obligatorios' })
@@ -147,7 +177,7 @@ app.post('/api/usuarios', async (req, res) => {
     res.status(500).json({ error: 'Error al encriptar la contrasena' })
   }
 })
-
+ 
 app.put('/api/usuarios/:id', (req, res) => {
   const { Nombre, Correo, Telefono } = req.body
   db.query(
@@ -159,15 +189,15 @@ app.put('/api/usuarios/:id', (req, res) => {
     }
   )
 })
-
+ 
 app.delete('/api/usuarios/:id', (req, res) => {
   db.query('DELETE FROM usuario WHERE ID_usuario=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Usuario eliminado' })
   })
 })
-
-// LOGIN
+ 
+// LOGIN — genera un JWT al autenticarse correctamente
 app.post('/api/login', async (req, res) => {
   const { Correo, Contrasena } = req.body
   try {
@@ -177,23 +207,31 @@ app.post('/api/login', async (req, res) => {
       async (err, results) => {
         if (err) return res.status(500).json({ error: err.message })
         if (results.length === 0) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+ 
         const usuario = results[0]
         let isPasswordValid = false
         const storedPassword = usuario.Contrasena || ''
+ 
+        // Verificar contrasena (bcrypt o texto plano legacy)
         if (storedPassword.startsWith('$2')) {
           isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
         } else {
           isPasswordValid = Contrasena === storedPassword
         }
+ 
         if (!isPasswordValid) {
           return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
         }
+ 
+        // Migrar contrasena plana a bcrypt si aplica
         if (!storedPassword.startsWith('$2')) {
           const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
           db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
             if (err) console.error('Error actualizando hash:', err.message)
           })
         }
+ 
+        // Datos publicos del usuario (sin contrasena)
         const usuarioSeguro = {
           ID_usuario: usuario.ID_usuario,
           Nombre: usuario.Nombre,
@@ -201,14 +239,23 @@ app.post('/api/login', async (req, res) => {
           Telefono: usuario.Telefono,
           Rol: usuario.Rol
         }
-        res.json({ message: 'Login exitoso', usuario: usuarioSeguro })
+ 
+        // Generar JWT con duracion de 8 horas
+        const token = jwt.sign(
+          { ID_usuario: usuario.ID_usuario, Correo: usuario.Correo, Rol: usuario.Rol },
+          JWT_SECRET,
+          { expiresIn: '8h' }
+        )
+ 
+        // Devolver usuario + token
+        res.json({ message: 'Login exitoso', usuario: usuarioSeguro, token })
       }
     )
   } catch (error) {
     res.status(500).json({ error: 'Error al procesar el login' })
   }
 })
-
+ 
 // FORGOT PASSWORD
 app.post('/api/forgot-password', (req, res) => {
   const { Correo } = req.body
@@ -227,7 +274,7 @@ app.post('/api/forgot-password', (req, res) => {
     })
   })
 })
-
+ 
 // RESET PASSWORD
 app.post('/api/reset-password', async (req, res) => {
   const { token, nuevaContrasena } = req.body
@@ -250,7 +297,7 @@ app.post('/api/reset-password', async (req, res) => {
     res.status(500).json({ error: 'Error al actualizar contrasena' })
   }
 })
-
+ 
 // CLIENTES
 app.get('/api/clientes', (req, res) => {
   db.query(
@@ -262,7 +309,7 @@ app.get('/api/clientes', (req, res) => {
     }
   )
 })
-
+ 
 app.post('/api/clientes', (req, res) => {
   const { Direccion, ID_usuario } = req.body
   db.query('INSERT INTO cliente (Direccion, ID_usuario) VALUES (?,?)', [Direccion, ID_usuario], (err, result) => {
@@ -270,16 +317,17 @@ app.post('/api/clientes', (req, res) => {
     res.json({ ID_cliente: result.insertId, Direccion, ID_usuario })
   })
 })
-
+ 
 app.get('/api/clientes/usuario/:id_usuario', (req, res) => {
   db.query('SELECT * FROM cliente WHERE ID_usuario=?', [req.params.id_usuario], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
-
+ 
 // MASCOTAS
-app.get('/api/mascotas', (req, res) => {
+// Ruta protegida — requiere token JWT en el header Authorization
+app.get('/api/mascotas', verifyToken, (req, res) => {
   db.query(
     `SELECT m.*, u.Nombre AS Nombre_dueno
      FROM mascota m
@@ -291,15 +339,17 @@ app.get('/api/mascotas', (req, res) => {
     }
   )
 })
-
-app.get('/api/mascotas/cliente/:id_cliente', (req, res) => {
+ 
+// Ruta protegida — requiere token JWT
+app.get('/api/mascotas/cliente/:id_cliente', verifyToken, (req, res) => {
   db.query('SELECT * FROM mascota WHERE ID_cliente=?', [req.params.id_cliente], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
-
-app.post('/api/mascotas', (req, res) => {
+ 
+// Ruta protegida — requiere token JWT
+app.post('/api/mascotas', verifyToken, (req, res) => {
   const { ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
   db.query(
     'INSERT INTO mascota (ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso) VALUES (?,?,?,?,?,?,?,?)',
@@ -310,8 +360,9 @@ app.post('/api/mascotas', (req, res) => {
     }
   )
 })
-
-app.put('/api/mascotas/:id', (req, res) => {
+ 
+// Ruta protegida — requiere token JWT
+app.put('/api/mascotas/:id', verifyToken, (req, res) => {
   const { Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
   db.query(
     'UPDATE mascota SET Fecha_nacimiento=?, Nombre=?, Especie=?, Sexo=?, Foto=?, Raza=?, Peso=? WHERE ID_mascota=?',
@@ -322,14 +373,15 @@ app.put('/api/mascotas/:id', (req, res) => {
     }
   )
 })
-
-app.delete('/api/mascotas/:id', (req, res) => {
+ 
+// Ruta protegida — requiere token JWT
+app.delete('/api/mascotas/:id', verifyToken, (req, res) => {
   db.query('DELETE FROM mascota WHERE ID_mascota=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Mascota eliminada' })
   })
 })
-
+ 
 // VETERINARIOS
 app.get('/api/veterinarios', (req, res) => {
   db.query(
@@ -341,7 +393,7 @@ app.get('/api/veterinarios', (req, res) => {
     }
   )
 })
-
+ 
 // SERVICIOS
 app.get('/api/servicios', (req, res) => {
   db.query('SELECT * FROM servicio', (err, results) => {
@@ -349,7 +401,7 @@ app.get('/api/servicios', (req, res) => {
     res.json(results)
   })
 })
-
+ 
 app.post('/api/servicios', (req, res) => {
   const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
@@ -361,7 +413,7 @@ app.post('/api/servicios', (req, res) => {
     }
   )
 })
-
+ 
 app.put('/api/servicios/:id', (req, res) => {
   const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
@@ -373,14 +425,14 @@ app.put('/api/servicios/:id', (req, res) => {
     }
   )
 })
-
+ 
 app.delete('/api/servicios/:id', (req, res) => {
   db.query('DELETE FROM servicio WHERE ID_servicio=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Servicio eliminado' })
   })
 })
-
+ 
 // CITAS
 app.get('/api/citas', (req, res) => {
   db.query(
@@ -404,7 +456,7 @@ app.get('/api/citas', (req, res) => {
     }
   )
 })
-
+ 
 app.post('/api/citas', async (req, res) => {
   const { ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
   db.query(
@@ -412,9 +464,9 @@ app.post('/api/citas', async (req, res) => {
     [ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones],
     async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
-
+ 
       const ID_cita = result.insertId
-
+ 
       try {
         const googleEventId = await crearEventoCalendar({
           Fecha, Hora, Motivo, Observaciones
@@ -429,7 +481,7 @@ app.post('/api/citas', async (req, res) => {
     }
   )
 })
-
+ 
 app.put('/api/citas/:id', (req, res) => {
   const { ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
   db.query(
@@ -441,14 +493,14 @@ app.put('/api/citas/:id', (req, res) => {
     }
   )
 })
-
+ 
 app.delete('/api/citas/:id', (req, res) => {
   db.query('DELETE FROM cita WHERE ID_cita=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Cita eliminada' })
   })
 })
-
+ 
 // CARNET DE VACUNAS
 app.get('/api/vacunas', (req, res) => {
   db.query(
@@ -462,14 +514,14 @@ app.get('/api/vacunas', (req, res) => {
     }
   )
 })
-
+ 
 app.get('/api/vacunas/mascota/:id_mascota', (req, res) => {
   db.query('SELECT * FROM carnetvacunas WHERE ID_mascota=?', [req.params.id_mascota], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
-
+ 
 app.post('/api/vacunas', (req, res) => {
   const { ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones } = req.body
   db.query(
@@ -481,7 +533,7 @@ app.post('/api/vacunas', (req, res) => {
     }
   )
 })
-
+ 
 app.put('/api/vacunas/:id', (req, res) => {
   const { Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones } = req.body
   db.query(
@@ -493,14 +545,14 @@ app.put('/api/vacunas/:id', (req, res) => {
     }
   )
 })
-
+ 
 app.delete('/api/vacunas/:id', (req, res) => {
   db.query('DELETE FROM carnetvacunas WHERE ID_carnetVacunas=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Vacuna eliminada' })
   })
 })
-
+ 
 // PLAN DE ALIMENTACION
 app.get('/api/alimentacion', (req, res) => {
   db.query(
@@ -514,14 +566,14 @@ app.get('/api/alimentacion', (req, res) => {
     }
   )
 })
-
+ 
 app.get('/api/alimentacion/mascota/:id_mascota', (req, res) => {
   db.query('SELECT * FROM planalimentacion WHERE ID_mascota=?', [req.params.id_mascota], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
-
+ 
 app.post('/api/alimentacion', (req, res) => {
   const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
@@ -533,7 +585,7 @@ app.post('/api/alimentacion', (req, res) => {
     }
   )
 })
-
+ 
 app.put('/api/alimentacion/:id', (req, res) => {
   const { Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
@@ -545,14 +597,14 @@ app.put('/api/alimentacion/:id', (req, res) => {
     }
   )
 })
-
+ 
 app.delete('/api/alimentacion/:id', (req, res) => {
   db.query('DELETE FROM planalimentacion WHERE ID_planAlimentacion=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Plan eliminado' })
   })
 })
-
+ 
 // NOTIFICACIONES
 app.get('/api/notificaciones', (req, res) => {
   db.query(
@@ -566,19 +618,19 @@ app.get('/api/notificaciones', (req, res) => {
     }
   )
 })
-
+ 
 app.post('/api/notificaciones', async (req, res) => {
   const { ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal } = req.body
-
+ 
   // Guardar la notificacion en la base de datos
   db.query(
     'INSERT INTO notificacion (ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal, Fecha_envio) VALUES (?,?,?,?,?,NOW())',
     [ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal],
     async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
-
+ 
       const respuesta = { ID_notificacion: result.insertId, ...req.body, sms_enviado: false }
-
+ 
       // Si el canal es SMS, intentar enviar automaticamente
       if (Canal === 'SMS' && ID_usuario) {
         db.query(
@@ -601,14 +653,14 @@ app.post('/api/notificaciones', async (req, res) => {
     }
   )
 })
-
+ 
 app.delete('/api/notificaciones/:id', (req, res) => {
   db.query('DELETE FROM notificacion WHERE ID_notificacion=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Notificacion eliminada' })
   })
 })
-
+ 
 // ADMINISTRADOR
 app.get('/api/administradores', (req, res) => {
   db.query(
@@ -620,9 +672,9 @@ app.get('/api/administradores', (req, res) => {
     }
   )
 })
-
+ 
 // ===== ENDPOINTS SMS TWILIO =====
-
+ 
 // Enviar SMS manual
 app.post('/api/sms/enviar', async (req, res) => {
   const { telefono, mensaje } = req.body
@@ -634,7 +686,7 @@ app.post('/api/sms/enviar', async (req, res) => {
     res.status(500).json({ error: 'Error enviando SMS: ' + resultado.error })
   }
 })
-
+ 
 // Confirmar cita por SMS
 app.post('/api/sms/confirmar-cita', async (req, res) => {
   const { ID_cita } = req.body
@@ -671,7 +723,7 @@ app.post('/api/sms/confirmar-cita', async (req, res) => {
     }
   )
 })
-
+ 
 // Recordatorio de vacuna por SMS
 app.post('/api/sms/recordatorio-vacuna', async (req, res) => {
   const { ID_carnetVacunas } = req.body
@@ -705,10 +757,11 @@ app.post('/api/sms/recordatorio-vacuna', async (req, res) => {
     }
   )
 })
-
+ 
 // INICIAR SERVIDOR
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   console.log('✓ Servidor corriendo en http://localhost:' + PORT)
   console.log('✓ Listo para recibir peticiones en http://localhost:' + PORT + '/api/usuarios')
 })
+ 
