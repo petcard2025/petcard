@@ -1,4 +1,3 @@
-
 const express = require('express')
 const mysql = require('mysql2')
 const cors = require('cors')
@@ -6,18 +5,15 @@ const bcrypt = require('bcrypt')
 const crypto = require('crypto')
 const twilio = require('twilio')
 const jwt = require('jsonwebtoken')
+const https = require('https')
+const fs = require('fs')
 require('dotenv').config()
  
 // ===== JWT - AUTENTICACION POR TOKEN =====
  
-// Clave secreta para firmar los tokens (se lee del .env)
 const JWT_SECRET = process.env.JWT_SECRET || 'petcard_secret_key_2024'
  
-// Middleware que verifica el token JWT en rutas protegidas
-// Para proteger una ruta agregar verifyToken como segundo argumento:
-// Ejemplo: app.get('/api/mascotas', verifyToken, (req, res) => { ... })
 function verifyToken(req, res, next) {
-  // El token llega en el header: Authorization: Bearer <token>
   const authHeader = req.headers['authorization']
   const token = authHeader && authHeader.split(' ')[1]
  
@@ -26,9 +22,8 @@ function verifyToken(req, res, next) {
   }
  
   try {
-    // Verificar y decodificar el token — si expiro o es invalido lanza error
     const decoded = jwt.verify(token, JWT_SECRET)
-    req.usuario = decoded // El payload queda disponible en req.usuario
+    req.usuario = decoded
     next()
   } catch (error) {
     return res.status(403).json({ error: 'Token invalido o expirado.' })
@@ -51,7 +46,7 @@ async function getCalendarClient() {
 async function crearEventoCalendar(cita) {
   const calendar = await getCalendarClient()
   const fechaInicio = new Date(`${cita.Fecha}T${cita.Hora}`)
-  const fechaFin = new Date(fechaInicio.getTime() + 60 * 60 * 1000) // +1 hora
+  const fechaFin = new Date(fechaInicio.getTime() + 60 * 60 * 1000)
  
   const event = {
     summary: `Cita PetCard — ${cita.Nombre_mascota || 'Mascota'}`,
@@ -64,7 +59,7 @@ async function crearEventoCalendar(cita) {
     calendarId: process.env.GOOGLE_CALENDAR_ID,
     resource: event
   })
-  return response.data.id // guardamos este ID en la BD
+  return response.data.id
 }
  
 // ===== TWILIO - SERVICIO DE SMS =====
@@ -73,38 +68,29 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 )
  
-// Normaliza un número de teléfono colombiano al formato E.164 (+57XXXXXXXXXX)
 function normalizarTelefono(telefono) {
-  // Eliminar espacios, guiones, paréntesis y puntos
   let num = telefono.toString().replace(/[\s\-().]/g, '')
  
-  // Si ya tiene +57, verificar que tenga 10 dígitos después
   if (num.startsWith('+57')) {
     const digitos = num.slice(3)
     if (digitos.length === 10) return num
-    // Si tiene más/menos dígitos, retornar como está y que Twilio dé el error
     return num
   }
  
-  // Si empieza con 57 sin +, agregar +
   if (num.startsWith('57') && num.length === 12) {
     return '+' + num
   }
  
-  // Si es un número colombiano de 10 dígitos (empieza con 3 = celular)
   if (num.length === 10) {
     return '+57' + num
   }
  
-  // Si empieza con 0 y tiene 11 dígitos (ej: 0312...) — quitar el 0
   if (num.startsWith('0') && num.length === 11) {
     return '+57' + num.slice(1)
   }
  
-  // Si ya trae +, respetar el formato tal como viene
   if (num.startsWith('+')) return num
  
-  // Fallback: agregar +57 y dejar que Twilio valide
   return '+57' + num
 }
  
@@ -197,7 +183,7 @@ app.delete('/api/usuarios/:id', (req, res) => {
   })
 })
  
-// LOGIN — genera un JWT al autenticarse correctamente
+// LOGIN
 app.post('/api/login', async (req, res) => {
   const { Correo, Contrasena } = req.body
   try {
@@ -212,7 +198,6 @@ app.post('/api/login', async (req, res) => {
         let isPasswordValid = false
         const storedPassword = usuario.Contrasena || ''
  
-        // Verificar contrasena (bcrypt o texto plano legacy)
         if (storedPassword.startsWith('$2')) {
           isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
         } else {
@@ -223,7 +208,6 @@ app.post('/api/login', async (req, res) => {
           return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
         }
  
-        // Migrar contrasena plana a bcrypt si aplica
         if (!storedPassword.startsWith('$2')) {
           const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
           db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
@@ -231,7 +215,6 @@ app.post('/api/login', async (req, res) => {
           })
         }
  
-        // Datos publicos del usuario (sin contrasena)
         const usuarioSeguro = {
           ID_usuario: usuario.ID_usuario,
           Nombre: usuario.Nombre,
@@ -240,14 +223,12 @@ app.post('/api/login', async (req, res) => {
           Rol: usuario.Rol
         }
  
-        // Generar JWT con duracion de 8 horas
         const token = jwt.sign(
           { ID_usuario: usuario.ID_usuario, Correo: usuario.Correo, Rol: usuario.Rol },
           JWT_SECRET,
           { expiresIn: '8h' }
         )
  
-        // Devolver usuario + token
         res.json({ message: 'Login exitoso', usuario: usuarioSeguro, token })
       }
     )
@@ -326,7 +307,6 @@ app.get('/api/clientes/usuario/:id_usuario', (req, res) => {
 })
  
 // MASCOTAS
-// Ruta protegida — requiere token JWT en el header Authorization
 app.get('/api/mascotas', verifyToken, (req, res) => {
   db.query(
     `SELECT m.*, u.Nombre AS Nombre_dueno
@@ -340,7 +320,6 @@ app.get('/api/mascotas', verifyToken, (req, res) => {
   )
 })
  
-// Ruta protegida — requiere token JWT
 app.get('/api/mascotas/cliente/:id_cliente', verifyToken, (req, res) => {
   db.query('SELECT * FROM mascota WHERE ID_cliente=?', [req.params.id_cliente], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -348,7 +327,6 @@ app.get('/api/mascotas/cliente/:id_cliente', verifyToken, (req, res) => {
   })
 })
  
-// Ruta protegida — requiere token JWT
 app.post('/api/mascotas', verifyToken, (req, res) => {
   const { ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
   db.query(
@@ -361,7 +339,6 @@ app.post('/api/mascotas', verifyToken, (req, res) => {
   )
 })
  
-// Ruta protegida — requiere token JWT
 app.put('/api/mascotas/:id', verifyToken, (req, res) => {
   const { Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
   db.query(
@@ -374,7 +351,6 @@ app.put('/api/mascotas/:id', verifyToken, (req, res) => {
   )
 })
  
-// Ruta protegida — requiere token JWT
 app.delete('/api/mascotas/:id', verifyToken, (req, res) => {
   db.query('DELETE FROM mascota WHERE ID_mascota=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -622,7 +598,6 @@ app.get('/api/notificaciones', (req, res) => {
 app.post('/api/notificaciones', async (req, res) => {
   const { ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal } = req.body
  
-  // Guardar la notificacion en la base de datos
   db.query(
     'INSERT INTO notificacion (ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal, Fecha_envio) VALUES (?,?,?,?,?,NOW())',
     [ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal],
@@ -631,7 +606,6 @@ app.post('/api/notificaciones', async (req, res) => {
  
       const respuesta = { ID_notificacion: result.insertId, ...req.body, sms_enviado: false }
  
-      // Si el canal es SMS, intentar enviar automaticamente
       if (Canal === 'SMS' && ID_usuario) {
         db.query(
           'SELECT Telefono, Nombre FROM usuario WHERE ID_usuario = ?',
@@ -675,7 +649,6 @@ app.get('/api/administradores', (req, res) => {
  
 // ===== ENDPOINTS SMS TWILIO =====
  
-// Enviar SMS manual
 app.post('/api/sms/enviar', async (req, res) => {
   const { telefono, mensaje } = req.body
   if (!telefono || !mensaje) return res.status(400).json({ error: 'Se requieren telefono y mensaje' })
@@ -687,7 +660,6 @@ app.post('/api/sms/enviar', async (req, res) => {
   }
 })
  
-// Confirmar cita por SMS
 app.post('/api/sms/confirmar-cita', async (req, res) => {
   const { ID_cita } = req.body
   if (!ID_cita) return res.status(400).json({ error: 'ID_cita requerido' })
@@ -724,7 +696,6 @@ app.post('/api/sms/confirmar-cita', async (req, res) => {
   )
 })
  
-// Recordatorio de vacuna por SMS
 app.post('/api/sms/recordatorio-vacuna', async (req, res) => {
   const { ID_carnetVacunas } = req.body
   if (!ID_carnetVacunas) return res.status(400).json({ error: 'ID_carnetVacunas requerido' })
@@ -758,10 +729,22 @@ app.post('/api/sms/recordatorio-vacuna', async (req, res) => {
   )
 })
  
-// INICIAR SERVIDOR
+// ===== INICIAR SERVIDOR CON HTTPS =====
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => {
-  console.log('✓ Servidor corriendo en http://localhost:' + PORT)
-  console.log('✓ Listo para recibir peticiones en http://localhost:' + PORT + '/api/usuarios')
-})
- 
+
+try {
+  const sslOptions = {
+    key: fs.readFileSync('./cert.key'),
+    cert: fs.readFileSync('./cert.crt')
+  }
+  https.createServer(sslOptions, app).listen(PORT, () => {
+    console.log('✓ Servidor HTTPS corriendo en https://localhost:' + PORT)
+    console.log('✓ Listo para recibir peticiones en https://localhost:' + PORT + '/api/usuarios')
+  })
+} catch (sslError) {
+  console.error('✗ No se pudo cargar el certificado SSL:', sslError.message)
+  console.log('⚠ Iniciando en HTTP como fallback en http://localhost:' + PORT)
+  app.listen(PORT, () => {
+    console.log('✓ Servidor HTTP corriendo en http://localhost:' + PORT)
+  })
+}

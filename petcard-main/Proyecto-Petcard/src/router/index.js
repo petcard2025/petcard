@@ -19,34 +19,72 @@ import LoginAdmin from '../components/login-admin.vue'
 import RegistroUsuario from '../components/registro-usuario.vue'
 import RegistroAdmin from '../components/registro-admin.vue'
 import TestAPI from '../components/test-api.vue'
+
 const routes = [
+  // ── Rutas públicas ──────────────────────────────────────
   { path: '/', component: Inicio },
   { path: '/inicio', component: Inicio },
   { path: '/servicios', component: Servicios },
-  { path: '/citas', component: Citas },
-  { path: '/carnet', component: Carnet },
-  { path: '/alimentacion', component: Alimentacion },
-  { path: '/notificaciones', component: Notificaciones },
-  { path: '/perfil', component: Perfil },
-  { path: '/admin', component: AdminInicio },
-  { path: '/admin-inicio', component: AdminInicio },
-  { path: '/admin-citas', component: AdminCitas },
-  { path: '/admin-carnet', component: AdminCarnet },
-  { path: '/admin-alimentacion', component: AdminAlimentacion },
-  { path: '/admin-notificaciones', component: AdminNotificaciones },
-  { path: '/admin-servicios', component: AdminServicios },
-  { path: '/admin-perfil', component: AdminPerfil },
-  { path: '/mis-mascotas', component: MisMascotas },
   { path: '/login-usuario', component: LoginUsuario },
   { path: '/login-admin', component: LoginAdmin },
   { path: '/registro-usuario', component: RegistroUsuario },
   { path: '/registro-admin', component: RegistroAdmin },
   { path: '/test-api', component: TestAPI },
+
+  // ── Rutas privadas de usuario ────────────────────────────
+  { path: '/citas',           component: Citas,           meta: { requiresAuth: true } },
+  { path: '/carnet',          component: Carnet,          meta: { requiresAuth: true } },
+  { path: '/alimentacion',    component: Alimentacion,    meta: { requiresAuth: true } },
+  { path: '/notificaciones',  component: Notificaciones,  meta: { requiresAuth: true } },
+  { path: '/perfil',          component: Perfil,          meta: { requiresAuth: true } },
+  { path: '/mis-mascotas',    component: MisMascotas,     meta: { requiresAuth: true } },
+
+  // ── Rutas privadas de administrador ─────────────────────
+  { path: '/admin',                 component: AdminInicio,         meta: { requiresAdmin: true } },
+  { path: '/admin-inicio',          component: AdminInicio,         meta: { requiresAdmin: true } },
+  { path: '/admin-citas',           component: AdminCitas,          meta: { requiresAdmin: true } },
+  { path: '/admin-carnet',          component: AdminCarnet,         meta: { requiresAdmin: true } },
+  { path: '/admin-alimentacion',    component: AdminAlimentacion,   meta: { requiresAdmin: true } },
+  { path: '/admin-notificaciones',  component: AdminNotificaciones, meta: { requiresAdmin: true } },
+  { path: '/admin-servicios',       component: AdminServicios,      meta: { requiresAdmin: true } },
+  { path: '/admin-perfil',          component: AdminPerfil,         meta: { requiresAdmin: true } },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+})
+
+// ── Guard global de navegación ───────────────────────────
+router.beforeEach((to, from, next) => {
+  // Leer sesión del localStorage
+  let usuario = null
+  try {
+    const raw = localStorage.getItem('petcard_usuario_actual')
+    if (raw) usuario = JSON.parse(raw)
+  } catch {
+    usuario = null
+  }
+
+  const esAdmin = usuario?.Rol === 'administrador'
+
+  if (to.meta.requiresAdmin) {
+    // Ruta de admin: debe haber sesión y ser admin
+    if (!usuario) {
+      return next('/login-admin')
+    }
+    if (!esAdmin) {
+      // Usuario normal intentando entrar al panel admin
+      return next('/inicio')
+    }
+  } else if (to.meta.requiresAuth) {
+    // Ruta privada de usuario: solo necesita estar logueado
+    if (!usuario) {
+      return next('/login-usuario')
+    }
+  }
+
+  next()
 })
 
 export default router

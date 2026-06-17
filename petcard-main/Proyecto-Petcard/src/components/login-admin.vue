@@ -20,7 +20,7 @@ const forgotEmail = ref('')
 const resetToken = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
-const modalStep = ref('email') // 'email' or 'reset'
+const modalStep = ref('email')
 const message = ref('')
 const isResetting = ref(false)
 
@@ -46,7 +46,6 @@ const handleLogin = async () => {
     const response = await loginAPI.loginUsuario(correo, contrasena)
     
     if (response && response.message === 'Login exitoso') {
-      // Verificar que sea administrador
       if (response.usuario.Rol !== 'administrador') {
         errorMessage.value = 'Esta cuenta no tiene permisos de administrador.'
         isLoading.value = false
@@ -106,7 +105,7 @@ const requestReset = async () => {
   message.value = 'Enviando solicitud...'
 
   try {
-    const response = await fetch('http://localhost:3001/api/forgot-password', {
+    const response = await fetch('https://localhost:3001/api/forgot-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Correo: forgotEmail.value.trim() })
@@ -143,7 +142,7 @@ const resetPassword = async () => {
   message.value = 'Reseteando contraseña...'
 
   try {
-    const response = await fetch('http://localhost:3001/api/reset-password', {
+    const response = await fetch('https://localhost:3001/api/reset-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })
@@ -273,7 +272,6 @@ body { background: #f8fafc; display: flex; flex-direction: column; min-height: 1
 .footer-simple { background: #111827; text-align: center; padding: 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; gap: .4rem; }
 .footer-simple p { font-size: .78rem; color: #6b7280; }
 
-/* Modal Styles */
 .modal-overlay {
   position: fixed;
   top: 0;

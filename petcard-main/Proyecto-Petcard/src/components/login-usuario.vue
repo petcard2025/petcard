@@ -19,7 +19,7 @@ const forgotEmail = ref('')
 const resetToken = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
-const modalStep = ref('email') // 'email' or 'reset'
+const modalStep = ref('email')
 const message = ref('')
 const isResetting = ref(false)
 
@@ -105,7 +105,7 @@ const requestReset = async () => {
   message.value = 'Enviando solicitud...'
 
   try {
-    const response = await fetch('http://localhost:3001/api/forgot-password', {
+    const response = await fetch('https://localhost:3001/api/forgot-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Correo: forgotEmail.value.trim() })
@@ -142,7 +142,7 @@ const resetPassword = async () => {
   message.value = 'Reseteando contraseña...'
 
   try {
-    const response = await fetch('http://localhost:3001/api/reset-password', {
+    const response = await fetch('https://localhost:3001/api/reset-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })
@@ -237,7 +237,6 @@ const resetPassword = async () => {
 
 <style>
 
-
  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -247,7 +246,6 @@ const resetPassword = async () => {
       background: #fff;
     }
 
-    /* LEFT PANEL */
     .left-panel {
       background: url('https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=1200&q=80') center/cover no-repeat;
       width: 50%;
@@ -264,7 +262,6 @@ const resetPassword = async () => {
       height: 420px;
     }
 
-    /* Orange blobs */
     .blob {
       position: absolute;
       border-radius: 50%;
@@ -286,7 +283,6 @@ const resetPassword = async () => {
       opacity: 0.5;
     }
 
-    /* SVG family illustration */
     .family-svg {
       position: absolute;
       bottom: 20px;
@@ -295,14 +291,12 @@ const resetPassword = async () => {
       height: 400px;
     }
 
-    /* RIGHT PANEL */
     .right-panel {
       width: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 60px 80px;
-      
     }
 
     .form-wrapper {
@@ -431,7 +425,6 @@ const resetPassword = async () => {
 
     .privacy-link:hover { text-decoration: underline; }
 
-    /* Error and success messages */
     .error-msg {
       background: #fee;
       color: #c33;
@@ -452,7 +445,6 @@ const resetPassword = async () => {
       border-left: 4px solid #3c3;
     }
 
-    /* Navbar */
     .navbar {
       background: white;
       padding: 1rem 2rem;
@@ -469,7 +461,6 @@ const resetPassword = async () => {
       cursor: pointer;
     }
 
-    /* Placeholder styling */
     ::placeholder { color: #aaa; }
 
     @media (max-width: 768px) {
@@ -478,7 +469,6 @@ const resetPassword = async () => {
       .right-panel { width: 100%; padding: 40px 24px; }
     }
 
-  /* Modal Styles */
   .modal-overlay {
     position: fixed;
     top: 0;
