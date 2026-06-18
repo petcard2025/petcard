@@ -3,7 +3,8 @@ import { ref, onMounted } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
-const API = 'http://localhost:3001/api/usuarios'
+import { API_URL } from '../api.js'
+const API = `${API_URL}/usuarios`
 
 const editando = ref(false)
 const guardando = ref(false)

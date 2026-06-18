@@ -3,8 +3,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
-const API = 'http://localhost:3001/api/notificaciones'
-const API_USUARIOS = 'http://localhost:3001/api/usuarios'
+import { API_URL } from '../api.js'
+const API = `${API_URL}/notificaciones`
+const API_USUARIOS = `${API_URL}/usuarios`
 
 const notificaciones = ref([])
 const usuarios = ref([])

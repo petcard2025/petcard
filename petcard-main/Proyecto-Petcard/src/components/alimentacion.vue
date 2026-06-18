@@ -5,7 +5,8 @@ import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
 const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+import { API_URL } from '../api.js'
+const API_BASE = API_URL
 
 const mascotas = ref([])
 const selectedId = ref('')
