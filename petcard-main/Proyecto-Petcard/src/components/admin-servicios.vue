@@ -3,7 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
-const API = 'http://localhost:3001/api/servicios'
+import { API_URL } from '../api.js'
+const API = `${API_URL}/servicios`
 
 const servicios = ref([])
 const busqueda = ref('')

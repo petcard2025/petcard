@@ -4,7 +4,8 @@ import { useAuth } from '../composables/useAuth'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
 
-const API = 'http://localhost:3001/api'
+import { API_URL } from '../api.js'
+const API = API_URL
 
 const busqueda = ref('')
 const filtroEstado = ref('Todos')

@@ -729,22 +729,39 @@ app.post('/api/sms/recordatorio-vacuna', async (req, res) => {
   )
 })
  
-// ===== INICIAR SERVIDOR CON HTTPS =====
+// ===== INICIAR SERVIDOR =====
 const PORT = process.env.PORT || 3001
+const NODE_ENV = process.env.NODE_ENV || 'development'
 
-try {
-  const sslOptions = {
-    key: fs.readFileSync('./cert.key'),
-    cert: fs.readFileSync('./cert.crt')
-  }
-  https.createServer(sslOptions, app).listen(PORT, () => {
-    console.log('✓ Servidor HTTPS corriendo en https://localhost:' + PORT)
-    console.log('✓ Listo para recibir peticiones en https://localhost:' + PORT + '/api/usuarios')
-  })
-} catch (sslError) {
-  console.error('✗ No se pudo cargar el certificado SSL:', sslError.message)
-  console.log('⚠ Iniciando en HTTP como fallback en http://localhost:' + PORT)
+if (NODE_ENV === 'production') {
+  // En produccion el certificado real (Let's Encrypt, el del hosting, etc.)
+  // debe estar a cargo del proxy inverso o de la plataforma de hosting
+  // (Nginx, Caddy, Render, Railway, etc.), no de este proceso de Node.
+  // Por eso aqui corremos HTTP plano "interno": el trafico publico llega
+  // siempre cifrado, y el proxy se lo entrega a este proceso por dentro.
   app.listen(PORT, () => {
-    console.log('✓ Servidor HTTP corriendo en http://localhost:' + PORT)
+    console.log(`Servidor backend corriendo en el puerto ${PORT} (HTTP interno)`)
+    console.log('IMPORTANTE: verifica que el proxy/hosting este sirviendo HTTPS hacia afuera.')
+  })
+} else {
+  // En desarrollo local usamos HTTPS con un certificado autofirmado
+  // generado localmente (npm run certs). Nunca se versiona en git.
+  const keyPath = process.env.SSL_KEY_PATH || './certs/cert.key'
+  const certPath = process.env.SSL_CERT_PATH || './certs/cert.crt'
+
+  if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+    console.error('No se encontraron los certificados SSL de desarrollo.')
+    console.error(`Se esperaban en: ${keyPath} y ${certPath}`)
+    console.error('Generalos corriendo: npm run certs')
+    process.exit(1)
+  }
+
+  const sslOptions = {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath)
+  }
+
+  https.createServer(sslOptions, app).listen(PORT, () => {
+    console.log(`Servidor HTTPS de desarrollo corriendo en https://localhost:${PORT}`)
   })
 }

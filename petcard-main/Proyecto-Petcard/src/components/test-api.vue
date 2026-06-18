@@ -20,13 +20,14 @@
 
 <script setup>
 import { ref } from 'vue'
+import { API_URL } from '../api.js'
 
 const resultado = ref('Esperando prueba...')
 
 const testConexion = async () => {
   resultado.value = 'Probando conexión...'
   try {
-    const response = await fetch('http://localhost:3001/api/usuarios')
+    const response = await fetch(`${API_URL}/usuarios`)
     const data = await response.json()
     resultado.value = JSON.stringify(data, null, 2)
   } catch (error) {
@@ -37,7 +38,7 @@ const testConexion = async () => {
 const testRegistro = async () => {
   resultado.value = 'Probando registro...'
   try {
-    const response = await fetch('http://localhost:3001/api/usuarios', {
+    const response = await fetch(`${API_URL}/usuarios`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -58,7 +59,7 @@ const testRegistro = async () => {
 const testLogin = async () => {
   resultado.value = 'Probando login...'
   try {
-    const response = await fetch('http://localhost:3001/api/login', {
+    const response = await fetch(`${API_URL}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

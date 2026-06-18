@@ -1,7 +1,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, reactive } from 'vue'
-import { loginAPI } from '../api.js'
+import { loginAPI, API_URL } from '../api.js'
 
 const router = useRouter()
 
@@ -105,7 +105,7 @@ const requestReset = async () => {
   message.value = 'Enviando solicitud...'
 
   try {
-    const response = await fetch('https://localhost:3001/api/forgot-password', {
+    const response = await fetch(`${API_URL}/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Correo: forgotEmail.value.trim() })
@@ -142,7 +142,7 @@ const resetPassword = async () => {
   message.value = 'Reseteando contraseña...'
 
   try {
-    const response = await fetch('https://localhost:3001/api/reset-password', {
+    const response = await fetch(`${API_URL}/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })

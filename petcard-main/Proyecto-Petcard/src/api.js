@@ -1,5 +1,8 @@
 // Configuracion de la API
-const API_URL = import.meta.env.VITE_API_URL || 'https://localhost:3001/api'
+// Una sola fuente de verdad para la URL del backend.
+// En produccion, define VITE_API_URL en el .env del frontend
+// apuntando al dominio HTTPS real del backend desplegado.
+export const API_URL = import.meta.env.VITE_API_URL || 'https://localhost:3001/api'
 
 // Obtiene el token JWT guardado en localStorage tras el login
 function getToken() {

@@ -23,5 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.local
+.env.*.local
 google-credentials.json
 node_modules/
+
+# Certificados SSL locales (nunca deben subirse al repo)
+*.key
+*.crt
+*.pem
+basedatos-backend/certs/
