@@ -1,8 +1,9 @@
+
 <template>
   <div class="page-container">
     <nav class="navbar">
      <router-link to="/inicio" class="nav-logo">PETCARD</router-link>
-
+ 
   <ul class="nav-links">
     <li><router-link to="/inicio" class="active">Inicio</router-link></li>
     <li><router-link to="/servicios">Servicios</router-link></li>
@@ -24,11 +25,11 @@
     </template>
   </div>
 </nav>
-
+ 
     <!-- Grid de mascotas -->
     <div v-if="isLoading" class="loading">Cargando mascotas...</div>
     <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
-
+ 
     <div class="mascotas-grid">
       <div
         v-for="pet in pets"
@@ -58,25 +59,25 @@
             </button>
           </div>
         </div>
-
+ 
         <div class="mascota-datos" @click="openDetail(pet)">
           <div class="dato-item">Peso: <strong>{{ pet.Peso }} kg</strong></div>
           <div class="dato-item">Sexo: <strong>{{ pet.Sexo }}</strong></div>
-          <div class="dato-item">Fecha nacimiento: <strong>{{ pet.Fecha_nacimiento }}</strong></div>
+          <div class="dato-item">Fecha nacimiento: <strong>{{ formatearFecha(pet.Fecha_nacimiento) }}</strong></div>
         </div>
-
+ 
         <div class="mascota-btns">
           <button class="btn btn-secondary btn-sm" @click.stop="openVaccineEditor(pet)">Vacunas</button>
           <button class="btn btn-primary btn-sm" @click.stop="goToCita(pet.ID_mascota)">Cita</button>
         </div>
       </div>
     </div>
-
+ 
     <!-- Botón agregar -->
     <button id="btn-agregar-mascota" class="btn btn-primary" @click="openAddForm">
       Agregar mascota
     </button>
-
+ 
     <!-- ── MODAL: detalle ── -->
     <div v-if="detailPet" class="modal-overlay" @click.self="detailPet = null">
       <div class="modal-box" style="width:520px;">
@@ -106,18 +107,18 @@
         </div>
       </div>
     </div>
-
+ 
     <!-- ── MODAL: agregar / editar ── -->
     <div v-if="showForm" class="modal-overlay" @click.self="showForm = false">
       <div class="modal-box" style="width:420px;">
         <h3 style="margin-top:0;margin-bottom:1rem;">{{ isEditing ? 'Editar Mascota' : 'Agregar Mascota' }}</h3>
-
+ 
         <div style="display:flex;flex-direction:column;gap:.75rem;">
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Nombre</label>
             <input class="form-control" placeholder="Nombre de la mascota" v-model="formData.Nombre" />
           </div>
-
+ 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Especie</label>
             <select class="form-control" v-model="formData.Especie">
@@ -130,12 +131,12 @@
               <option>Pez</option>
             </select>
           </div>
-
+ 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Raza</label>
             <input class="form-control" placeholder="Raza de la mascota" v-model="formData.Raza" />
           </div>
-
+ 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Sexo</label>
             <select class="form-control" v-model="formData.Sexo">
@@ -143,23 +144,23 @@
               <option>Hembra</option>
             </select>
           </div>
-
+ 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Fecha de nacimiento</label>
             <input class="form-control" type="date" v-model="formData.Fecha_nacimiento" />
           </div>
-
+ 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Peso (kg)</label>
             <input class="form-control" type="number" step="0.1" placeholder="Peso en kg" v-model="formData.Peso" />
           </div>
-
+ 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Foto (URL opcional)</label>
             <input class="form-control" placeholder="URL de la foto" v-model="formData.Foto" />
           </div>
         </div>
-
+ 
         <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;">
           <button class="btn btn-outline-primary" @click="showForm = false">Cancelar</button>
           <button class="btn btn-primary" @click="savePet" :disabled="isLoading">
@@ -168,7 +169,7 @@
         </div>
       </div>
     </div>
-
+ 
     <!-- ── MODAL: vacunas ── -->
     <div v-if="vacPet" class="modal-overlay" @click.self="vacPet = null">
       <div class="modal-box" style="width:720px;max-height:90vh;overflow:auto;">
@@ -176,7 +177,7 @@
           <h3 style="margin:0">Vacunas — {{ vacPet.nombre }}</h3>
           <button class="btn btn-outline-primary" @click="vacPet = null">Cerrar</button>
         </div>
-
+ 
         <!-- Lista de vacunas -->
         <div v-if="!vacPet.vacunas || vacPet.vacunas.length === 0" style="color:var(--muted)">
           No hay vacunas registradas.
@@ -206,9 +207,9 @@
             </tr>
           </tbody>
         </table>
-
+ 
         <hr />
-
+ 
         <!-- Agregar vacuna -->
         <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem;flex-wrap:wrap;">
           <input class="form-control" placeholder="Vacuna (ej. Antirrábica)" v-model="newVac.nombre" style="flex:1;min-width:160px;" />
@@ -221,25 +222,25 @@
     </div>
   </div>
 </template>
-
+ 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 import { mascotasAPI, clientesAPI, vacunasAPI } from '../api.js'
-
+ 
 const router = useRouter()
 const { usuarioLogueado, cerrarSesion, irALogin, irARegistro } = useAuth()
-
+ 
 // ── Estado reactivo ─────────────────────────────────────────
 const pets = ref([])
 const clienteActual = ref(null)
 const isLoading = ref(false)
 const errorMessage = ref('')
-
+ 
 // Modal detalle
 const detailPet = ref(null)
-
+ 
 // Modal formulario
 const showForm = ref(false)
 const isEditing = ref(false)
@@ -253,18 +254,18 @@ const formData = reactive({
   Peso: '',
   Foto: ''
 })
-
+ 
 // Modal vacunas
 const vacPet = ref(null)
 const newVac = reactive({ nombre: '', fechaProgramada: '', fechaAplicada: '', lote: '' })
-
+ 
 // ── Constantes ──────────────────────────────────────────────
 const avatarOptions = [
   '🐶', '🐱', '🦜', '🐰', '🐹', '🐢', '🐠'
 ]
-
+ 
 const defaultVacunaServicioId = 2
-
+ 
 const detailFields = {
   Especie: 'Especie',
   Sexo: 'Sexo',
@@ -272,18 +273,18 @@ const detailFields = {
   Raza: 'Raza',
   Fecha_nacimiento: 'Fecha de Nacimiento'
 }
-
+ 
 // ── Funciones de carga ──────────────────────────────────────
 async function cargarCliente() {
   if (!usuarioLogueado.value) {
     errorMessage.value = 'Por favor inicia sesión para ver tus mascotas.'
     return
   }
-
+ 
   try {
     const clientes = await clientesAPI.obtenerPorUsuario(usuarioLogueado.value.ID_usuario)
     clienteActual.value = Array.isArray(clientes) ? clientes[0] : clientes
-
+ 
     if (!clienteActual.value) {
       // Crear la fila de cliente si no existe
       clienteActual.value = await clientesAPI.crear({
@@ -296,13 +297,13 @@ async function cargarCliente() {
     errorMessage.value = 'No se pudo identificar al cliente.'
   }
 }
-
+ 
 async function cargarMascotas() {
   if (!clienteActual.value) return
-
+ 
   isLoading.value = true
   errorMessage.value = ''
-
+ 
   try {
     pets.value = await mascotasAPI.obtenerPorCliente(clienteActual.value.ID_cliente)
   } catch (error) {
@@ -312,8 +313,17 @@ async function cargarMascotas() {
     isLoading.value = false
   }
 }
-
+ 
 // ── CRUD mascotas ────────────────────────────────────────────
+function formatearFecha(fecha) {
+  if (!fecha) return 'No especificada'
+  return new Date(fecha).toLocaleDateString('es-CO', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  })
+}
+ 
 function openAddForm() {
   isEditing.value = false
   editingId.value = null
@@ -328,20 +338,20 @@ function openAddForm() {
   })
   showForm.value = true
 }
-
+ 
 function openEditForm(pet) {
   isEditing.value = true
   editingId.value = pet.ID_mascota
   Object.assign(formData, { ...pet })
   showForm.value = true
 }
-
+ 
 async function savePet() {
   if (!formData.Nombre.trim()) {
     alert('Nombre es requerido')
     return
   }
-
+ 
   if (!clienteActual.value) {
     await cargarCliente()
     if (!clienteActual.value) {
@@ -349,19 +359,19 @@ async function savePet() {
       return
     }
   }
-
+ 
   try {
     const datosMascota = {
       ID_cliente: clienteActual.value.ID_cliente,
       ...formData
     }
-
+ 
     if (isEditing.value) {
       await mascotasAPI.actualizar(editingId.value, formData)
     } else {
       await mascotasAPI.crear(datosMascota)
     }
-
+ 
     showForm.value = false
     await cargarMascotas() // Recargar la lista
   } catch (error) {
@@ -369,10 +379,10 @@ async function savePet() {
     console.error('Error al guardar mascota:', error)
   }
 }
-
+ 
 async function deletePet(id) {
   if (!confirm('¿Eliminar esta mascota?')) return
-
+ 
   try {
     await mascotasAPI.eliminar(id)
     await cargarMascotas() // Recargar la lista
@@ -381,22 +391,22 @@ async function deletePet(id) {
     console.error('Error al eliminar mascota:', error)
   }
 }
-
+ 
 // ── Detalle / navegación ─────────────────────────────────────
 function openDetail(pet) {
   detailPet.value = { ...pet }
 }
-
+ 
 function goToCita(id) {
   router.push({ path: '/citas', query: { mascota: id } })
 }
-
+ 
 // ── Vacunas ──────────────────────────────────────────────────
 async function openVaccineEditor(pet) {
   const mascotaId = pet.ID_mascota || pet.id || pet.id_mascota || pet.ID
   vacPet.value = reactive({ ...pet, ID_mascota: mascotaId, vacunas: [] })
   Object.assign(newVac, { nombre:'', fechaProgramada:'', fechaAplicada:'', lote:'' })
-
+ 
   try {
     if (!mascotaId) throw new Error('ID de mascota no disponible')
     const vacunas = await vacunasAPI.obtenerPorMascota(mascotaId)
@@ -414,22 +424,22 @@ async function openVaccineEditor(pet) {
     vacPet.value.vacunas = []
   }
 }
-
+ 
 function calcEstado(v) {
   if (v.fechaAplicada) return 'aplicada'
   if (v.fechaProgramada && new Date(v.fechaProgramada) < new Date()) return 'atrasada'
   return 'proxima'
 }
-
+ 
 function recalcEstado(v) {
   v.estado = calcEstado(v)
 }
-
+ 
 async function saveVac(idx) {
   const v = vacPet.value.vacunas[idx]
   recalcEstado(v)
   const mascotaId = vacPet.value.ID_mascota || vacPet.value.id || vacPet.value.id_mascota || vacPet.value.ID
-
+ 
   const payload = {
     ID_mascota: mascotaId,
     ID_servicio: v.ID_servicio || defaultVacunaServicioId,
@@ -440,10 +450,10 @@ async function saveVac(idx) {
     Estado: v.estado || 'proxima',
     Observaciones: v.observaciones || ''
   }
-
+ 
   try {
     if (!mascotaId) throw new Error('ID de mascota no disponible para guardar vacuna')
-
+ 
     if (v.id) {
       await vacunasAPI.actualizar(v.id, payload)
     } else {
@@ -456,7 +466,7 @@ async function saveVac(idx) {
     alert('No se pudo guardar la vacuna en el carnet. ' + (error.message || ''))
   }
 }
-
+ 
 function toggleVac(idx) {
   const v = vacPet.value.vacunas[idx]
   if (v.estado === 'aplicada') {
@@ -466,11 +476,11 @@ function toggleVac(idx) {
     if (!v.fechaAplicada) v.fechaAplicada = new Date().toISOString().slice(0, 10)
   }
 }
-
+ 
 async function deleteVac(idx) {
   const v = vacPet.value.vacunas[idx]
   if (!confirm('¿Eliminar vacuna?')) return
-
+ 
   try {
     if (v.id) {
       await vacunasAPI.eliminar(v.id)
@@ -481,7 +491,7 @@ async function deleteVac(idx) {
     alert('No se pudo eliminar la vacuna del carnet.')
   }
 }
-
+ 
 async function addVac() {
   if (!newVac.nombre.trim()) {
     alert('Nombre de vacuna requerido')
@@ -493,7 +503,7 @@ async function addVac() {
     alert('No se pudo identificar la mascota para el carnet.')
     return
   }
-
+ 
   const nuevaVacuna = {
     nombre: newVac.nombre,
     fechaProgramada: newVac.fechaProgramada,
@@ -502,7 +512,7 @@ async function addVac() {
     observaciones: '',
     estado: calcEstado(newVac)
   }
-
+ 
   try {
     const payload = {
       ID_mascota: mascotaId,
@@ -514,7 +524,7 @@ async function addVac() {
       Estado: nuevaVacuna.estado,
       Observaciones: nuevaVacuna.observaciones
     }
-
+ 
     const created = await vacunasAPI.crear(payload)
     nuevaVacuna.id = created.ID_carnetVacunas
     vacPet.value.vacunas.push(nuevaVacuna)
@@ -524,7 +534,7 @@ async function addVac() {
     alert('No se pudo agregar la vacuna al carnet. ' + (error.message || ''))
   }
 }
-
+ 
 // ── Imprimir / PDF ───────────────────────────────────────────
 function printDetail() {
   if (!detailPet.value) return
@@ -534,12 +544,12 @@ function printDetail() {
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${pet.Nombre}</title></head><body>
     <h1>${pet.Nombre}</h1>
     <p>Especie: ${pet.Especie}</p><p>Raza: ${pet.Raza}</p><p>Sexo: ${pet.Sexo}</p>
-    <p>Peso: ${pet.Peso}</p><p>Fecha de nacimiento: ${pet.Fecha_nacimiento}</p>
+    <p>Peso: ${pet.Peso}</p><p>Fecha de nacimiento: ${formatearFecha(pet.Fecha_nacimiento)}</p>
   </body></html>`)
   w.document.close()
   setTimeout(() => w.print(), 300)
 }
-
+ 
 async function downloadPdf(pet) {
   try {
     const { jsPDF } = window.jspdf
@@ -551,21 +561,21 @@ async function downloadPdf(pet) {
     doc.text('Raza: '           + (pet.Raza       || ''), 40, y); y += 18
     doc.text('Sexo: '           + (pet.Sexo       || ''), 40, y); y += 18
     doc.text('Peso: '           + (pet.Peso       || ''), 40, y); y += 18
-    doc.text('Fecha nacimiento: ' + (pet.Fecha_nacimiento || ''), 40, y)
+    doc.text('Fecha nacimiento: ' + formatearFecha(pet.Fecha_nacimiento), 40, y)
     doc.save((pet.Nombre || 'mascota') + '.pdf')
   } catch (err) {
     console.error(err)
     alert('No se pudo generar el PDF. Usa Imprimir para guardar como PDF.')
   }
 }
-
+ 
 // ── Inicialización ───────────────────────────────────────────
 onMounted(async () => {
   await cargarCliente()
   await cargarMascotas()
 })
 </script>
-
+ 
 <style scoped>
 .modal-overlay {
   position: fixed;
@@ -610,20 +620,20 @@ table th, table td {
   padding: .3rem .4rem;
   vertical-align: middle;
 }
-
+ 
 .page-container {
   max-width: 1160px;
   margin: 1.5rem auto;
   padding: 0 1rem;
 }
-
+ 
 .loading {
   text-align: center;
   padding: 2rem;
   color: #666;
   font-size: 1.1rem;
 }
-
+ 
 .error {
   background: #fee;
   color: #c33;
@@ -632,7 +642,7 @@ table th, table td {
   margin-bottom: 1rem;
   border: 1px solid #fcc;
 }
-
+ 
 .navbar {
   display: flex;
   align-items: center;
@@ -646,14 +656,14 @@ table th, table td {
   margin-bottom: 1.25rem;
   flex-wrap: wrap;
 }
-
+ 
 .nav-logo {
   font-size: 1.25rem;
   font-weight: 700;
   color: #0f172a;
   text-decoration: none;
 }
-
+ 
 .nav-links {
   display: flex;
   flex-wrap: wrap;
@@ -662,7 +672,7 @@ table th, table td {
   padding: 0;
   list-style: none;
 }
-
+ 
 .nav-links li a {
   text-decoration: none;
   color: #334155;
@@ -670,18 +680,18 @@ table th, table td {
   padding: .4rem .6rem;
   border-radius: 8px;
 }
-
+ 
 .nav-links li a.active,
 .nav-links li a:hover {
   color: #1d4ed8;
   background: #eff6ff;
 }
-
+ 
 .auth-section {
   display: flex;
   gap: .5rem;
 }
-
+ 
 .btn-auth, .btn {
   cursor: pointer;
   border: 1px solid #3b82f6;
@@ -692,43 +702,43 @@ table th, table td {
   font-weight: 600;
   transition: all .2s ease;
 }
-
+ 
 .btn-auth:hover, .btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(59,130,246,0.2);
 }
-
+ 
 .btn-outline-primary {
   background: white;
   color: #1d4ed8;
   border: 1px solid #1d4ed8;
 }
-
+ 
 .btn-outline-primary:hover {
   background: #eff6ff;
 }
-
+ 
 .btn-secondary {
   background: #64748b;
   border-color: #64748b;
 }
-
+ 
 .btn-secondary:hover {
   background: #475569;
 }
-
+ 
 .btn-sm {
   font-size: .8rem;
   padding: .4rem .7rem;
 }
-
+ 
 .mascotas-grid {
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
   gap:1rem;
   margin-bottom: 1.2rem;
 }
-
+ 
 .mascota-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -737,19 +747,19 @@ table th, table td {
   box-shadow: 0 4px 15px rgba(15, 23, 42, 0.06);
   transition: transform .2s ease, box-shadow .2s ease;
 }
-
+ 
 .mascota-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.15);
 }
-
+ 
 .mascota-top {
   display: flex;
   align-items: center;
   gap: .75rem;
   margin-bottom: .8rem;
 }
-
+ 
 .mascota-avatar {
   width: 52px;
   height: 52px;
@@ -760,30 +770,30 @@ table th, table td {
   font-size: 1.5rem;
   background: #fef3c7;
 }
-
+ 
 .mascota-info {
   display: flex;
   flex-direction: column;
   gap: .15rem;
 }
-
+ 
 .mascota-nombre {
   font-size: 1rem;
   font-weight: 700;
   color: #0f172a;
 }
-
+ 
 .mascota-tipo {
   color: #64748b;
   font-size: .85rem;
 }
-
+ 
 .mascota-actions {
   margin-left: auto;
   display: flex;
   gap: .25rem;
 }
-
+ 
 .btn-icon {
   border: 1px solid #cbd5e1;
   background: #ffffff;
@@ -795,11 +805,11 @@ table th, table td {
   justify-content: center;
   color: #334155;
 }
-
+ 
 .btn-icon:hover {
   background: #f1f5f9;
 }
-
+ 
 .microchip-tag {
   margin: .6rem 0;
   color: #334155;
@@ -809,18 +819,18 @@ table th, table td {
   border-radius: 8px;
   font-size: .85rem;
 }
-
+ 
 .mascota-btns {
   display: flex;
   gap: .5rem;
   margin-top: .75rem;
 }
-
+ 
 #btn-agregar-mascota {
   margin-top: 1rem;
   width: 250px;
 }
-
+ 
 .modal-box {
   max-width: 95%;
   background: #fff;
@@ -828,7 +838,7 @@ table th, table td {
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(15, 23, 42, 0.25);
 }
-
+ 
 .form-control {
   border-radius: 8px;
   border: 1px solid #cbd5e1;
@@ -837,13 +847,13 @@ table th, table td {
   color: #0f172a;
   width: 100%;
 }
-
+ 
 .form-control:focus {
   border-color: #2563eb;
   outline: none;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
 }
-
+ 
 /* Usuario logueado */
 .usuario-nombre {
   color: #0f172a;
@@ -851,15 +861,15 @@ table th, table td {
   margin-right: 1rem;
   font-size: 0.95rem;
 }
-
+ 
 .btn-logout {
   background-color: #dc3545;
   border: 1px solid #dc3545;
 }
-
+ 
 .btn-logout:hover {
   background-color: #c82333;
   border-color: #c82333;
 }
-
+ 
 </style>

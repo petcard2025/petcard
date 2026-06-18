@@ -1,27 +1,48 @@
-// Configuración de la API
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+// Configuracion de la API
+const API_URL = import.meta.env.VITE_API_URL || 'https://localhost:3001/api'
 
-// Función auxiliar para hacer peticiones
+// Obtiene el token JWT guardado en localStorage tras el login
+function getToken() {
+  return localStorage.getItem('petcard_token')
+}
+
+// Funcion auxiliar para hacer peticiones al backend
+// Si existe un token JWT lo agrega automaticamente en el header Authorization
 const fetchAPI = async (endpoint, options = {}) => {
+  const token = getToken()
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers
+  }
+
+  // Agregar el token si existe (rutas protegidas lo requieren)
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   try {
     const response = await fetch(`${API_URL}${endpoint}`, {
       mode: 'cors',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
+      headers,
       ...options
     })
 
     const data = await response.json()
 
     if (!response.ok) {
+      // Si el token expiro o es invalido, limpiar sesion
+      if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem('petcard_token')
+        localStorage.removeItem('petcard_usuario_actual')
+        window.location.href = '/login-usuario'
+      }
       throw new Error(data.error || `Error ${response.status}: ${response.statusText}`)
     }
 
     return data
   } catch (error) {
-    console.error('Error en la petición:', error)
+    console.error('Error en la peticion:', error)
     throw error
   }
 }
@@ -43,11 +64,19 @@ export const usuariosAPI = {
 }
 
 // ========== LOGIN ==========
+// Guarda el token JWT en localStorage automaticamente al hacer login
 export const loginAPI = {
-  loginUsuario: (correo, contrasena) => fetchAPI('/login', {
-    method: 'POST',
-    body: JSON.stringify({ Correo: correo, Contrasena: contrasena })
-  })
+  loginUsuario: async (correo, contrasena) => {
+    const data = await fetchAPI('/login', {
+      method: 'POST',
+      body: JSON.stringify({ Correo: correo, Contrasena: contrasena })
+    })
+    // Si el backend devuelve token, guardarlo en localStorage
+    if (data.token) {
+      localStorage.setItem('petcard_token', data.token)
+    }
+    return data
+  }
 }
 
 // ========== CLIENTES ==========
