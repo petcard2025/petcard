@@ -90,11 +90,29 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 import ModalRegistro from './ModalRegistro.vue'
 
+const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion } = useAuth()
+
+// ===== GUARD DE SEGURIDAD =====
+onMounted(() => {
+  const token = localStorage.getItem('petcard_token')
+  const usuarioStr = localStorage.getItem('petcard_usuario_actual')
+  let usuario = null
+  try { usuario = usuarioStr ? JSON.parse(usuarioStr) : null } catch {}
+  if (!token && !usuario) {
+    router.push('/login-admin')
+    return
+  }
+  const rol = usuario?.Rol
+  if (rol !== 'Admin') {
+    router.push('/inicio')
+  }
+})
 
 // Estado reactivo
 const registros = ref([])

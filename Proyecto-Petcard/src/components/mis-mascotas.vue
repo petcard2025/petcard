@@ -559,6 +559,22 @@ async function downloadPdf(pet) {
   }
 }
 
+// ===== GUARD DE SEGURIDAD =====
+onMounted(() => {
+  const token = localStorage.getItem('petcard_token')
+  const usuarioStr = localStorage.getItem('petcard_usuario_actual')
+  let usuario = null
+  try { usuario = usuarioStr ? JSON.parse(usuarioStr) : null } catch {}
+  if (!token && !usuario) {
+    router.push('/login-usuario')
+    return
+  }
+  const rol = usuario?.Rol
+  if (rol === 'Admin') {
+    router.push('/admin-inicio')
+  }
+})
+
 // ── Inicialización ───────────────────────────────────────────
 onMounted(async () => {
   await cargarCliente()

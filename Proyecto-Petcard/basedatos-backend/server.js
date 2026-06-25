@@ -5,6 +5,9 @@ const bcrypt = require('bcrypt')
 const crypto = require('crypto')
 const twilio = require('twilio')
 const jwt = require('jsonwebtoken')
+const https = require('https')
+const fs = require('fs')
+const path = require('path')
 require('dotenv').config()
 
 // ===== GOOGLE CALENDAR =====
@@ -35,7 +38,7 @@ async function crearEventoCalendar(cita) {
     calendarId: process.env.GOOGLE_CALENDAR_ID,
     resource: event
   })
-  return response.data.id // guardamos este ID en la BD
+  return response.data.id
 }
 
 // ===== TWILIO - SERVICIO DE SMS =====
@@ -44,38 +47,17 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 )
 
-// Normaliza un número de teléfono colombiano al formato E.164 (+57XXXXXXXXXX)
 function normalizarTelefono(telefono) {
-  // Eliminar espacios, guiones, paréntesis y puntos
   let num = telefono.toString().replace(/[\s\-().]/g, '')
-
-  // Si ya tiene +57, verificar que tenga 10 dígitos después
   if (num.startsWith('+57')) {
     const digitos = num.slice(3)
     if (digitos.length === 10) return num
-    // Si tiene más/menos dígitos, retornar como está y que Twilio dé el error
     return num
   }
-
-  // Si empieza con 57 sin +, agregar +
-  if (num.startsWith('57') && num.length === 12) {
-    return '+' + num
-  }
-
-  // Si es un número colombiano de 10 dígitos (empieza con 3 = celular)
-  if (num.length === 10) {
-    return '+57' + num
-  }
-
-  // Si empieza con 0 y tiene 11 dígitos (ej: 0312...) — quitar el 0
-  if (num.startsWith('0') && num.length === 11) {
-    return '+57' + num.slice(1)
-  }
-
-  // Si ya trae +, respetar el formato tal como viene
+  if (num.startsWith('57') && num.length === 12) return '+' + num
+  if (num.length === 10) return '+57' + num
+  if (num.startsWith('0') && num.length === 11) return '+57' + num.slice(1)
   if (num.startsWith('+')) return num
-
-  // Fallback: agregar +57 y dejar que Twilio valide
   return '+57' + num
 }
 
@@ -83,7 +65,6 @@ async function enviarSMS(telefono, mensaje) {
   try {
     const telefonoFormateado = normalizarTelefono(telefono)
     console.log(`📞 Enviando SMS a: ${telefono} → ${telefonoFormateado}`)
-
     const message = await twilioClient.messages.create({
       body: mensaje,
       from: process.env.TWILIO_PHONE_NUMBER,
@@ -126,7 +107,7 @@ const soloAdmin = (req, res, next) => {
   next()
 }
 
-// CONEXION
+// ===== CONEXION =====
 const db = mysql.createConnection({
   host: process.env.DB_HOST || '127.0.0.1',
   port: process.env.DB_PORT || 3306,
@@ -144,7 +125,7 @@ db.connect(err => {
   console.log('✓ Conectado a MySQL correctamente')
 })
 
-// USUARIOS
+// ===== USUARIOS =====
 app.get('/api/usuarios', verificarToken, soloAdmin, (req, res) => {
   db.query('SELECT ID_usuario, Nombre, Correo, Telefono, Rol FROM usuario', (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -189,7 +170,7 @@ app.delete('/api/usuarios/:id', verificarToken, soloAdmin, (req, res) => {
   })
 })
 
-// LOGIN
+// ===== LOGIN =====
 app.post('/api/login', async (req, res) => {
   const { Correo, Contrasena } = req.body
   try {
@@ -207,9 +188,7 @@ app.post('/api/login', async (req, res) => {
         } else {
           isPasswordValid = Contrasena === storedPassword
         }
-        if (!isPasswordValid) {
-          return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-        }
+        if (!isPasswordValid) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
         if (!storedPassword.startsWith('$2')) {
           const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
           db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
@@ -224,12 +203,7 @@ app.post('/api/login', async (req, res) => {
           Rol: usuario.Rol
         }
         const token = jwt.sign(
-          {
-            ID_usuario: usuario.ID_usuario,
-            Nombre: usuario.Nombre,
-            Correo: usuario.Correo,
-            Rol: usuario.Rol
-          },
+          { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
           process.env.JWT_SECRET,
           { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
         )
@@ -241,7 +215,7 @@ app.post('/api/login', async (req, res) => {
   }
 })
 
-// FORGOT PASSWORD
+// ===== FORGOT PASSWORD =====
 app.post('/api/forgot-password', (req, res) => {
   const { Correo } = req.body
   if (!Correo) return res.status(400).json({ error: 'Correo requerido' })
@@ -252,15 +226,11 @@ app.post('/api/forgot-password', (req, res) => {
     const token = crypto.randomBytes(32).toString('hex')
     const expires = Date.now() + 3600000
     resetTokens.set(token, { ID_usuario: usuario.ID_usuario, expires })
-    res.json({
-      message: 'Token de reset generado.',
-      token: token,
-      info: 'Usa este token en /api/reset-password con la nueva contrasena'
-    })
+    res.json({ message: 'Token de reset generado.', token, info: 'Usa este token en /api/reset-password con la nueva contrasena' })
   })
 })
 
-// RESET PASSWORD
+// ===== RESET PASSWORD =====
 app.post('/api/reset-password', async (req, res) => {
   const { token, nuevaContrasena } = req.body
   if (!token || !nuevaContrasena) return res.status(400).json({ error: 'Token y nueva contrasena requeridos' })
@@ -283,7 +253,7 @@ app.post('/api/reset-password', async (req, res) => {
   }
 })
 
-// CLIENTES
+// ===== CLIENTES =====
 app.get('/api/clientes', verificarToken, (req, res) => {
   db.query(
     `SELECT c.ID_cliente, c.Direccion, u.Nombre, u.Correo, u.Telefono
@@ -310,13 +280,14 @@ app.get('/api/clientes/usuario/:id_usuario', verificarToken, (req, res) => {
   })
 })
 
-// MASCOTAS
+/// ===== MASCOTAS =====
 app.get('/api/mascotas', verificarToken, (req, res) => {
   db.query(
     `SELECT m.*, u.Nombre AS Nombre_dueno
      FROM mascota m
      JOIN cliente c ON m.ID_cliente = c.ID_cliente
-     JOIN usuario u ON c.ID_usuario = u.ID_usuario`,
+     JOIN usuario u ON c.ID_usuario = u.ID_usuario
+     WHERE m.Estado = 'activo'`,
     (err, results) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json(results)
@@ -325,7 +296,7 @@ app.get('/api/mascotas', verificarToken, (req, res) => {
 })
 
 app.get('/api/mascotas/cliente/:id_cliente', verificarToken, (req, res) => {
-  db.query('SELECT * FROM mascota WHERE ID_cliente=?', [req.params.id_cliente], (err, results) => {
+  db.query('SELECT * FROM mascota WHERE ID_cliente=? AND Estado="activo"', [req.params.id_cliente], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
@@ -356,13 +327,12 @@ app.put('/api/mascotas/:id', verificarToken, (req, res) => {
 })
 
 app.delete('/api/mascotas/:id', verificarToken, (req, res) => {
-  db.query('DELETE FROM mascota WHERE ID_mascota=?', [req.params.id], (err) => {
+  db.query('UPDATE mascota SET Estado="inactivo" WHERE ID_mascota=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
-    res.json({ message: 'Mascota eliminada' })
+    res.json({ message: 'Mascota desactivada' })
   })
 })
-
-// VETERINARIOS
+// ===== VETERINARIOS =====
 app.get('/api/veterinarios', verificarToken, (req, res) => {
   db.query(
     `SELECT v.ID_veterinario, v.Cargo, v.Especialidad, u.Nombre, u.Correo, u.Telefono
@@ -374,7 +344,7 @@ app.get('/api/veterinarios', verificarToken, (req, res) => {
   )
 })
 
-// SERVICIOS
+// ===== SERVICIOS =====
 app.get('/api/servicios', verificarToken, (req, res) => {
   db.query('SELECT * FROM servicio', (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -413,7 +383,7 @@ app.delete('/api/servicios/:id', verificarToken, soloAdmin, (req, res) => {
   })
 })
 
-// CITAS
+// ===== CITAS =====
 app.get('/api/citas', verificarToken, (req, res) => {
   db.query(
     `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
@@ -444,15 +414,10 @@ app.post('/api/citas', verificarToken, async (req, res) => {
     [ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones],
     async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
-
       const ID_cita = result.insertId
-
       try {
-        const googleEventId = await crearEventoCalendar({
-          Fecha, Hora, Motivo, Observaciones
-        })
-        db.query('UPDATE cita SET Google_Event_ID=? WHERE ID_cita=?',
-                 [googleEventId, ID_cita])
+        const googleEventId = await crearEventoCalendar({ Fecha, Hora, Motivo, Observaciones })
+        db.query('UPDATE cita SET Google_Event_ID=? WHERE ID_cita=?', [googleEventId, ID_cita])
         res.json({ ID_cita, googleEventId, ...req.body })
       } catch (calError) {
         console.error('Error Google Calendar:', calError.message)
@@ -474,6 +439,18 @@ app.put('/api/citas/:id', verificarToken, (req, res) => {
   )
 })
 
+app.patch('/api/citas/:id', verificarToken, (req, res) => {
+  const campos = req.body
+  const keys = Object.keys(campos)
+  if (keys.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' })
+  const set = keys.map(k => `${k}=?`).join(', ')
+  const values = [...Object.values(campos), req.params.id]
+  db.query(`UPDATE cita SET ${set} WHERE ID_cita=?`, values, (err) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json({ message: 'Cita actualizada parcialmente' })
+  })
+})
+
 app.delete('/api/citas/:id', verificarToken, (req, res) => {
   db.query('DELETE FROM cita WHERE ID_cita=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -481,7 +458,7 @@ app.delete('/api/citas/:id', verificarToken, (req, res) => {
   })
 })
 
-// CARNET DE VACUNAS
+// ===== CARNET DE VACUNAS =====
 app.get('/api/vacunas', verificarToken, (req, res) => {
   db.query(
     `SELECT cv.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
@@ -533,7 +510,7 @@ app.delete('/api/vacunas/:id', verificarToken, (req, res) => {
   })
 })
 
-// PLAN DE ALIMENTACION
+// ===== PLAN DE ALIMENTACION =====
 app.get('/api/alimentacion', verificarToken, (req, res) => {
   db.query(
     `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
@@ -585,7 +562,7 @@ app.delete('/api/alimentacion/:id', verificarToken, (req, res) => {
   })
 })
 
-// NOTIFICACIONES
+// ===== NOTIFICACIONES =====
 app.get('/api/notificaciones', verificarToken, (req, res) => {
   db.query(
     `SELECT n.*, u.Nombre AS Nombre_usuario
@@ -601,32 +578,21 @@ app.get('/api/notificaciones', verificarToken, (req, res) => {
 
 app.post('/api/notificaciones', verificarToken, async (req, res) => {
   const { ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal } = req.body
-
-  // Guardar la notificacion en la base de datos
   db.query(
     'INSERT INTO notificacion (ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal, Fecha_envio) VALUES (?,?,?,?,?,NOW())',
     [ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal],
     async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
-
       const respuesta = { ID_notificacion: result.insertId, ...req.body, sms_enviado: false }
-
-      // Si el canal es SMS, intentar enviar automaticamente
       if (Canal === 'SMS' && ID_usuario) {
-        db.query(
-          'SELECT Telefono, Nombre FROM usuario WHERE ID_usuario = ?',
-          [ID_usuario],
-          async (errU, usuarios) => {
-            if (!errU && usuarios.length > 0 && usuarios[0].Telefono) {
-              const smsResultado = await enviarSMS(usuarios[0].Telefono, Mensaje)
-              respuesta.sms_enviado = smsResultado.success
-              if (!smsResultado.success) {
-                respuesta.sms_error = smsResultado.error
-              }
-            }
-            res.json(respuesta)
+        db.query('SELECT Telefono, Nombre FROM usuario WHERE ID_usuario = ?', [ID_usuario], async (errU, usuarios) => {
+          if (!errU && usuarios.length > 0 && usuarios[0].Telefono) {
+            const smsResultado = await enviarSMS(usuarios[0].Telefono, Mensaje)
+            respuesta.sms_enviado = smsResultado.success
+            if (!smsResultado.success) respuesta.sms_error = smsResultado.error
           }
-        )
+          res.json(respuesta)
+        })
       } else {
         res.json(respuesta)
       }
@@ -641,7 +607,6 @@ app.delete('/api/notificaciones/:id', verificarToken, (req, res) => {
   })
 })
 
-// GET - Notificaciones por usuario
 app.get('/api/notificaciones/usuario/:idUsuario', verificarToken, (req, res) => {
   db.query(
     'SELECT * FROM notificacion WHERE ID_usuario = ? ORDER BY Fecha_envio DESC',
@@ -653,7 +618,6 @@ app.get('/api/notificaciones/usuario/:idUsuario', verificarToken, (req, res) => 
   )
 })
 
-// GET - Notificaciones no leídas de un usuario
 app.get('/api/notificaciones/usuario/:idUsuario/no-leidas', verificarToken, (req, res) => {
   db.query(
     'SELECT * FROM notificacion WHERE ID_usuario = ? AND Leida = 0 ORDER BY Fecha_envio DESC',
@@ -665,20 +629,14 @@ app.get('/api/notificaciones/usuario/:idUsuario/no-leidas', verificarToken, (req
   )
 })
 
-// GET - Notificación por ID
 app.get('/api/notificaciones/:id', verificarToken, (req, res) => {
-  db.query(
-    'SELECT * FROM notificacion WHERE ID_notificacion = ?',
-    [req.params.id],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (results.length === 0) return res.status(404).json({ error: 'Notificación no encontrada' })
-      res.json(results[0])
-    }
-  )
+  db.query('SELECT * FROM notificacion WHERE ID_notificacion = ?', [req.params.id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message })
+    if (results.length === 0) return res.status(404).json({ error: 'Notificación no encontrada' })
+    res.json(results[0])
+  })
 })
 
-// PUT - Actualizar notificación
 app.put('/api/notificaciones/:id', verificarToken, (req, res) => {
   const { Mensaje, Tipo, Canal } = req.body
   db.query(
@@ -691,7 +649,6 @@ app.put('/api/notificaciones/:id', verificarToken, (req, res) => {
   )
 })
 
-// PATCH - Marcar como leída
 app.patch('/api/notificaciones/:id/marcar-como-leida', verificarToken, (req, res) => {
   db.query(
     'UPDATE notificacion SET Leida = 1, Fecha_lectura = NOW() WHERE ID_notificacion = ?',
@@ -703,51 +660,33 @@ app.patch('/api/notificaciones/:id/marcar-como-leida', verificarToken, (req, res
   )
 })
 
-// PATCH - Marcar múltiples como leídas
 app.patch('/api/notificaciones/marcar-como-leidas/bulk', verificarToken, (req, res) => {
   const { ids } = req.body
-  if (!Array.isArray(ids) || ids.length === 0)
-    return res.status(400).json({ error: 'ids debe ser un array no vacío' })
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids debe ser un array no vacío' })
   const placeholders = ids.map(() => '?').join(',')
-  db.query(
-    `UPDATE notificacion SET Leida = 1, Fecha_lectura = NOW() WHERE ID_notificacion IN (${placeholders})`,
-    ids,
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ actualizadas: ids.length })
-    }
-  )
+  db.query(`UPDATE notificacion SET Leida = 1, Fecha_lectura = NOW() WHERE ID_notificacion IN (${placeholders})`, ids, (err) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json({ actualizadas: ids.length })
+  })
 })
 
-// DELETE - Eliminar múltiples
 app.delete('/api/notificaciones/bulk', verificarToken, (req, res) => {
   const { ids } = req.body
-  if (!Array.isArray(ids) || ids.length === 0)
-    return res.status(400).json({ error: 'ids debe ser un array no vacío' })
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids debe ser un array no vacío' })
   const placeholders = ids.map(() => '?').join(',')
-  db.query(
-    `DELETE FROM notificacion WHERE ID_notificacion IN (${placeholders})`,
-    ids,
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ eliminadas: ids.length })
-    }
-  )
+  db.query(`DELETE FROM notificacion WHERE ID_notificacion IN (${placeholders})`, ids, (err) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json({ eliminadas: ids.length })
+  })
 })
 
-// DELETE - Eliminar todas las de un usuario
 app.delete('/api/notificaciones/usuario/:idUsuario/todas', verificarToken, (req, res) => {
-  db.query(
-    'DELETE FROM notificacion WHERE ID_usuario = ?',
-    [req.params.idUsuario],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ eliminadas: result.affectedRows })
-    }
-  )
+  db.query('DELETE FROM notificacion WHERE ID_usuario = ?', [req.params.idUsuario], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json({ eliminadas: result.affectedRows })
+  })
 })
 
-// GET - Estadísticas generales
 app.get('/api/notificaciones/estadisticas', verificarToken, (req, res) => {
   db.query(
     `SELECT COUNT(*) as total,
@@ -761,7 +700,6 @@ app.get('/api/notificaciones/estadisticas', verificarToken, (req, res) => {
   )
 })
 
-// GET - Estadísticas por usuario
 app.get('/api/notificaciones/usuario/:idUsuario/estadisticas', verificarToken, (req, res) => {
   db.query(
     `SELECT COUNT(*) as total,
@@ -776,7 +714,7 @@ app.get('/api/notificaciones/usuario/:idUsuario/estadisticas', verificarToken, (
   )
 })
 
-// ADMINISTRADOR
+// ===== ADMINISTRADOR =====
 app.get('/api/administradores', verificarToken, soloAdmin, (req, res) => {
   db.query(
     `SELECT a.ID_administrador, a.Cargo, a.Area, a.Permisos, u.Nombre, u.Correo
@@ -788,9 +726,7 @@ app.get('/api/administradores', verificarToken, soloAdmin, (req, res) => {
   )
 })
 
-// ===== ENDPOINTS SMS TWILIO =====
-
-// Enviar SMS manual
+// ===== SMS TWILIO =====
 app.post('/api/sms/enviar', verificarToken, async (req, res) => {
   const { telefono, mensaje } = req.body
   if (!telefono || !mensaje) return res.status(400).json({ error: 'Se requieren telefono y mensaje' })
@@ -802,7 +738,6 @@ app.post('/api/sms/enviar', verificarToken, async (req, res) => {
   }
 })
 
-// Confirmar cita por SMS
 app.post('/api/sms/confirmar-cita', verificarToken, async (req, res) => {
   const { ID_cita } = req.body
   if (!ID_cita) return res.status(400).json({ error: 'ID_cita requerido' })
@@ -839,7 +774,6 @@ app.post('/api/sms/confirmar-cita', verificarToken, async (req, res) => {
   )
 })
 
-// Recordatorio de vacuna por SMS
 app.post('/api/sms/recordatorio-vacuna', verificarToken, async (req, res) => {
   const { ID_carnetVacunas } = req.body
   if (!ID_carnetVacunas) return res.status(400).json({ error: 'ID_carnetVacunas requerido' })
@@ -873,9 +807,23 @@ app.post('/api/sms/recordatorio-vacuna', verificarToken, async (req, res) => {
   )
 })
 
-// INICIAR SERVIDOR
+// ===== INICIAR SERVIDOR HTTPS =====
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => {
-  console.log('✓ Servidor corriendo en http://localhost:' + PORT)
-  console.log('✓ Listo para recibir peticiones en http://localhost:' + PORT + '/api/usuarios')
-})
+
+try {
+  const sslOptions = {
+key: fs.readFileSync(path.join(__dirname, 'certs', 'localhost.key')),
+cert: fs.readFileSync(path.join(__dirname, 'certs', 'localhost.crt')),
+  }
+  https.createServer(sslOptions, app).listen(PORT, () => {
+    console.log('🔒 Servidor HTTPS corriendo en https://localhost:' + PORT)
+    console.log('✓ Conectado a MySQL correctamente')
+    console.log('✓ Listo para recibir peticiones en https://localhost:' + PORT + '/api/usuarios')
+  })
+} catch (err) {
+  console.error('✗ Error cargando certificados SSL:', err.message)
+  console.error('  Asegúrate de que existen los archivos:')
+  console.error('  - certs/localhost.key')
+  console.error('  - certs/localhost.crt')
+  process.exit(1)
+}

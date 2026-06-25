@@ -5,7 +5,7 @@ import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+const API_BASE = import.meta.env.VITE_API_URL || 'https://localhost:3001/api'
 
 const mascotas = ref([])
 const selectedId = ref('')
@@ -95,9 +95,14 @@ function cancelarEdicion() {
 
 async function fetchJson(endpoint, options = {}) {
   try {
+    const token = localStorage.getItem('petcard_token')
     const response = await fetch(`${API_BASE}${endpoint}`, {
       mode: 'cors',
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(options.headers || {}) 
+      },
       ...options
     })
     const data = await response.json()
@@ -108,7 +113,6 @@ async function fetchJson(endpoint, options = {}) {
     throw error
   }
 }
-
 async function cargarCliente() {
   if (!usuarioLogueado.value?.ID_usuario) {
     clienteActual.value = null
@@ -318,6 +322,22 @@ watch(usuarioLogueado, async (valor) => {
 
 watch(selectedId, async (valor) => {
   if (valor) await cargarPlan(valor)
+})
+
+// ===== GUARD DE SEGURIDAD =====
+onMounted(() => {
+  const token = localStorage.getItem('petcard_token')
+  const usuarioStr = localStorage.getItem('petcard_usuario_actual')
+  let usuario = null
+  try { usuario = usuarioStr ? JSON.parse(usuarioStr) : null } catch {}
+  if (!token && !usuario) {
+    router.push('/login-usuario')
+    return
+  }
+  const rol = usuario?.Rol
+  if (rol === 'Admin') {
+    router.push('/admin-inicio')
+  }
 })
 
 onMounted(async () => {
