@@ -24,7 +24,11 @@ async function getCalendarClient() {
 
 async function crearEventoCalendar(cita) {
   const calendar = await getCalendarClient()
-  const fechaInicio = new Date(`${cita.Fecha}T${cita.Hora}`)
+  // Sanitizar Fecha y Hora para evitar "Invalid time value"
+  const fechaStr = String(cita.Fecha).substring(0, 10)   // "YYYY-MM-DD"
+  const horaStr  = String(cita.Hora).substring(0, 5)     // "HH:MM"
+  const fechaInicio = new Date(`${fechaStr}T${horaStr}:00`)
+  if (isNaN(fechaInicio.getTime())) throw new Error(`Fecha/Hora inválida: ${fechaStr} ${horaStr}`)
   const fechaFin = new Date(fechaInicio.getTime() + 60 * 60 * 1000) // +1 hora
 
   const event = {
@@ -84,7 +88,7 @@ async function crearNotificacionAutomatica(ID_usuario, mensaje, tipo, canal = 'S
   return new Promise((resolve) => {
     db.query(
       'INSERT INTO notificacion (ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal, Fecha_envio) VALUES (?,?,?,?,?,NOW())',
-      [ID_usuario, null, mensaje, tipo, canal],
+      [ID_usuario, 1, mensaje, tipo, canal],   // ID 1 = Gmail SMTP (sistema por defecto)
       async (err, result) => {
         if (err) {
           console.error('Error creando notificación automática:', err.message)
