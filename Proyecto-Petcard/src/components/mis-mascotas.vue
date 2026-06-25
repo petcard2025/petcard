@@ -171,52 +171,116 @@
 
     <!-- ── MODAL: vacunas ── -->
     <div v-if="vacPet" class="modal-overlay" @click.self="vacPet = null">
-      <div class="modal-box" style="width:720px;max-height:90vh;overflow:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
-          <h3 style="margin:0">Vacunas — {{ vacPet.nombre }}</h3>
-          <button class="btn btn-outline-primary" @click="vacPet = null">Cerrar</button>
+      <div class="modal-box vac-modal">
+
+        <!-- Header del modal -->
+        <div class="vac-header">
+          <div class="vac-header-left">
+            <span class="vac-icon">💉</span>
+            <div>
+              <h3 class="vac-title">Carnet de Vacunas</h3>
+              <p class="vac-subtitle">{{ vacPet.Nombre || vacPet.nombre }}</p>
+            </div>
+          </div>
+          <button class="vac-close-btn" @click="vacPet = null">✕</button>
         </div>
 
-        <!-- Lista de vacunas -->
-        <div v-if="!vacPet.vacunas || vacPet.vacunas.length === 0" style="color:var(--muted)">
-          No hay vacunas registradas.
-        </div>
-        <table v-else style="width:100%;border-collapse:collapse;font-size:.875rem;">
-          <thead>
-            <tr>
-              <th>Estado</th><th>Vacuna</th><th>Programada</th><th>Aplicada</th>
-              <th>Lote</th><th>Observaciones</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(v, idx) in vacPet.vacunas" :key="idx">
-              <td>{{ v.estado === 'aplicada' ? '✓' : v.estado === 'atrasada' ? '✖' : '⚠' }}</td>
-              <td><input class="form-control" v-model="v.nombre" /></td>
-              <td><input class="form-control" type="date" v-model="v.fechaProgramada" /></td>
-              <td><input class="form-control" type="date" v-model="v.fechaAplicada" @change="recalcEstado(v)" /></td>
-              <td><input class="form-control" v-model="v.lote" /></td>
-              <td><input class="form-control" v-model="v.observaciones" /></td>
-              <td style="white-space:nowrap;display:flex;gap:.25rem;">
-                <button class="btn btn-primary btn-sm" @click="saveVac(idx)">Guardar</button>
-                <button class="btn btn-outline-primary btn-sm" @click="toggleVac(idx)">
-                  {{ v.estado === 'aplicada' ? 'Desmarcar' : 'Marcar aplicada' }}
-                </button>
-                <button class="btn btn-outline-danger btn-sm" @click="deleteVac(idx)">Eliminar</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- Lista de vacunas existentes -->
+        <div class="vac-list-section">
+          <div v-if="!vacPet.vacunas || vacPet.vacunas.length === 0" class="vac-empty">
+            <span style="font-size:2rem;">📋</span>
+            <p>No hay vacunas registradas aún.</p>
+          </div>
 
-        <hr />
+          <div v-else class="vac-cards">
+            <div v-for="(v, idx) in vacPet.vacunas" :key="idx" class="vac-card"
+              :class="{ 'vac-applied': v.estado === 'aplicada', 'vac-late': v.estado === 'atrasada', 'vac-pending': v.estado === 'proxima' }">
 
-        <!-- Agregar vacuna -->
-        <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem;flex-wrap:wrap;">
-          <input class="form-control" placeholder="Vacuna (ej. Antirrábica)" v-model="newVac.nombre" style="flex:1;min-width:160px;" />
-          <input class="form-control" type="date" v-model="newVac.fechaProgramada" style="max-width:150px;" />
-          <input class="form-control" type="date" v-model="newVac.fechaAplicada" style="max-width:150px;" />
-          <input class="form-control" placeholder="Lote" v-model="newVac.lote" style="max-width:120px;" />
-          <button class="btn btn-primary" @click="addVac">Agregar</button>
+              <div class="vac-card-header">
+                <span class="vac-badge"
+                  :class="{ 'badge-green': v.estado === 'aplicada', 'badge-red': v.estado === 'atrasada', 'badge-yellow': v.estado === 'proxima' }">
+                  {{ v.estado === 'aplicada' ? '✓ Aplicada' : v.estado === 'atrasada' ? '✖ Atrasada' : '⏰ Próxima' }}
+                </span>
+                <div class="vac-card-actions">
+                  <button class="vac-btn-sm vac-btn-toggle" @click="toggleVac(idx)">
+                    {{ v.estado === 'aplicada' ? 'Desmarcar' : 'Marcar aplicada' }}
+                  </button>
+                  <button class="vac-btn-sm vac-btn-save" @click="saveVac(idx)">Guardar</button>
+                  <button class="vac-btn-sm vac-btn-del" @click="deleteVac(idx)">🗑</button>
+                </div>
+              </div>
+
+              <div class="vac-card-body">
+                <div class="vac-field">
+                  <label>Nombre vacuna</label>
+                  <input class="vac-input" v-model="v.nombre" list="vacunas-list" placeholder="Nombre de la vacuna" />
+                </div>
+                <div class="vac-field-row">
+                  <div class="vac-field">
+                    <label>Fecha aplicación</label>
+                    <input class="vac-input" type="date" v-model="v.fechaAplicada" @change="recalcEstado(v)" />
+                  </div>
+                  <div class="vac-field">
+                    <label>Próxima dosis</label>
+                    <input class="vac-input" type="date" v-model="v.fechaProgramada" />
+                  </div>
+                  <div class="vac-field">
+                    <label>Lote</label>
+                    <input class="vac-input" v-model="v.lote" placeholder="Ej. A123" />
+                  </div>
+                </div>
+                <div class="vac-field">
+                  <label>Observaciones / Reacciones</label>
+                  <input class="vac-input" v-model="v.observaciones" placeholder="Ej. Leve fiebre, ninguna..." />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+
+        <hr class="vac-divider" />
+
+        <!-- Formulario agregar vacuna -->
+        <div class="vac-add-section">
+          <h4 class="vac-add-title">➕ Registrar nueva vacuna</h4>
+          <div class="vac-add-grid">
+            <div class="vac-field vac-field-wide">
+              <label>Nombre de la vacuna *</label>
+              <input class="vac-input" list="vacunas-list" v-model="newVac.nombre" placeholder="Escribe o selecciona una vacuna..." />
+            </div>
+            <div class="vac-field">
+              <label>Fecha aplicación</label>
+              <input class="vac-input" type="date" v-model="newVac.fechaAplicada" />
+            </div>
+            <div class="vac-field">
+              <label>Próxima dosis</label>
+              <input class="vac-input" type="date" v-model="newVac.fechaProgramada" />
+            </div>
+            <div class="vac-field">
+              <label>Lote</label>
+              <input class="vac-input" v-model="newVac.lote" placeholder="Ej. B456" />
+            </div>
+          </div>
+          <button class="vac-btn-add" @click="addVac">💉 Agregar vacuna</button>
+        </div>
+
+        <!-- Datalist con nombres de vacunas de la BD -->
+        <datalist id="vacunas-list">
+          <option value="Antirrábica" />
+          <option value="Triple Felina" />
+          <option value="Parvovirus" />
+          <option value="Moquillo" />
+          <option value="Leptospirosis" />
+          <option value="Bordetella" />
+          <option value="Rabia" />
+          <option value="Leucemia Felina" />
+          <option value="Panleucopenia" />
+          <option value="Calicivirus" />
+          <option value="Rinotraqueitis" />
+          <option value="Hepatitis Infecciosa" />
+          <option value="Parainfluenza" />
+          <option value="Coronavirus" />
+        </datalist>
       </div>
     </div>
   </div>
@@ -878,4 +942,215 @@ table th, table td {
   border-color: #c82333;
 }
 
+/* ── Estilos modal vacunas rediseñado ── */
+.vac-modal {
+  width: 680px;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 0;
+  border-radius: 16px;
+}
+
+.vac-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border-radius: 16px 16px 0 0;
+  color: white;
+}
+.vac-header-left {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+}
+.vac-icon {
+  font-size: 2rem;
+  background: rgba(255,255,255,.2);
+  padding: .4rem;
+  border-radius: 10px;
+}
+.vac-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.vac-subtitle {
+  margin: 0;
+  font-size: .85rem;
+  opacity: .85;
+}
+.vac-close-btn {
+  background: rgba(255,255,255,.2);
+  border: none;
+  color: white;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .2s;
+}
+.vac-close-btn:hover {
+  background: rgba(255,255,255,.35);
+}
+
+.vac-list-section {
+  padding: 1.25rem 1.5rem .5rem;
+}
+.vac-empty {
+  text-align: center;
+  padding: 1.5rem;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .5rem;
+}
+.vac-cards {
+  display: flex;
+  flex-direction: column;
+  gap: .85rem;
+}
+.vac-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: box-shadow .2s;
+}
+.vac-card:hover {
+  box-shadow: 0 4px 16px rgba(15,23,42,.1);
+}
+.vac-applied { border-left: 4px solid #22c55e; }
+.vac-late    { border-left: 4px solid #ef4444; }
+.vac-pending { border-left: 4px solid #f59e0b; }
+
+.vac-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .6rem 1rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
+}
+.vac-badge {
+  font-size: .75rem;
+  font-weight: 700;
+  padding: .25rem .65rem;
+  border-radius: 20px;
+}
+.badge-green { background: #dcfce7; color: #15803d; }
+.badge-red   { background: #fee2e2; color: #b91c1c; }
+.badge-yellow{ background: #fef9c3; color: #92400e; }
+
+.vac-card-actions {
+  display: flex;
+  gap: .4rem;
+}
+.vac-btn-sm {
+  font-size: .75rem;
+  padding: .28rem .65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-weight: 600;
+}
+.vac-btn-toggle {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+.vac-btn-save {
+  background: #4f46e5;
+  color: white;
+}
+.vac-btn-del {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.vac-card-body {
+  padding: .85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .65rem;
+}
+.vac-field {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  flex: 1;
+}
+.vac-field label {
+  font-size: .75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.vac-field-row {
+  display: flex;
+  gap: .65rem;
+}
+.vac-input {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: .45rem .65rem;
+  font-size: .875rem;
+  color: #0f172a;
+  background: white;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color .2s, box-shadow .2s;
+}
+.vac-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+}
+
+.vac-divider {
+  border: none;
+  border-top: 2px dashed #e2e8f0;
+  margin: .5rem 1.5rem;
+}
+
+.vac-add-section {
+  padding: 1rem 1.5rem 1.5rem;
+}
+.vac-add-title {
+  font-size: .9rem;
+  font-weight: 700;
+  color: #334155;
+  margin: 0 0 .85rem;
+}
+.vac-add-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .65rem;
+  margin-bottom: 1rem;
+}
+.vac-field-wide {
+  grid-column: 1 / -1;
+}
+.vac-btn-add {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: .65rem 1.5rem;
+  font-weight: 700;
+  font-size: .9rem;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+}
+.vac-btn-add:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(99,102,241,.35);
+}
 </style>

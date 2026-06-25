@@ -229,6 +229,18 @@ onMounted(async () => {
         <div v-if="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
         <div v-if="successMessage" class="alert alert-success">{{ successMessage }}</div>
 
+        <!-- Sin mascotas registradas -->
+        <div v-if="mascotas.length === 0" style="text-align:center; padding:2.5rem 1rem;">
+          <div style="font-size:3.5rem; margin-bottom:1rem;">🐾</div>
+          <h3 style="color:var(--purple); margin-bottom:.5rem;">¡Aún no tienes mascotas registradas!</h3>
+          <p style="color:var(--muted); margin-bottom:1.5rem; font-size:.95rem;">Primero registra una mascota para poder agendar una cita veterinaria.</p>
+          <router-link to="/mis-mascotas" class="btn btn-primary" style="display:inline-block; text-decoration:none; padding:.65rem 1.5rem; border-radius:8px;">
+            🐶 Registrar mi mascota
+          </router-link>
+        </div>
+
+        <!-- Formulario (solo si hay mascotas) -->
+        <template v-else>
         <div class="form-row">
           <div class="form-group">
             <label>Seleccionar Mascota <span class="req">*</span></label>
@@ -279,6 +291,7 @@ onMounted(async () => {
           <button class="btn btn-primary btn-full" @click="agendarCita" :disabled="isLoading">{{ isLoading ? 'Guardando...' : 'Agendar Cita' }}</button>
           <router-link to="/perfil" class="btn btn-outline-primary" style="display:inline-block;text-align:center;text-decoration:none;">Ver Perfil</router-link>
         </div>
+        </template>
       </div>
 
       <div class="sidebar">

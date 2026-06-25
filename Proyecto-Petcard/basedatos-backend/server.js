@@ -78,6 +78,37 @@ async function enviarSMS(telefono, mensaje) {
   }
 }
 
+// ===== NOTIFICACIONES AUTOMÁTICAS =====
+// Crea una notificación en BD y opcionalmente envía SMS al usuario dueño
+async function crearNotificacionAutomatica(ID_usuario, mensaje, tipo, canal = 'Sistema') {
+  return new Promise((resolve) => {
+    db.query(
+      'INSERT INTO notificacion (ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal, Fecha_envio) VALUES (?,?,?,?,?,NOW())',
+      [ID_usuario, null, mensaje, tipo, canal],
+      async (err, result) => {
+        if (err) {
+          console.error('Error creando notificación automática:', err.message)
+          return resolve({ success: false })
+        }
+        console.log(`🔔 Notificación automática creada (ID: ${result.insertId}) → Usuario ${ID_usuario}`)
+
+        // Si el canal es SMS, intentar enviar mensaje de texto
+        if (canal === 'SMS') {
+          db.query('SELECT Telefono FROM usuario WHERE ID_usuario = ?', [ID_usuario], async (errU, rows) => {
+            if (!errU && rows.length > 0 && rows[0].Telefono) {
+              await enviarSMS(rows[0].Telefono, mensaje)
+            }
+            resolve({ success: true, ID_notificacion: result.insertId })
+          })
+        } else {
+          resolve({ success: true, ID_notificacion: result.insertId })
+        }
+      }
+    )
+  })
+}
+
+
 // ===== ENCRIPTACION =====
 const SALT_ROUNDS = 10
 const resetTokens = new Map()
@@ -415,6 +446,30 @@ app.post('/api/citas', verificarToken, async (req, res) => {
     async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
       const ID_cita = result.insertId
+
+      // ── Notificación automática de cita ──
+      try {
+        // Obtener ID_usuario del cliente para notificar
+        db.query(
+          `SELECT c.ID_usuario, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
+           FROM cliente c
+           JOIN mascota m ON m.ID_mascota = ?
+           JOIN servicio s ON s.ID_servicio = ?
+           WHERE c.ID_cliente = ?`,
+          [ID_mascota, ID_servicio, ID_cliente],
+          async (errQ, rows) => {
+            if (!errQ && rows.length > 0) {
+              const { ID_usuario, Nombre_mascota, Nombre_servicio } = rows[0]
+              const mensaje = `✅ Cita agendada para ${Nombre_mascota || 'tu mascota'} — ${Nombre_servicio || Motivo || 'Consulta'} el ${Fecha} a las ${Hora}.`
+              await crearNotificacionAutomatica(ID_usuario, mensaje, 'cita', 'Sistema')
+            }
+          }
+        )
+      } catch (notifError) {
+        console.error('Error creando notificación de cita:', notifError.message)
+      }
+
+      // ── Google Calendar ──
       try {
         const googleEventId = await crearEventoCalendar({ Fecha, Hora, Motivo, Observaciones })
         db.query('UPDATE cita SET Google_Event_ID=? WHERE ID_cita=?', [googleEventId, ID_cita])
@@ -484,8 +539,31 @@ app.post('/api/vacunas', verificarToken, (req, res) => {
   db.query(
     'INSERT INTO carnetvacunas (ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones) VALUES (?,?,?,?,?,?,?,?)',
     [ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones],
-    (err, result) => {
+    async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
+
+      // ── Notificación automática de vacuna ──
+      try {
+        db.query(
+          `SELECT c.ID_usuario, m.Nombre AS Nombre_mascota
+           FROM mascota m
+           JOIN cliente c ON c.ID_cliente = m.ID_cliente
+           WHERE m.ID_mascota = ?`,
+          [ID_mascota],
+          async (errQ, rows) => {
+            if (!errQ && rows.length > 0) {
+              const { ID_usuario, Nombre_mascota } = rows[0]
+              const fechaAplicada = Fecha_aplicacion ? ` aplicada el ${Fecha_aplicacion}` : ''
+              const proximaDosis = Proxima_dosis ? `. Próxima dosis: ${Proxima_dosis}` : ''
+              const mensaje = `💉 Vacuna "${Nombre_vacuna}" registrada para ${Nombre_mascota || 'tu mascota'}${fechaAplicada}${proximaDosis}.`
+              await crearNotificacionAutomatica(ID_usuario, mensaje, 'vacuna', 'Sistema')
+            }
+          }
+        )
+      } catch (notifError) {
+        console.error('Error creando notificación de vacuna:', notifError.message)
+      }
+
       res.json({ ID_carnetVacunas: result.insertId, ...req.body })
     }
   )
