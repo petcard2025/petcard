@@ -113,7 +113,7 @@ const requestReset = async () => {
     const data = await response.json()
     
     if (response.ok) {
-      message.value = `Token generado: ${data.token}\n\nCopia este token para resetear tu contraseña.`
+      message.value = 'Si tu correo está registrado, recibirás las instrucciones de recuperación en breve.'
       modalStep.value = 'reset'
     } else {
       message.value = data.error || 'Error al solicitar reset'
