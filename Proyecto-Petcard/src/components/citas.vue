@@ -15,6 +15,8 @@ const citas = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+const showSuccess = ref(false)
+const citaCreada = ref(null)
 
 const form = reactive({
   mascota: '',
@@ -149,6 +151,19 @@ async function agendarCita() {
     }
 
     await citasAPI.crear(nuevaCita)
+
+    // Guardar datos de la cita para el modal de confirmación
+    const mascotaNombre = mascotas.value.find(m => m.ID_mascota === Number(form.mascota))?.Nombre || ''
+    const servicioNombre = servicios.value.find(s => s.ID_servicio === Number(form.servicio))?.Nombre || ''
+    const vetNombre = veterinarios.value.find(v => v.ID_veterinario === Number(form.veterinario))?.Nombre || ''
+    citaCreada.value = {
+      mascota: mascotaNombre,
+      servicio: servicioNombre,
+      veterinario: vetNombre,
+      fecha: form.fecha,
+      hora: form.hora
+    }
+    showSuccess.value = true
     successMessage.value = 'Cita registrada con éxito en la base de datos.'
     await cargarCitas()
     resetForm()
@@ -296,14 +311,33 @@ onMounted(async () => {
 
       <div class="sidebar">
         <div class="card">
-          <div class="card-title" style="color:var(--orange);">Próximas Citas</div>
-          <div v-if="citas.length === 0" style="padding:.75rem 0; color: var(--muted);">No hay citas registradas aún.</div>
-          <div v-for="cita in citas.slice(0, 3)" :key="cita.ID_cita" style="padding:.65rem 0; border-bottom:1px solid var(--border);">
-            <div style="display:flex; justify-content:space-between; margin-bottom:.2rem;"><span style="font-weight:700; font-size:.9rem;">{{ cita.Nombre_servicio }}</span><span class="badge badge-yellow">Pendiente</span></div>
-            <div style="font-size:.8rem; color:var(--muted);">{{ cita.Fecha }} · {{ cita.Hora }}</div>
-            <div style="font-size:.8rem; color:var(--muted);">Mascota: <strong>{{ cita.Nombre_mascota }}</strong></div>
+          <div class="card-title" style="color:var(--orange);">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Próximas Citas
           </div>
-          <a href="#" class="ver-todas">Ver todas las Citas</a>
+          <div v-if="citas.length === 0" style="padding:1.5rem 0; text-align:center; color:var(--muted);">
+            <div style="font-size:2rem; margin-bottom:.5rem;">📅</div>
+            <div style="font-size:.88rem;">Aún no tienes citas agendadas.</div>
+          </div>
+          <div v-for="cita in citas.slice(0, 3)" :key="cita.ID_cita" class="cita-item-card">
+            <div class="cita-item-top">
+              <div class="cita-item-servicio">{{ cita.Nombre_servicio || 'Cita veterinaria' }}</div>
+              <span class="badge badge-yellow">Pendiente</span>
+            </div>
+            <div class="cita-item-row">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              {{ new Date(cita.Fecha).toLocaleDateString('es-ES', { weekday:'short', day:'2-digit', month:'short', year:'numeric' }) }}
+            </div>
+            <div class="cita-item-row">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              {{ cita.Hora }}
+            </div>
+            <div class="cita-item-row">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+              <strong>{{ cita.Nombre_mascota }}</strong>
+            </div>
+          </div>
+          <a href="#" class="ver-todas" style="display:block; margin-top:.75rem; text-align:center; font-size:.83rem; color:var(--purple); font-weight:600; text-decoration:none;">Ver todas las Citas →</a>
         </div>
 
         <div class="card">
@@ -315,17 +349,49 @@ onMounted(async () => {
           </ul>
           <p style="color:var(--red); font-weight:700; font-size:.83rem; margin-top:.5rem;">🔴 Emergencias 24/7</p>
         </div>
-
-        <div class="card">
-          <div class="card-title" style="color:var(--purple);">Servicios Populares</div>
-          <div class="servicio-pop"><div><div class="sp-nombre">Consulta General</div><div class="sp-dur">30 min</div></div><strong>$50</strong></div>
-          <div class="servicio-pop"><div><div class="sp-nombre">Vacunación</div><div class="sp-dur">15 min</div></div><strong>$35</strong></div>
-          <div class="servicio-pop"><div><div class="sp-nombre">Cirugía</div><div class="sp-dur">2-4 horas</div></div><strong>$200+</strong></div>
-          <div class="servicio-pop"><div><div class="sp-nombre">Emergencia</div><div class="sp-dur">Variable</div></div><strong>$100+</strong></div>
-        </div>
       </div>
     </div>
   </div>
+
+  <!-- ══ MODAL CITA CREADA ══ -->
+  <Teleport to="body">
+    <div v-if="showSuccess" class="success-overlay" @click.self="showSuccess = false">
+      <div class="success-modal">
+        <div class="success-confetti">🎉</div>
+        <div class="success-check">
+          <svg width="52" height="52" fill="none" stroke="#fff" stroke-width="3" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#22c55e" stroke="none"/><polyline points="5 12 10 17 19 7" stroke="#fff" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h2 class="success-title">¡Tu cita ha sido creada!</h2>
+        <p class="success-sub">Hemos registrado tu cita exitosamente. Te esperamos 🐾</p>
+
+        <div v-if="citaCreada" class="success-details">
+          <div class="success-detail-row">
+            <span>🐶 Mascota</span>
+            <strong>{{ citaCreada.mascota }}</strong>
+          </div>
+          <div class="success-detail-row">
+            <span>🩺 Servicio</span>
+            <strong>{{ citaCreada.servicio }}</strong>
+          </div>
+          <div class="success-detail-row">
+            <span>👨‍⚕️ Veterinario</span>
+            <strong>{{ citaCreada.veterinario }}</strong>
+          </div>
+          <div class="success-detail-row">
+            <span>📅 Fecha</span>
+            <strong>{{ new Date(citaCreada.fecha).toLocaleDateString('es-ES', { weekday:'long', day:'2-digit', month:'long', year:'numeric' }) }}</strong>
+          </div>
+          <div class="success-detail-row">
+            <span>🕐 Hora</span>
+            <strong>{{ citaCreada.hora }}</strong>
+          </div>
+        </div>
+
+        <button class="success-btn" @click="showSuccess = false">¡Perfecto, entendido!</button>
+        <p class="success-note">Puedes ver tu cita en el panel de <strong>Próximas Citas</strong> →</p>
+      </div>
+    </div>
+  </Teleport>
 
   <footer class="footer" style="margin-top:2rem;">
     <div class="footer-grid"><div class="footer-brand"><span class="nav-logo" style="color:#fff;display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div><div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div><div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div><div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div></div>
@@ -349,5 +415,136 @@ onMounted(async () => {
 .btn-logout:hover {
   background-color: #c82333;
   border-color: #c82333;
+}
+
+/* ── CITA ITEM CARD ── */
+.cita-item-card {
+  padding: .75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.cita-item-card:last-of-type { border-bottom: none; }
+
+.cita-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: .4rem;
+}
+
+.cita-item-servicio {
+  font-weight: 700;
+  font-size: .9rem;
+  color: var(--dark);
+}
+
+.cita-item-row {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .8rem;
+  color: var(--muted);
+  margin-bottom: .2rem;
+}
+
+.cita-item-row svg { flex-shrink: 0; color: var(--purple); }
+
+/* ── MODAL ÉXITO ── */
+.success-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn .25s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+.success-modal {
+  background: #fff;
+  border-radius: 20px;
+  padding: 2.5rem 2rem 2rem;
+  max-width: 440px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  animation: slideUp .3s ease;
+}
+
+@keyframes slideUp { from { transform: translateY(30px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+.success-confetti {
+  font-size: 2.8rem;
+  margin-bottom: .5rem;
+  animation: bounce .6s ease infinite alternate;
+}
+
+@keyframes bounce { from { transform: translateY(0) } to { transform: translateY(-8px) } }
+
+.success-check {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.1rem;
+}
+
+.success-title {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  font-size: 1.6rem;
+  color: var(--dark);
+  margin: 0 0 .5rem;
+  line-height: 1.2;
+}
+
+.success-sub {
+  color: var(--muted);
+  font-size: .95rem;
+  margin-bottom: 1.25rem;
+}
+
+.success-details {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.success-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .45rem 0;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: .88rem;
+}
+
+.success-detail-row:last-child { border-bottom: none; }
+.success-detail-row span { color: var(--muted); }
+.success-detail-row strong { color: var(--dark); }
+
+.success-btn {
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: .85rem 2.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity .2s;
+  margin-bottom: .75rem;
+}
+
+.success-btn:hover { opacity: .9; }
+
+.success-note {
+  font-size: .8rem;
+  color: var(--muted);
+  margin: 0;
 }
 </style>

@@ -144,7 +144,7 @@ body {
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 2px 8px rgba(124, 137, 165, 0.3);
 }
 
 .btn-auth:hover {

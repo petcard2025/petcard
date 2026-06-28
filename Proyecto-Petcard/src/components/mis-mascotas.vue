@@ -38,7 +38,9 @@
         @click.self="openDetail(pet)"
       >
         <div class="mascota-top">
-          <div class="mascota-avatar" style="background:#fef3c7;">🐾</div>
+          <div class="mascota-avatar" :style="pet.Foto ? { backgroundImage: `url(${pet.Foto})`, backgroundSize: 'cover', backgroundPosition: 'center', fontSize: '0' } : { background: '#fef3c7' }">
+            <span v-if="!pet.Foto">{{ pet.Especie === 'Gato' ? '🐱' : pet.Especie === 'Ave' ? '🐦' : pet.Especie === 'Conejo' ? '🐰' : pet.Especie === 'Hamster' ? '🐹' : '🐾' }}</span>
+          </div>
           <div class="mascota-info">
             <div class="mascota-nombre">{{ pet.Nombre }}</div>
             <div class="mascota-tipo">{{ pet.Especie }} - {{ pet.Raza }}</div>
@@ -66,8 +68,7 @@
         </div>
 
         <div class="mascota-btns">
-          <button class="btn btn-secondary btn-sm" @click.stop="openVaccineEditor(pet)">Vacunas</button>
-          <button class="btn btn-primary btn-sm" @click.stop="goToCita(pet.ID_mascota)">Cita</button>
+          <button class="btn btn-primary btn-sm" @click.stop="goToCita(pet.ID_mascota)">Agendar Cita</button>
         </div>
       </div>
     </div>
@@ -155,8 +156,22 @@
           </div>
 
           <div>
-            <label style="display:block;font-weight:700;margin-bottom:.5rem;">Foto (URL opcional)</label>
-            <input class="form-control" placeholder="URL de la foto" v-model="formData.Foto" />
+            <label style="display:block;font-weight:700;margin-bottom:.5rem;">Foto de la mascota</label>
+            <!-- Preview -->
+            <div class="foto-preview-wrap">
+              <div class="foto-preview" :style="fotoPreview ? { backgroundImage: `url(${fotoPreview})` } : {}">
+                <span v-if="!fotoPreview">{{ formData.Especie === 'Gato' ? '🐱' : formData.Especie === 'Ave' ? '🐦' : formData.Especie === 'Conejo' ? '🐰' : '🐾' }}</span>
+              </div>
+              <div class="foto-upload-area">
+                <label class="foto-upload-btn" for="foto-input">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  {{ fotoPreview ? 'Cambiar foto' : 'Subir foto' }}
+                </label>
+                <input id="foto-input" type="file" accept="image/*" style="display:none;" @change="handleFotoUpload" />
+                <p class="foto-hint">JPG, PNG o WebP · máx. 2 MB</p>
+                <button v-if="fotoPreview" class="foto-quitar" @click="fotoPreview = ''; formData.Foto = ''">✕ Quitar foto</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -318,6 +333,23 @@ const formData = reactive({
   Foto: ''
 })
 
+const fotoPreview = ref('')
+
+function handleFotoUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  if (file.size > 2 * 1024 * 1024) {
+    alert('La imagen no debe superar 2 MB.')
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    fotoPreview.value = e.target.result
+    formData.Foto = e.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
 // Modal vacunas
 const vacPet = ref(null)
 const newVac = reactive({ nombre: '', fechaProgramada: '', fechaAplicada: '', lote: '' })
@@ -381,6 +413,7 @@ async function cargarMascotas() {
 function openAddForm() {
   isEditing.value = false
   editingId.value = null
+  fotoPreview.value = ''
   Object.assign(formData, {
     Nombre: '',
     Especie: '',
@@ -396,6 +429,7 @@ function openAddForm() {
 function openEditForm(pet) {
   isEditing.value = true
   editingId.value = pet.ID_mascota
+  fotoPreview.value = pet.Foto || ''
   Object.assign(formData, { ...pet })
   showForm.value = true
 }
@@ -839,7 +873,75 @@ table th, table td {
   justify-content: center;
   font-size: 1.5rem;
   background: #fef3c7;
+  overflow: hidden;
+  flex-shrink: 0;
 }
+
+/* ── FOTO UPLOAD ── */
+.foto-preview-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.foto-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  flex-shrink: 0;
+  border: 2px dashed #cbd5e1;
+}
+
+.foto-upload-area {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+.foto-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: var(--purple);
+  color: #fff;
+  border-radius: 7px;
+  padding: .45rem .9rem;
+  font-size: .82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .2s;
+  width: fit-content;
+}
+
+.foto-upload-btn:hover { opacity: .88; }
+
+.foto-hint {
+  font-size: .74rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.foto-quitar {
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.foto-quitar:hover { text-decoration: underline; }
+
+
 
 .mascota-info {
   display: flex;

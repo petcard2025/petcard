@@ -10,22 +10,31 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
 const pets = ref([])
 const selectedId = ref(null)
 const showModal = ref(false)
-const isEditing = ref(false)
-const editingId = ref(null)
 const clienteActual = ref(null)
 const vacunas = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
 
-const formData = reactive({
-  Nombre: '',
-  Especie: '',
-  Raza: '',
-  Sexo: 'Macho',
-  Fecha_nacimiento: '',
-  Peso: '',
-  Foto: ''
+// Formulario para agregar vacuna
+const vacForm = reactive({
+  Nombre_vacuna: '',
+  Fecha_aplicacion: '',
+  Proxima_dosis: '',
+  Lote: '',
+  Observaciones: '',
+  Estado: 'Completo'
 })
+
+function resetVacForm() {
+  Object.assign(vacForm, {
+    Nombre_vacuna: '',
+    Fecha_aplicacion: '',
+    Proxima_dosis: '',
+    Lote: '',
+    Observaciones: '',
+    Estado: 'Completo'
+  })
+}
 
 const selectedPet = computed(() => {
   const pet = pets.value.find(p => p.ID_mascota === selectedId.value)
@@ -51,7 +60,20 @@ function badgeLabel(estado) {
 }
 
 function obtenerFechaTexto(fecha) {
-  return fecha ? new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+  if (!fecha) return '—'
+  // Extraer solo la parte de la fecha YYYY-MM-DD para evitar desfase de zona horaria
+  const soloFecha = String(fecha).split('T')[0]
+  const [anio, mes, dia] = soloFecha.split('-').map(Number)
+  const d = new Date(anio, mes - 1, dia)
+  return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function obtenerFechaNacimiento(fecha) {
+  if (!fecha) return '—'
+  const soloFecha = String(fecha).split('T')[0]
+  const [anio, mes, dia] = soloFecha.split('-').map(Number)
+  const d = new Date(anio, mes - 1, dia)
+  return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 function especieRaza(tipo = '') {
@@ -122,17 +144,7 @@ watch(selectedId, async (nuevoId) => {
 })
 
 function abrirModal() {
-  isEditing.value = false
-  editingId.value = null
-  Object.assign(formData, {
-    Nombre: '',
-    Especie: '',
-    Raza: '',
-    Sexo: 'Macho',
-    Fecha_nacimiento: '',
-    Peso: '',
-    Foto: ''
-  })
+  resetVacForm()
   showModal.value = true
 }
 
@@ -140,62 +152,30 @@ function cerrarModal() {
   showModal.value = false
 }
 
-async function guardarMascota() {
-  if (!formData.Nombre.trim()) {
-    alert('Nombre de mascota requerido')
+async function guardarVacuna() {
+  if (!vacForm.Nombre_vacuna.trim()) {
+    alert('El nombre de la vacuna es requerido')
     return
   }
-  if (!clienteActual.value) {
-    alert('No se encontró al cliente actual')
+  if (!selectedId.value) {
+    alert('Selecciona una mascota primero')
     return
   }
   try {
-    const datos = {
-      ID_cliente: clienteActual.value.ID_cliente,
-      Nombre: formData.Nombre.trim(),
-      Especie: formData.Especie,
-      Sexo: formData.Sexo,
-      Fecha_nacimiento: formData.Fecha_nacimiento,
-      Peso: formData.Peso,
-      Foto: formData.Foto,
-      Raza: formData.Raza
-    }
-    if (isEditing.value && editingId.value) {
-      await mascotasAPI.actualizar(editingId.value, datos)
-    } else {
-      await mascotasAPI.crear(datos)
-    }
+    await vacunasAPI.crear({
+      ID_mascota: selectedId.value,
+      Nombre_vacuna: vacForm.Nombre_vacuna.trim(),
+      Fecha_aplicacion: vacForm.Fecha_aplicacion || null,
+      Proxima_dosis: vacForm.Proxima_dosis || null,
+      Lote: vacForm.Lote,
+      Observaciones: vacForm.Observaciones,
+      Estado: vacForm.Estado
+    })
     showModal.value = false
-    await cargarMascotas()
+    await cargarVacunas(selectedId.value)
   } catch (error) {
-    console.error('Error guardando mascota:', error)
-    alert('Error al guardar mascota: ' + error.message)
-  }
-}
-
-function openEditPet(pet) {
-  isEditing.value = true
-  editingId.value = pet.ID_mascota
-  Object.assign(formData, {
-    Nombre: pet.Nombre || '',
-    Especie: pet.Especie || '',
-    Raza: pet.Raza || '',
-    Sexo: pet.Sexo || 'Macho',
-    Fecha_nacimiento: pet.Fecha_nacimiento || '',
-    Peso: pet.Peso || '',
-    Foto: pet.Foto || ''
-  })
-  showModal.value = true
-}
-
-async function eliminarMascota(id) {
-  if (!confirm('¿Eliminar esta mascota?')) return
-  try {
-    await mascotasAPI.eliminar(id)
-    await cargarMascotas()
-  } catch (error) {
-    console.error('Error eliminando mascota:', error)
-    alert('Error al eliminar mascota: ' + error.message)
+    console.error('Error guardando vacuna:', error)
+    alert('Error al guardar vacuna: ' + error.message)
   }
 }
 
@@ -276,7 +256,7 @@ onMounted(async () => {
             </svg>
             Seleccionar Mascota
             <button class="btn btn-success btn-sm" style="margin-left:auto;" @click="abrirModal">
-              + Agregar Mascota
+              💉 Agregar Vacuna
             </button>
           </div>
           <p style="font-size:.85rem; color:var(--muted); margin-bottom:.75rem;">
@@ -379,8 +359,8 @@ onMounted(async () => {
           <div class="info-row"><span>Especie:</span><strong>{{ selectedPet ? selectedPet.Especie : '—' }}</strong></div>
           <div class="info-row"><span>Raza:</span><strong>{{ selectedPet ? selectedPet.Raza : '—' }}</strong></div>
           <div class="info-row"><span>ID:</span><strong>{{ selectedPet ? selectedPet.ID_mascota : '—' }}</strong></div>
-          <div class="info-row"><span>Fecha de nacimiento:</span><strong>{{ selectedPet ? selectedPet.Fecha_nacimiento : '—' }}</strong></div>
-          <div class="info-row"><span>Próxima cita:</span><strong>{{ proximas.length ? proximas[0].fechaProgramada : '—' }}</strong></div>
+          <div class="info-row"><span>Fecha de nacimiento:</span><strong>{{ obtenerFechaNacimiento(selectedPet?.Fecha_nacimiento) }}</strong></div>
+          <div class="info-row"><span>Próxima cita:</span><strong>{{ proximas.length ? obtenerFechaTexto(proximas[0].Proxima_dosis) : '—' }}</strong></div>
           <div style="display:flex; gap:.5rem; margin-top:1rem;">
             <button class="btn btn-secondary btn-sm" style="flex:1;" @click="imprimir">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -395,35 +375,64 @@ onMounted(async () => {
     </div>
   </div>
 
-  <!-- MODAL AGREGAR MASCOTA -->
+  <!-- MODAL AGREGAR VACUNA -->
   <Teleport to="body">
     <div v-if="showModal" class="modal-overlay" @click.self="cerrarModal">
-      <div class="modal-box">
+      <div class="modal-box" style="max-width:440px;">
         <div class="modal-header">
-          <span style="font-weight:700; font-size:1rem; color:var(--purple);">🐾 Nueva Mascota</span>
+          <span style="font-weight:700; font-size:1rem; color:var(--green);">💉 Agregar Carnet de Vacunas</span>
           <button class="modal-close" @click="cerrarModal">✕</button>
         </div>
         <div class="modal-body">
-          <label class="modal-label">Nombre <span style="color:var(--red)">*</span></label>
-          <input class="form-control" v-model="formData.Nombre" placeholder="Ej: Max" style="margin-bottom:.85rem;" />
-          <label class="modal-label">Especie</label>
-          <select class="form-control" v-model="formData.Especie" style="margin-bottom:.85rem;">
-            <option value="">Seleccionar...</option>
-            <option>Canino</option>
-            <option>Felino</option>
-            <option>Ave</option>
-            <option>Reptil</option>
-            <option>Otro</option>
+          <label class="modal-label">Nombre de la vacuna <span style="color:var(--red)">*</span></label>
+          <input class="form-control" list="vacunas-list-modal" v-model="vacForm.Nombre_vacuna" placeholder="Ej: Antirrábica" style="margin-bottom:.85rem;" />
+          <datalist id="vacunas-list-modal">
+            <option value="Antirrábica" />
+            <option value="Triple Felina" />
+            <option value="Parvovirus" />
+            <option value="Moquillo" />
+            <option value="Leptospirosis" />
+            <option value="Bordetella" />
+            <option value="Rabia" />
+            <option value="Leucemia Felina" />
+            <option value="Panleucopenia" />
+            <option value="Calicivirus" />
+            <option value="Rinotraqueitis" />
+            <option value="Hepatitis Infecciosa" />
+            <option value="Parainfluenza" />
+            <option value="Coronavirus" />
+          </datalist>
+
+          <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:.85rem;">
+            <div style="flex:1; min-width:160px;">
+              <label class="modal-label">Fecha de aplicación</label>
+              <input class="form-control" type="date" v-model="vacForm.Fecha_aplicacion" />
+            </div>
+            <div style="flex:1; min-width:160px;">
+              <label class="modal-label">Próxima dosis</label>
+              <input class="form-control" type="date" v-model="vacForm.Proxima_dosis" />
+            </div>
+          </div>
+
+          <label class="modal-label">Lote</label>
+          <input class="form-control" v-model="vacForm.Lote" placeholder="Ej: A123" style="margin-bottom:.85rem;" />
+
+          <label class="modal-label">Estado</label>
+          <select class="form-control" v-model="vacForm.Estado" style="margin-bottom:.85rem;">
+            <option value="Completo">Aplicada</option>
+            <option value="Proxima">Próxima</option>
+            <option value="Atrasada">Atrasada</option>
           </select>
-          <label class="modal-label">Raza</label>
-          <input class="form-control" v-model="formData.Raza" placeholder="Ej: Golden Retriever" />
+
+          <label class="modal-label">Observaciones / Reacciones</label>
+          <textarea class="form-control" v-model="vacForm.Observaciones" placeholder="Ej: Sin reacciones adversas..." style="min-height:70px;"></textarea>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="cerrarModal">Cancelar</button>
-          <button class="btn btn-success btn-sm" @click="guardarMascota"
-            :disabled="!formData.Nombre.trim()"
-            :style="{ opacity: formData.Nombre.trim() ? 1 : 0.5 }">
-            Guardar
+          <button class="btn btn-success btn-sm" @click="guardarVacuna"
+            :disabled="!vacForm.Nombre_vacuna.trim()"
+            :style="{ opacity: vacForm.Nombre_vacuna.trim() ? 1 : 0.5 }">
+            Guardar Vacuna
           </button>
         </div>
       </div>

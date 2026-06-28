@@ -535,11 +535,6 @@ onMounted(async () => {
               </div>
 
               <div v-else>
-                <!-- Botón de editar -->
-                <div style="margin-bottom:1rem; text-align:right;">
-                  <button class="btn btn-outline" @click="iniciarEdicionPlan" style="font-size:.85rem;">Editar Plan</button>
-                </div>
-
                 <!-- Stats -->
                 <div class="stats-row">
                 <div class="stat-box orange">
@@ -651,30 +646,137 @@ onMounted(async () => {
             </div>
           </div><!-- Cierre historial-content -->
 
-          <!-- TAB ALTERNATIVAS RECOMENDADAS -->
+          <!-- TAB PLANES DE ALIMENTACIÓN RECOMENDADOS -->
           <div id="alternativas-content" v-show="selectedTab === 'alternativas'">
-            <h5 style="font-family:'Nunito',sans-serif; font-weight:700; margin:0 0 1rem; color:var(--dark);">Cambiar a un Alimento Alternativo</h5>
-            <div class="cards-grid-2">
-              <div style="background:#f5f5f5; padding:1rem; border-radius:6px;">
-                <div style="font-weight:700; margin-bottom:0.5rem;">Pro Plan Adult Large Dog</div>
-                <p style="font-size:.85rem; color:var(--muted); margin:0.5rem 0;">Proteína optimizada para tamaño grande</p>
-                <button class="alt-apply btn btn-sm btn-primary" data-name="Pro Plan Adult Large Dog" style="margin-top:0.5rem;">Aplicar</button>
+            <h5 style="font-family:'Nunito',sans-serif; font-weight:700; margin:0 0 .25rem; color:var(--dark);">Planes de Alimentación Veterinarios</h5>
+            <p style="font-size:.82rem; color:var(--muted); margin-bottom:1.25rem;">Planes recomendados por veterinarias especializadas. Solo el administrador puede asignar uno a tu mascota.</p>
+
+            <!-- Plan 1: Mantenimiento Estándar -->
+            <div class="plan-rec-card" style="border-left:4px solid var(--green);">
+              <div class="plan-rec-header">
+                <div>
+                  <div class="plan-rec-title">🥗 Plan Mantenimiento Estándar</div>
+                  <div class="plan-rec-vet">Clínica Veterinaria del Valle · Adultos sanos</div>
+                </div>
+                <span class="badge badge-green">Más popular</span>
               </div>
-              <div style="background:#f5f5f5; padding:1rem; border-radius:6px;">
-                <div style="font-weight:700; margin-bottom:0.5rem;">Hill's Science Diet Adult</div>
-                <p style="font-size:.85rem; color:var(--muted); margin:0.5rem 0;">Fórmula equilibrada para adultos</p>
-                <button class="alt-apply btn btn-sm btn-primary" data-name="Hill's Science Diet Adult" style="margin-top:0.5rem;">Aplicar</button>
+              <div class="plan-rec-grid">
+                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Balanceada completa</strong></div>
+                <div class="plan-rec-item"><span>Frecuencia</span><strong>2 veces al día</strong></div>
+                <div class="plan-rec-item"><span>Horario</span><strong>7:00 AM · 6:00 PM</strong></div>
+                <div class="plan-rec-item"><span>Calorías/día</span><strong>1 200 kcal</strong></div>
+                <div class="plan-rec-item"><span>Proteína</span><strong>26 – 30 %</strong></div>
+                <div class="plan-rec-item"><span>Grasas</span><strong>12 – 16 %</strong></div>
               </div>
-              <div style="background:#f5f5f5; padding:1rem; border-radius:6px;">
-                <div style="font-weight:700; margin-bottom:0.5rem;">Acana Heritage Meat</div>
-                <p style="font-size:.85rem; color:var(--muted); margin:0.5rem 0;">Carne de calidad con ingredientes naturales</p>
-                <button class="alt-apply btn btn-sm btn-primary" data-name="Acana Heritage Meat" style="margin-top:0.5rem;">Aplicar</button>
+              <div class="plan-rec-comidas">
+                <span class="comida-badge">🌅 Desayuno · Croquetas Premium 180 g + agua</span>
+                <span class="comida-badge">🌆 Cena · Croquetas Premium 180 g + vegetal cocido</span>
               </div>
-              <div style="background:#f5f5f5; padding:1rem; border-radius:6px;">
-                <div style="font-weight:700; margin-bottom:0.5rem;">Orijen Adult</div>
-                <p style="font-size:.85rem; color:var(--muted); margin:0.5rem 0;">Alto contenido proteico biológicamente apropiado</p>
-                <button class="alt-apply btn btn-sm btn-primary" data-name="Orijen Adult" style="margin-top:0.5rem;">Aplicar</button>
+              <div class="plan-rec-obs">Sin restricciones específicas. Ideal para mascotas adultas sin patologías. Revisión nutricional cada 6 meses.</div>
+            </div>
+
+            <!-- Plan 2: Control de Peso -->
+            <div class="plan-rec-card" style="border-left:4px solid var(--orange);">
+              <div class="plan-rec-header">
+                <div>
+                  <div class="plan-rec-title">⚖️ Plan Control de Peso</div>
+                  <div class="plan-rec-vet">Centro Veterinario Bienestar Animal · Mascotas con sobrepeso</div>
+                </div>
+                <span class="badge badge-yellow">Especializado</span>
               </div>
+              <div class="plan-rec-grid">
+                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Hipocalórica controlada</strong></div>
+                <div class="plan-rec-item"><span>Frecuencia</span><strong>3 veces al día</strong></div>
+                <div class="plan-rec-item"><span>Horario</span><strong>8:00 AM · 1:00 PM · 7:00 PM</strong></div>
+                <div class="plan-rec-item"><span>Calorías/día</span><strong>800 – 950 kcal</strong></div>
+                <div class="plan-rec-item"><span>Proteína</span><strong>30 – 35 %</strong></div>
+                <div class="plan-rec-item"><span>Grasas</span><strong>6 – 10 %</strong></div>
+              </div>
+              <div class="plan-rec-comidas">
+                <span class="comida-badge">🌅 Mañana · Alimento Light 120 g + zanahoria rallada</span>
+                <span class="comida-badge">☀️ Mediodía · Pollo hervido 80 g sin piel</span>
+                <span class="comida-badge">🌆 Noche · Alimento Light 120 g + caldo sin sal</span>
+              </div>
+              <div class="plan-rec-obs">Sin golosinas entre comidas. Ejercicio diario de 30 min recomendado. Pesaje mensual obligatorio.</div>
+            </div>
+
+            <!-- Plan 3: Renal / Digestivo -->
+            <div class="plan-rec-card" style="border-left:4px solid var(--purple);">
+              <div class="plan-rec-header">
+                <div>
+                  <div class="plan-rec-title">💊 Plan Soporte Renal y Digestivo</div>
+                  <div class="plan-rec-vet">Hospital Veterinario San Francisco · Patologías internas</div>
+                </div>
+                <span class="badge badge-blue">Prescripción médica</span>
+              </div>
+              <div class="plan-rec-grid">
+                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Terapéutica baja en fósforo</strong></div>
+                <div class="plan-rec-item"><span>Frecuencia</span><strong>3 – 4 veces al día</strong></div>
+                <div class="plan-rec-item"><span>Horario</span><strong>Cada 6 horas</strong></div>
+                <div class="plan-rec-item"><span>Calorías/día</span><strong>900 – 1 100 kcal</strong></div>
+                <div class="plan-rec-item"><span>Proteína</span><strong>14 – 18 % (alta calidad)</strong></div>
+                <div class="plan-rec-item"><span>Fósforo</span><strong>&lt; 0.5 %</strong></div>
+              </div>
+              <div class="plan-rec-comidas">
+                <span class="comida-badge">Hill's k/d Kidney Care · ración según peso</span>
+                <span class="comida-badge">Royal Canin Renal · alternado según tolerancia</span>
+              </div>
+              <div class="plan-rec-obs">Requiere diagnóstico previo. Evitar proteínas de origen vegetal. Control de BUN y creatinina cada 3 meses.</div>
+            </div>
+
+            <!-- Plan 4: Cachorro / Junior -->
+            <div class="plan-rec-card" style="border-left:4px solid #f59e0b;">
+              <div class="plan-rec-header">
+                <div>
+                  <div class="plan-rec-title">🐾 Plan Crecimiento (Cachorros / Junior)</div>
+                  <div class="plan-rec-vet">Clínica PetLife · Hasta los 12 meses</div>
+                </div>
+                <span class="badge badge-yellow">Junior</span>
+              </div>
+              <div class="plan-rec-grid">
+                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Alta energía / hipercalórica</strong></div>
+                <div class="plan-rec-item"><span>Frecuencia</span><strong>4 veces al día</strong></div>
+                <div class="plan-rec-item"><span>Horario</span><strong>7 AM · 12 PM · 5 PM · 9 PM</strong></div>
+                <div class="plan-rec-item"><span>Calorías/día</span><strong>1 500 – 1 800 kcal</strong></div>
+                <div class="plan-rec-item"><span>Proteína</span><strong>28 – 32 %</strong></div>
+                <div class="plan-rec-item"><span>Calcio</span><strong>1.2 – 1.8 %</strong></div>
+              </div>
+              <div class="plan-rec-comidas">
+                <span class="comida-badge">🌅 Mañana · Puppy food húmedo 100 g + DHA</span>
+                <span class="comida-badge">☀️ Mediodía · Croquetas Junior 120 g</span>
+                <span class="comida-badge">🌆 Tarde · Croquetas Junior 120 g + calcio</span>
+                <span class="comida-badge">🌙 Noche · Puppy food seco 100 g</span>
+              </div>
+              <div class="plan-rec-obs">Suplementar con omega-3 para desarrollo neurológico. Transición gradual de 7 días al cambiar de alimento.</div>
+            </div>
+
+            <!-- Plan 5: Senior -->
+            <div class="plan-rec-card" style="border-left:4px solid #6366f1;">
+              <div class="plan-rec-header">
+                <div>
+                  <div class="plan-rec-title">🏥 Plan Geronto (Senior +7 años)</div>
+                  <div class="plan-rec-vet">Clínica Veterinaria Oasis · Mascotas mayores</div>
+                </div>
+                <span class="badge" style="background:#ede9fe; color:#7c3aed;">Senior</span>
+              </div>
+              <div class="plan-rec-grid">
+                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Baja en sodio, antiinflamatoria</strong></div>
+                <div class="plan-rec-item"><span>Frecuencia</span><strong>2 – 3 veces al día</strong></div>
+                <div class="plan-rec-item"><span>Horario</span><strong>8:00 AM · 3:00 PM · 8:00 PM</strong></div>
+                <div class="plan-rec-item"><span>Calorías/día</span><strong>1 000 – 1 200 kcal</strong></div>
+                <div class="plan-rec-item"><span>Proteína</span><strong>22 – 28 %</strong></div>
+                <div class="plan-rec-item"><span>Fibra</span><strong>3 – 5 %</strong></div>
+              </div>
+              <div class="plan-rec-comidas">
+                <span class="comida-badge">Hill's Science Diet Senior · según peso</span>
+                <span class="comida-badge">Suplemento glucosamina/condroitina · diario</span>
+                <span class="comida-badge">Omega-3 · 1 cápsula diaria</span>
+              </div>
+              <div class="plan-rec-obs">Evitar alimentos procesados con alto sodio. Control geriátrico anual. Agua fresca disponible siempre.</div>
+            </div>
+
+            <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:.85rem 1rem; margin-top:.5rem; font-size:.82rem; color:#0c4a6e;">
+              <strong>ℹ️ Nota:</strong> Estos planes son de referencia. El plan activo de tu mascota solo puede ser asignado o modificado por el veterinario administrador de PetCard.
             </div>
           </div><!-- Cierre alternativas-content -->
         </div><!-- Cierre card principal -->
@@ -760,6 +862,77 @@ onMounted(async () => {
 </template>
 
 <style>
+
+/* ── PLANES RECOMENDADOS ── */
+.plan-rec-card {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.1rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}
+
+.plan-rec-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: .75rem;
+  gap: .5rem;
+}
+
+.plan-rec-title {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: .95rem;
+  color: var(--dark);
+  margin-bottom: .15rem;
+}
+
+.plan-rec-vet {
+  font-size: .75rem;
+  color: var(--muted);
+}
+
+.plan-rec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: .4rem .75rem;
+  margin-bottom: .75rem;
+}
+
+.plan-rec-item {
+  display: flex;
+  flex-direction: column;
+  font-size: .8rem;
+}
+
+.plan-rec-item span { color: var(--muted); font-size: .72rem; }
+.plan-rec-item strong { font-weight: 700; color: var(--dark); }
+
+.plan-rec-comidas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-bottom: .65rem;
+}
+
+.comida-badge {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: .25rem .65rem;
+  font-size: .75rem;
+  color: var(--text-secondary);
+}
+
+.plan-rec-obs {
+  font-size: .78rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  padding-top: .55rem;
+  line-height: 1.55;
+}
 
 .tabs {
   display: flex;
