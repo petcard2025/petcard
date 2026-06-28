@@ -164,6 +164,7 @@ async function guardarVacuna() {
   try {
     await vacunasAPI.crear({
       ID_mascota: selectedId.value,
+      ID_servicio: 2,
       Nombre_vacuna: vacForm.Nombre_vacuna.trim(),
       Fecha_aplicacion: vacForm.Fecha_aplicacion || null,
       Proxima_dosis: vacForm.Proxima_dosis || null,
@@ -378,63 +379,111 @@ onMounted(async () => {
   <!-- MODAL AGREGAR VACUNA -->
   <Teleport to="body">
     <div v-if="showModal" class="modal-overlay" @click.self="cerrarModal">
-      <div class="modal-box" style="max-width:440px;">
-        <div class="modal-header">
-          <span style="font-weight:700; font-size:1rem; color:var(--green);">💉 Agregar Carnet de Vacunas</span>
-          <button class="modal-close" @click="cerrarModal">✕</button>
-        </div>
-        <div class="modal-body">
-          <label class="modal-label">Nombre de la vacuna <span style="color:var(--red)">*</span></label>
-          <input class="form-control" list="vacunas-list-modal" v-model="vacForm.Nombre_vacuna" placeholder="Ej: Antirrábica" style="margin-bottom:.85rem;" />
-          <datalist id="vacunas-list-modal">
-            <option value="Antirrábica" />
-            <option value="Triple Felina" />
-            <option value="Parvovirus" />
-            <option value="Moquillo" />
-            <option value="Leptospirosis" />
-            <option value="Bordetella" />
-            <option value="Rabia" />
-            <option value="Leucemia Felina" />
-            <option value="Panleucopenia" />
-            <option value="Calicivirus" />
-            <option value="Rinotraqueitis" />
-            <option value="Hepatitis Infecciosa" />
-            <option value="Parainfluenza" />
-            <option value="Coronavirus" />
-          </datalist>
+      <div class="vac-modal">
 
-          <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:.85rem;">
-            <div style="flex:1; min-width:160px;">
-              <label class="modal-label">Fecha de aplicación</label>
-              <input class="form-control" type="date" v-model="vacForm.Fecha_aplicacion" />
-            </div>
-            <div style="flex:1; min-width:160px;">
-              <label class="modal-label">Próxima dosis</label>
-              <input class="form-control" type="date" v-model="vacForm.Proxima_dosis" />
+        <!-- Header -->
+        <div class="vac-modal-header">
+          <div class="vac-modal-icon">💉</div>
+          <div>
+            <div class="vac-modal-title">Agregar Vacuna</div>
+            <div class="vac-modal-sub">Registra una nueva vacuna para <strong>{{ selectedPet?.Nombre || 'tu mascota' }}</strong></div>
+          </div>
+          <button class="vac-modal-close" @click="cerrarModal">✕</button>
+        </div>
+
+        <!-- Body -->
+        <div class="vac-modal-body">
+
+          <!-- Nombre vacuna -->
+          <div class="vac-field">
+            <label class="vac-label">Nombre de la vacuna <span class="vac-required">*</span></label>
+            <div class="vac-input-wrap">
+              <input
+                class="vac-input"
+                list="vacunas-list-modal"
+                v-model="vacForm.Nombre_vacuna"
+                placeholder="Ej: Antirrábica, Parvovirus..."
+                autocomplete="off"
+              />
+              <datalist id="vacunas-list-modal">
+                <option value="Antirrábica" />
+                <option value="Triple Felina" />
+                <option value="Parvovirus" />
+                <option value="Moquillo" />
+                <option value="Leptospirosis" />
+                <option value="Bordetella" />
+                <option value="Rabia" />
+                <option value="Leucemia Felina" />
+                <option value="Panleucopenia" />
+                <option value="Calicivirus" />
+                <option value="Rinotraqueitis" />
+                <option value="Hepatitis Infecciosa" />
+                <option value="Parainfluenza" />
+                <option value="Coronavirus" />
+              </datalist>
             </div>
           </div>
 
-          <label class="modal-label">Lote</label>
-          <input class="form-control" v-model="vacForm.Lote" placeholder="Ej: A123" style="margin-bottom:.85rem;" />
+          <!-- Fechas -->
+          <div class="vac-row-2">
+            <div class="vac-field">
+              <label class="vac-label">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Fecha de aplicación
+              </label>
+              <input class="vac-input" type="date" v-model="vacForm.Fecha_aplicacion" />
+            </div>
+            <div class="vac-field">
+              <label class="vac-label">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Próxima dosis
+              </label>
+              <input class="vac-input" type="date" v-model="vacForm.Proxima_dosis" />
+            </div>
+          </div>
 
-          <label class="modal-label">Estado</label>
-          <select class="form-control" v-model="vacForm.Estado" style="margin-bottom:.85rem;">
-            <option value="Completo">Aplicada</option>
-            <option value="Proxima">Próxima</option>
-            <option value="Atrasada">Atrasada</option>
-          </select>
+          <!-- Lote y Estado -->
+          <div class="vac-row-2">
+            <div class="vac-field">
+              <label class="vac-label">Lote / Serie</label>
+              <input class="vac-input" v-model="vacForm.Lote" placeholder="Ej: A-1234" />
+            </div>
+            <div class="vac-field">
+              <label class="vac-label">Estado</label>
+              <select class="vac-input" v-model="vacForm.Estado">
+                <option value="Aplicada">✅ Aplicada</option>
+                <option value="Proxima">🔔 Próxima</option>
+                <option value="Atrasada">⚠️ Atrasada</option>
+              </select>
+            </div>
+          </div>
 
-          <label class="modal-label">Observaciones / Reacciones</label>
-          <textarea class="form-control" v-model="vacForm.Observaciones" placeholder="Ej: Sin reacciones adversas..." style="min-height:70px;"></textarea>
+          <!-- Observaciones -->
+          <div class="vac-field">
+            <label class="vac-label">Observaciones / Reacciones</label>
+            <textarea
+              class="vac-input vac-textarea"
+              v-model="vacForm.Observaciones"
+              placeholder="Ej: Sin reacciones adversas. Aplicada en clínica veterinaria..."
+            ></textarea>
+          </div>
+
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary btn-sm" @click="cerrarModal">Cancelar</button>
-          <button class="btn btn-success btn-sm" @click="guardarVacuna"
+
+        <!-- Footer -->
+        <div class="vac-modal-footer">
+          <button class="vac-btn-cancel" @click="cerrarModal">Cancelar</button>
+          <button
+            class="vac-btn-save"
+            @click="guardarVacuna"
             :disabled="!vacForm.Nombre_vacuna.trim()"
-            :style="{ opacity: vacForm.Nombre_vacuna.trim() ? 1 : 0.5 }">
+            :class="{ 'vac-btn-disabled': !vacForm.Nombre_vacuna.trim() }"
+          >
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
             Guardar Vacuna
           </button>
         </div>
+
       </div>
     </div>
   </Teleport>
@@ -505,6 +554,180 @@ onMounted(async () => {
 .btn-logout:hover {
   background-color: #c82333;
   border-color: #c82333;
+}
+
+/* ══ MODAL VACUNA ══ */
+.vac-modal {
+  background: #fff;
+  border-radius: 18px;
+  width: 92%;
+  max-width: 480px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.22);
+  overflow: hidden;
+  animation: vacSlide .28s ease;
+}
+
+@keyframes vacSlide {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.vac-modal-header {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  padding: 1.25rem 1.4rem 1rem;
+  border-bottom: 1px solid #e8edf3;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+}
+
+.vac-modal-icon {
+  font-size: 2rem;
+  width: 48px;
+  height: 48px;
+  background: #fff;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  flex-shrink: 0;
+}
+
+.vac-modal-title {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #14532d;
+}
+
+.vac-modal-sub {
+  font-size: .78rem;
+  color: #166534;
+  margin-top: .1rem;
+}
+
+.vac-modal-close {
+  margin-left: auto;
+  background: rgba(0,0,0,.07);
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: .85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+
+.vac-modal-close:hover { background: rgba(0,0,0,.14); }
+
+.vac-modal-body {
+  padding: 1.25rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.vac-field {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+.vac-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .85rem;
+}
+
+.vac-label {
+  font-size: .78rem;
+  font-weight: 700;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+}
+
+.vac-required { color: #dc2626; }
+
+.vac-input {
+  width: 100%;
+  padding: .6rem .85rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
+  font-size: .9rem;
+  font-family: inherit;
+  color: #1e293b;
+  background: #f8fafc;
+  transition: border-color .2s, box-shadow .2s;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.vac-input:focus {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34,197,94,.12);
+  background: #fff;
+}
+
+.vac-textarea {
+  min-height: 80px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.vac-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem 1.4rem 1.3rem;
+  border-top: 1px solid #e8edf3;
+}
+
+.vac-btn-cancel {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
+  padding: .6rem 1.2rem;
+  font-size: .88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.vac-btn-cancel:hover { background: #e2e8f0; }
+
+.vac-btn-save {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  padding: .6rem 1.35rem;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .2s, transform .15s;
+  box-shadow: 0 3px 10px rgba(22,163,74,.25);
+}
+
+.vac-btn-save:hover { opacity: .92; transform: translateY(-1px); }
+
+.vac-btn-disabled {
+  opacity: .45 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
 }
 
 </style>

@@ -17,6 +17,48 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const showSuccess = ref(false)
 const citaCreada = ref(null)
+const showAllCitas = ref(false)
+const citaCancelarId = ref(null)
+const showConfirmCancel = ref(false)
+
+function estadoBadgeClass(estado) {
+  const e = (estado || 'Pendiente').toLowerCase()
+  if (e === 'confirmada') return 'badge-green'
+  if (e === 'completada' || e === 'completa') return 'badge-gray'
+  if (e === 'cancelada') return 'badge-red'
+  return 'badge-yellow'
+}
+
+function estadoLabel(estado) {
+  const e = (estado || 'Pendiente').toLowerCase()
+  if (e === 'confirmada') return '✅ Confirmada'
+  if (e === 'completada' || e === 'completa') return '☑️ Completada'
+  if (e === 'cancelada') return '❌ Cancelada'
+  return '🕐 Pendiente'
+}
+
+function formatFechaCita(fecha) {
+  if (!fecha) return '—'
+  const soloFecha = String(fecha).split('T')[0]
+  const [y, m, d] = soloFecha.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function pedirCancelar(idCita) {
+  citaCancelarId.value = idCita
+  showConfirmCancel.value = true
+}
+
+async function confirmarCancelacion() {
+  try {
+    await citasAPI.actualizar(citaCancelarId.value, { Estado: 'Cancelada' })
+    showConfirmCancel.value = false
+    citaCancelarId.value = null
+    await cargarCitas()
+  } catch (e) {
+    alert('Error al cancelar la cita: ' + e.message)
+  }
+}
 
 const form = reactive({
   mascota: '',
@@ -37,7 +79,13 @@ const horasDisponibles = [
   '04:00 PM'
 ]
 
-const fechaMin = ref(new Date().toISOString().split('T')[0])
+const fechaMin = ref((() => {
+  const hoy = new Date()
+  const y = hoy.getFullYear()
+  const m = String(hoy.getMonth() + 1).padStart(2, '0')
+  const d = String(hoy.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+})())
 
 async function cargarCliente() {
   if (!usuarioLogueado.value?.ID_usuario) return
@@ -125,6 +173,15 @@ function validateForm() {
   }
   if (!form.mascota || !form.servicio || !form.veterinario || !form.fecha || !form.hora) {
     errorMessage.value = 'Completa todos los campos obligatorios.'
+    return false
+  }
+  // Validar que la fecha no sea anterior a hoy (usando fecha local, no UTC)
+  const [y, m, d] = form.fecha.split('-').map(Number)
+  const fechaSeleccionada = new Date(y, m - 1, d)
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  if (fechaSeleccionada < hoy) {
+    errorMessage.value = 'No puedes agendar una cita en una fecha pasada. Selecciona desde hoy en adelante.'
     return false
   }
   return true
@@ -313,20 +370,25 @@ onMounted(async () => {
         <div class="card">
           <div class="card-title" style="color:var(--orange);">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Próximas Citas
+            Mis Citas
+            <span v-if="citas.length" class="citas-count-badge">{{ citas.length }}</span>
           </div>
+
           <div v-if="citas.length === 0" style="padding:1.5rem 0; text-align:center; color:var(--muted);">
             <div style="font-size:2rem; margin-bottom:.5rem;">📅</div>
             <div style="font-size:.88rem;">Aún no tienes citas agendadas.</div>
           </div>
-          <div v-for="cita in citas.slice(0, 3)" :key="cita.ID_cita" class="cita-item-card">
+
+          <div v-for="cita in (showAllCitas ? citas : citas.slice(0, 3))" :key="cita.ID_cita"
+               class="cita-item-card"
+               :class="{ 'cita-cancelada': (cita.Estado || '').toLowerCase() === 'cancelada' }">
             <div class="cita-item-top">
               <div class="cita-item-servicio">{{ cita.Nombre_servicio || 'Cita veterinaria' }}</div>
-              <span class="badge badge-yellow">Pendiente</span>
+              <span class="badge" :class="estadoBadgeClass(cita.Estado)">{{ estadoLabel(cita.Estado) }}</span>
             </div>
             <div class="cita-item-row">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              {{ new Date(cita.Fecha).toLocaleDateString('es-ES', { weekday:'short', day:'2-digit', month:'short', year:'numeric' }) }}
+              {{ formatFechaCita(cita.Fecha) }}
             </div>
             <div class="cita-item-row">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -336,8 +398,19 @@ onMounted(async () => {
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
               <strong>{{ cita.Nombre_mascota }}</strong>
             </div>
+            <!-- Botón cancelar solo si está Pendiente o Confirmada -->
+            <button
+              v-if="['pendiente','confirmada'].includes((cita.Estado || 'pendiente').toLowerCase())"
+              class="btn-cancelar-cita"
+              @click="pedirCancelar(cita.ID_cita)"
+            >
+              ✕ Cancelar cita
+            </button>
           </div>
-          <a href="#" class="ver-todas" style="display:block; margin-top:.75rem; text-align:center; font-size:.83rem; color:var(--purple); font-weight:600; text-decoration:none;">Ver todas las Citas →</a>
+
+          <button v-if="citas.length > 3" class="ver-todas-btn" @click="showAllCitas = !showAllCitas">
+            {{ showAllCitas ? '▲ Ver menos' : `Ver todas (${citas.length}) →` }}
+          </button>
         </div>
 
         <div class="card">
@@ -352,6 +425,21 @@ onMounted(async () => {
       </div>
     </div>
   </div>
+
+  <!-- ══ MODAL CONFIRMAR CANCELACIÓN ══ -->
+  <Teleport to="body">
+    <div v-if="showConfirmCancel" class="modal-overlay" @click.self="showConfirmCancel = false">
+      <div class="cancel-modal">
+        <div class="cancel-modal-icon">⚠️</div>
+        <h3 class="cancel-modal-title">¿Cancelar esta cita?</h3>
+        <p class="cancel-modal-sub">Esta acción no se puede deshacer. El veterinario será notificado.</p>
+        <div class="cancel-modal-btns">
+          <button class="vac-btn-cancel" @click="showConfirmCancel = false">No, mantenerla</button>
+          <button class="btn-cancelar-confirm" @click="confirmarCancelacion">Sí, cancelar</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- ══ MODAL CITA CREADA ══ -->
   <Teleport to="body">
@@ -547,4 +635,80 @@ onMounted(async () => {
   color: var(--muted);
   margin: 0;
 }
+
+/* ── ESTADOS DE CITAS ── */
+.badge-gray { background: #f1f5f9; color: #475569; }
+.badge-red  { background: #fee2e2; color: #dc2626; }
+
+.citas-count-badge {
+  background: var(--orange);
+  color: #fff;
+  font-size: .7rem;
+  font-weight: 800;
+  border-radius: 20px;
+  padding: .1rem .45rem;
+  margin-left: .3rem;
+}
+
+.cita-cancelada { opacity: .52; }
+
+.btn-cancelar-cita {
+  display: block;
+  width: 100%;
+  margin-top: .55rem;
+  background: none;
+  border: 1.5px solid #fca5a5;
+  color: #dc2626;
+  border-radius: 7px;
+  padding: .35rem;
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-cancelar-cita:hover { background: #fee2e2; }
+
+.ver-todas-btn {
+  display: block;
+  width: 100%;
+  margin-top: .75rem;
+  background: none;
+  border: none;
+  color: var(--purple);
+  font-size: .83rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  padding: .35rem 0;
+}
+.ver-todas-btn:hover { text-decoration: underline; }
+
+/* ── MODAL CANCELAR ── */
+.cancel-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem 1.75rem;
+  max-width: 360px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  animation: slideUp .25s ease;
+}
+.cancel-modal-icon  { font-size: 2.5rem; margin-bottom: .75rem; }
+.cancel-modal-title { font-family:'Nunito',sans-serif; font-weight:800; font-size:1.15rem; color:var(--dark); margin:0 0 .5rem; }
+.cancel-modal-sub   { font-size:.85rem; color:var(--muted); margin-bottom:1.4rem; line-height:1.5; }
+.cancel-modal-btns  { display:flex; gap:.75rem; justify-content:center; }
+
+.btn-cancelar-confirm {
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  padding: .6rem 1.35rem;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .2s;
+}
+.btn-cancelar-confirm:hover { opacity: .88; }
 </style>
