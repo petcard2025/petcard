@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 25-03-2026 a las 15:30:18
+-- Tiempo de generación: 18-06-2026 a las 08:25:06
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -107,18 +107,31 @@ CREATE TABLE `cita` (
   `Fecha` date DEFAULT NULL COMMENT 'Fecha programada de la cita.',
   `Hora` time DEFAULT NULL COMMENT 'Hora programada de la cita.',
   `Motivo` varchar(255) DEFAULT NULL COMMENT 'Motivo principal de la consulta.',
-  `Observaciones` text DEFAULT NULL COMMENT 'Notas adicionales de la cita.'
+  `Observaciones` text DEFAULT NULL COMMENT 'Notas adicionales de la cita.',
+  `Google_Event_ID` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `cita`
 --
 
-INSERT INTO `cita` (`ID_cita`, `ID_cliente`, `ID_mascota`, `ID_servicio`, `ID_veterinario`, `Fecha`, `Hora`, `Motivo`, `Observaciones`) VALUES
-(1, 1, 1, 1, 1, '2026-02-20', '10:00:00', 'Chequeo general', 'Sin novedades'),
-(2, 1, 2, 2, 1, '2026-02-21', '11:00:00', 'Vacunación anual', 'Aplicar refuerzo'),
-(3, 2, 3, 4, 2, '2026-02-22', '09:30:00', 'Desparasitación', 'Control mensual'),
-(4, 3, 4, 1, 1, '2026-02-23', '14:00:00', 'Consulta digestiva', 'Presenta vómito');
+INSERT INTO `cita` (`ID_cita`, `ID_cliente`, `ID_mascota`, `ID_servicio`, `ID_veterinario`, `Fecha`, `Hora`, `Motivo`, `Observaciones`, `Google_Event_ID`) VALUES
+(1, 1, 1, 1, 1, '2026-02-20', '10:00:00', 'Chequeo general', 'Sin novedades', NULL),
+(2, 1, 2, 2, 1, '2026-02-21', '11:00:00', 'Vacunación anual', 'Aplicar refuerzo', NULL),
+(3, 2, 3, 4, 2, '2026-02-22', '09:30:00', 'Desparasitación', 'Control mensual', NULL),
+(4, 3, 4, 1, 1, '2026-02-23', '14:00:00', 'Consulta digestiva', 'Presenta vómito', NULL),
+(5, 1, 1, 1, 1, '2026-05-25', '10:00:00', 'Vacunación anual', 'Prueba Google Calendar', 'ngp0ulha5p959ti7si7v69n5dc'),
+(6, 1, 2, 1, 2, '2026-05-29', '08:00:00', 'Consulta General', 'np', NULL),
+(7, 1, 2, 3, 1, '2026-05-23', '11:00:00', 'Cirugía Esterilización', 'hacer la esterilizacion', NULL),
+(8, 1, 2, 3, 1, '2026-05-23', '11:00:00', 'cirugia esterilizacion', 'Prueba Google Calendar', NULL),
+(9, 1, 2, 3, 1, '2026-05-23', '11:00:00', 'Cirugia Esterilizacion', 'hacer la esterilizacion', NULL),
+(10, 1, 2, 3, 1, '2026-05-23', '11:00:00', 'Cirugia Esterilizacion', 'hacer la esterilizacion', NULL),
+(11, 1, 2, 3, 1, '2026-05-23', '11:00:00', 'Cirugia Esterilizacion', 'hacer la esterilizacion', NULL),
+(12, 1, 2, 3, 1, '2026-05-23', '11:00:00', 'Cirugia Esterilizacion', 'hacer la esterilizacion', '55ofdsgd9d77inq0h29b41e0i4'),
+(13, 1, 1, 1, 1, '2026-06-10', '10:00:00', 'Chequeo general', 'Prueba con Google Calendar', 'o9eua4gmrdiaj4lcgqqe2o0o68'),
+(14, 1, 2, 3, 1, '2026-06-15', '11:00:00', 'Cirugía Esterilización', 'Prueba Google Calendar', 'u1icteq2h0mmae91vbmu1qh2s0'),
+(16, 1, 2, 3, 1, '2026-05-23', '11:00:00', 'Cirugía Esterilizacion', 'hacer la esterilizacion', 'q5pappnbo7ipa4aoh62fd2vfl4'),
+(17, 1, 2, 3, 1, '2026-05-23', '11:00:00', 'Cirugía Esterilizacion', 'hacer la esterilizacion', 'k14semrbqg0p5f3165ct60cdr0');
 
 -- --------------------------------------------------------
 
@@ -139,7 +152,8 @@ CREATE TABLE `cliente` (
 INSERT INTO `cliente` (`ID_cliente`, `Direccion`, `ID_usuario`) VALUES
 (1, 'Calle 10 #20-30 Bogotá', 1),
 (2, 'Carrera 15 #30-40 Cali', 2),
-(3, 'Av 80 #45-60 Medellín', 3);
+(3, 'Av 80 #45-60 Medellín', 3),
+(4, '', 6);
 
 -- --------------------------------------------------------
 
@@ -167,7 +181,8 @@ INSERT INTO `mascota` (`ID_mascota`, `ID_cliente`, `Fecha_nacimiento`, `Nombre`,
 (1, 1, '2020-05-10', 'Max', 'Perro', 'Macho', 'max.jpg', 'Labrador', 25.50),
 (2, 1, '2021-03-15', 'Luna', 'Gato', 'Hembra', 'luna.jpg', 'Siames', 4.20),
 (3, 2, '2019-07-20', 'Rocky', 'Perro', 'Macho', 'rocky.jpg', 'Bulldog', 18.00),
-(4, 3, '2022-01-05', 'Milo', 'Gato', 'Macho', 'milo.jpg', 'Criollo', 3.80);
+(4, 3, '2022-01-05', 'Milo', 'Gato', 'Macho', 'milo.jpg', 'Criollo', 3.80),
+(5, 1, '2024-05-10', 'dester', 'Perro', 'Macho', 'foto.png', 'golden', 49.70);
 
 -- --------------------------------------------------------
 
@@ -182,16 +197,20 @@ CREATE TABLE `notificacion` (
   `Mensaje` text DEFAULT NULL COMMENT 'Contenido del mensaje enviado.',
   `Tipo` varchar(100) DEFAULT NULL COMMENT 'Tipo de notificación (recordatorio, alerta, confirmación).',
   `Canal` varchar(100) DEFAULT NULL COMMENT 'Medio de envío (correo, SMS, sistema).',
-  `Fecha_envio` datetime DEFAULT NULL COMMENT 'Fecha y hora del envío.'
+  `Fecha_envio` datetime DEFAULT NULL COMMENT 'Fecha y hora del envío.',
+  `Leida` tinyint(1) DEFAULT 0,
+  `Fecha_lectura` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `notificacion`
 --
 
-INSERT INTO `notificacion` (`ID_notificacion`, `ID_usuario`, `ID_sistemaCorreo`, `Mensaje`, `Tipo`, `Canal`, `Fecha_envio`) VALUES
-(1, 1, 1, 'Recordatorio de vacuna para Max', 'Recordatorio', 'Correo', '2026-02-18 21:40:19'),
-(2, 2, 2, 'Confirmación de cita', 'Confirmación', 'Correo', '2026-02-18 21:40:19');
+INSERT INTO `notificacion` (`ID_notificacion`, `ID_usuario`, `ID_sistemaCorreo`, `Mensaje`, `Tipo`, `Canal`, `Fecha_envio`, `Leida`, `Fecha_lectura`) VALUES
+(1, 1, 1, 'Recordatorio de vacuna para Max', 'Recordatorio', 'Correo', '2026-02-18 21:40:19', 0, NULL),
+(2, 2, 2, 'Confirmación de cita', 'Confirmación', 'Correo', '2026-02-18 21:40:19', 0, NULL),
+(3, 7, 1, 'su perro esta ue se muere\n', 'Alerta', 'SMS', '2026-05-21 07:05:46', 0, NULL),
+(4, 7, 1, 'la mascota', 'Alerta', 'SMS', '2026-05-21 07:11:54', 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -289,12 +308,13 @@ CREATE TABLE `usuario` (
 --
 
 INSERT INTO `usuario` (`ID_usuario`, `Nombre`, `Correo`, `Telefono`, `Contrasena`, `Rol`) VALUES
-(1, 'Juan Perez', 'juan@gmail.com', '3001111111', '123456', 'cliente'),
-(2, 'Maria Lopez', 'maria@gmail.com', '3002222222', '123456', 'cliente'),
+(1, 'Juan Perez', 'juan@gmail.com', '3001111111', '$2b$10$QnUv1Dugoyoa6jQqBLh3SenFCNtMQBRWV8gqDBhZiwH9SXZw/bfwa', 'cliente'),
+(2, 'Maria Lopez', 'maria@gmail.com', '3002222222', '$2b$10$C3sxx/illhIHmPW3KMAQzuLOcT9BvpfhhiR0UMS4qud.78ggTw9zm', 'cliente'),
 (3, 'Carlos Ruiz', 'carlos@gmail.com', '3003333333', '123456', 'cliente'),
 (4, 'Dra. Laura Gomez', 'laura@gmail.com', '3004444444', '123456', 'veterinario'),
 (5, 'Dr. Andres Torres', 'andres@gmail.com', '3005555555', '123456', 'veterinario'),
-(6, 'Admin Principal', 'admin@gmail.com', '3006666666', '123456', 'administrador');
+(6, 'Admin Principal', 'admin@gmail.com', '3215642023', '$2b$10$iaQyGPlaAfwy8a4vZRZYReksD9kJ1i1fZb/wgW2tQs.791UdhWxwe', 'administrador'),
+(7, 'yuber franco', 'yuberfranco@gmail.com', '3132849355', '123456', 'cliente');
 
 -- --------------------------------------------------------
 
@@ -492,25 +512,25 @@ ALTER TABLE `carnetvacunas`
 -- AUTO_INCREMENT de la tabla `cita`
 --
 ALTER TABLE `cita`
-  MODIFY `ID_cita` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único de la cita.', AUTO_INCREMENT=5;
+  MODIFY `ID_cita` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único de la cita.', AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT de la tabla `cliente`
 --
 ALTER TABLE `cliente`
-  MODIFY `ID_cliente` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único del cliente.', AUTO_INCREMENT=4;
+  MODIFY `ID_cliente` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único del cliente.', AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `mascota`
 --
 ALTER TABLE `mascota`
-  MODIFY `ID_mascota` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único de la mascota.', AUTO_INCREMENT=5;
+  MODIFY `ID_mascota` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único de la mascota.', AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `notificacion`
 --
 ALTER TABLE `notificacion`
-  MODIFY `ID_notificacion` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único de la notificación.', AUTO_INCREMENT=3;
+  MODIFY `ID_notificacion` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único de la notificación.', AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `planalimentacion`
@@ -534,7 +554,7 @@ ALTER TABLE `sistemacorreo`
 -- AUTO_INCREMENT de la tabla `usuario`
 --
 ALTER TABLE `usuario`
-  MODIFY `ID_usuario` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único del usuario dentro del sistema.', AUTO_INCREMENT=7;
+  MODIFY `ID_usuario` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Identificador único del usuario dentro del sistema.', AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT de la tabla `veterinario`

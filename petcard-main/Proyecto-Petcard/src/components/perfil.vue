@@ -4,7 +4,7 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
-const { usuarioLogueado: authUsuario, cerrarSesion, irALogin, irARegistro } = useAuth()
+const { usuarioLogueado: authUsuario, token, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 const usuarioActual = ref(null)
 const enEdicion = ref(false)
@@ -99,6 +99,22 @@ const irMascotas = () => router.push('/mis-mascotas')
 const irCitas = () => router.push('/citas')
 const irCarnet = () => router.push('/carnet')
 const irNotificaciones = () => router.push('/notificaciones')
+
+// ===== GUARD DE SEGURIDAD =====
+onMounted(() => {
+  const token = localStorage.getItem('petcard_token')
+  const usuarioStr = localStorage.getItem('petcard_usuario_actual')
+  let usuario = null
+  try { usuario = usuarioStr ? JSON.parse(usuarioStr) : null } catch {}
+  if (!token && !usuario) {
+    router.push('/login-usuario')
+    return
+  }
+  const rol = usuario?.Rol
+  if (rol === 'Admin') {
+    router.push('/admin-inicio')
+  }
+})
 
 onMounted(() => {
   cargarUsuario()
@@ -233,6 +249,12 @@ watch(authUsuario, () => {
         </div>
 
         <!-- Estadísticas -->
+        <div class="card">
+          <div class="card-title" style="font-size:.95rem;">Estado de la sesión</div>
+          <div class="estadistica-row"><span>JWT activo</span><strong>{{ token ? 'Sí' : 'No' }}</strong></div>
+          <div class="estadistica-row" v-if="token"><span>Token (inicio)</span><strong>{{ token.slice(0, 18) + '...' }}</strong></div>
+        </div>
+
         <div class="card">
           <div class="card-title" style="font-size:.95rem;">Estadísticas</div>
           <div class="estadistica-row"><span>Mascotas registradas</span><strong>3</strong></div>

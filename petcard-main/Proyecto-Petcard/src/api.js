@@ -34,7 +34,7 @@ const fetchAPI = async (endpoint, options = {}) => {
     const data = await response.json()
 
     if (!response.ok) {
-      // Si el token expiro o es invalido, limpiar sesion
+      // Si el token expiro o es invalido, limpiar sesion y redirigir
       if (response.status === 401 || response.status === 403) {
         localStorage.removeItem('petcard_token')
         localStorage.removeItem('petcard_usuario_actual')
@@ -71,6 +71,17 @@ export const usuariosAPI = {
 export const loginAPI = {
   loginUsuario: async (correo, contrasena) => {
     const data = await fetchAPI('/login', {
+      method: 'POST',
+      body: JSON.stringify({ Correo: correo, Contrasena: contrasena })
+    })
+    // Si el backend devuelve token, guardarlo en localStorage
+    if (data.token) {
+      localStorage.setItem('petcard_token', data.token)
+    }
+    return data
+  },
+  loginAdmin: async (correo, contrasena) => {
+    const data = await fetchAPI('/login-admin', {
       method: 'POST',
       body: JSON.stringify({ Correo: correo, Contrasena: contrasena })
     })
@@ -141,6 +152,10 @@ export const citasAPI = {
     method: 'PUT',
     body: JSON.stringify(datos)
   }),
+  actualizarParcial: (id, datos) => fetchAPI(`/citas/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(datos)
+  }),
   eliminar: (id) => fetchAPI(`/citas/${id}`, {
     method: 'DELETE'
   })
@@ -183,12 +198,47 @@ export const alimentacionAPI = {
 // ========== NOTIFICACIONES ==========
 export const notificacionesAPI = {
   obtener: () => fetchAPI('/notificaciones'),
+  obtenerPorUsuario: (idUsuario) => fetchAPI(`/notificaciones/usuario/${idUsuario}`),
+  obtenerNoLeidas: (idUsuario) => fetchAPI(`/notificaciones/usuario/${idUsuario}/no-leidas`),
+  obtenerPorId: (id) => fetchAPI(`/notificaciones/${id}`),
   crear: (datos) => fetchAPI('/notificaciones', {
     method: 'POST',
     body: JSON.stringify(datos)
   }),
+  actualizar: (id, datos) => fetchAPI(`/notificaciones/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(datos)
+  }),
+  marcarComoLeida: (id) => fetchAPI(`/notificaciones/${id}/marcar-como-leida`, {
+    method: 'PATCH'
+  }),
+  marcarMultiplesComoLeidas: (ids) => fetchAPI('/notificaciones/marcar-como-leidas/bulk', {
+    method: 'PATCH',
+    body: JSON.stringify({ ids })
+  }),
   eliminar: (id) => fetchAPI(`/notificaciones/${id}`, {
     method: 'DELETE'
+  }),
+  eliminarMultiples: (ids) => fetchAPI('/notificaciones/bulk', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids })
+  }),
+  eliminarTodas: (idUsuario) => fetchAPI(`/notificaciones/usuario/${idUsuario}/todas`, {
+    method: 'DELETE'
+  }),
+  obtenerEstadisticas: () => fetchAPI('/notificaciones/estadisticas'),
+  obtenerEstadisticasUsuario: (idUsuario) => fetchAPI(`/notificaciones/usuario/${idUsuario}/estadisticas`)
+}
+
+// ========== AUTENTICACIÓN (Olvidé contraseña / Reset) ==========
+export const authAPI = {
+  requestForgotPassword: (correo) => fetchAPI('/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ Correo: correo })
+  }),
+  resetPassword: (token, nuevaContrasena) => fetchAPI('/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, nuevaContrasena })
   })
 }
 
