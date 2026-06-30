@@ -1,8 +1,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, reactive } from 'vue'
-import { loginAPI, authAPI } from '../api'
-import { useAuth } from '../composables/useAuth'
+import { loginAPI, API_URL } from '../api'
 
 const router = useRouter()
 
@@ -21,15 +20,15 @@ const forgotEmail = ref('')
 const resetToken = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
-const modalStep = ref('email') // 'email' or 'reset'
+const modalStep = ref('email')
 const message = ref('')
-const isResetting = ref(false)
-
-const { setSession } = useAuth()
 
 const handleLogin = async () => {
+  console.log("ESTOY EN LOGIN ADMIN")
+
   errorMessage.value = ''
   successMessage.value = ''
+
 
   const correo = formData.correo.trim()
   const contrasena = formData.contrasena
@@ -46,45 +45,49 @@ const handleLogin = async () => {
   isLoading.value = true
 
   try {
-    const response = await loginAPI.loginUsuario(correo, contrasena)
-    
-    if (response && response.message === 'Login exitoso') {
-      // Verificar que sea administrador
-      if (response.usuario.Rol !== 'administrador') {
-        errorMessage.value = 'Esta cuenta no tiene permisos de administrador.'
+    const response = await loginAPI.loginAdmin(correo, contrasena)
+    console.log("RESPUESTA:", response)
+console.log("ROL:", response.usuario?.Rol)
+
+    if (response && response.token) {
+      const rol = response.usuario.Rol?.toLowerCase()
+
+      // Solo admin y veterinario pueden entrar por aquí
+      if (rol !== 'administrador' && rol !== 'admin' && rol !== 'veterinario') {
+        errorMessage.value = 'Esta cuenta no tiene permisos de acceso al panel.'
         isLoading.value = false
         return
       }
-      successMessage.value = `¡Bienvenido Admin ${response.usuario.Nombre}! Redirigiendo...`
-      const token = response.token || response.jwt || response.accessToken || null
-      setSession(response.usuario, token)
+
+      localStorage.setItem('petcard_usuario_actual', JSON.stringify(response.usuario))
       localStorage.setItem('petcard_admin_actual', JSON.stringify(response.usuario))
 
       if (formData.recordar) {
         localStorage.setItem('petcard_admin_recordado', JSON.stringify(response.usuario))
       }
 
-      setTimeout(() => {
-        router.push('/admin-inicio')
-      }, 1500)
+      // Redirigir según rol
+      if (rol === 'veterinario') {
+        successMessage.value = `¡Bienvenido Dr. ${response.usuario.Nombre}! Redirigiendo...`
+        setTimeout(() => router.push('/veterinario-inicio'), 1500)
+      } else {
+        successMessage.value = `¡Bienvenido Admin ${response.usuario.Nombre}! Redirigiendo...`
+        setTimeout(() => router.push('/admin-inicio'), 1500)
+      }
+
     } else if (response && response.error) {
       errorMessage.value = response.error
     }
   } catch (error) {
     errorMessage.value = error.message || 'Error al conectar con el servidor. Intenta más tarde.'
-    console.error('Error de login:', error)
   } finally {
     isLoading.value = false
   }
 }
 
-const togglePassword = () => {
-  showPassword.value = !showPassword.value
-}
-
-const irARegistro = () => {
-  router.push('/registro-admin')
-}
+const togglePassword = () => { showPassword.value = !showPassword.value }
+const irARegistro = () => router.push('/registro-admin')
+const irAlInicio = () => router.push('/inicio')
 
 const openForgotModal = () => {
   showForgotModal.value = true
@@ -95,71 +98,52 @@ const openForgotModal = () => {
   modalStep.value = 'email'
   message.value = ''
 }
-
-const closeForgotModal = () => {
-  showForgotModal.value = false
-}
+const closeForgotModal = () => { showForgotModal.value = false }
 
 const requestReset = async () => {
-  if (!forgotEmail.value.trim()) {
-    message.value = 'Ingresa tu correo electrónico'
-    return
-  }
-
+  if (!forgotEmail.value.trim()) { message.value = 'Ingresa tu correo electrónico'; return }
   message.value = 'Enviando solicitud...'
-
   try {
-    const data = await authAPI.requestForgotPassword(forgotEmail.value.trim())
-    if (data && data.token) {
+    const response = await fetch(`${API_URL}/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Correo: forgotEmail.value.trim() })
+    })
+    const data = await response.json()
+    if (response.ok) {
       message.value = `Token generado: ${data.token}\n\nCopia este token para resetear tu contraseña.`
       modalStep.value = 'reset'
     } else {
-      message.value = 'Solicitud enviada. Revisa tu correo.'
-      modalStep.value = 'reset'
+      message.value = data.error || 'Error al solicitar reset'
     }
-  } catch (error) {
-    message.value = error.message || 'Error al solicitar reset'
-  }
+  } catch { message.value = 'Error de conexión' }
 }
 
 const resetPassword = async () => {
   if (!resetToken.value.trim() || !newPassword.value || !confirmPassword.value) {
-    message.value = 'Completa todos los campos'
-    return
+    message.value = 'Completa todos los campos'; return
   }
-
   if (newPassword.value !== confirmPassword.value) {
-    message.value = 'Las contraseñas no coinciden'
-    return
+    message.value = 'Las contraseñas no coinciden'; return
   }
-
   if (newPassword.value.length < 6) {
-    message.value = 'La contraseña debe tener al menos 6 caracteres'
-    return
+    message.value = 'La contraseña debe tener al menos 6 caracteres'; return
   }
-
   message.value = 'Reseteando contraseña...'
-
   try {
-    const data = await authAPI.resetPassword(resetToken.value.trim(), newPassword.value)
-    if (data) {
+    const response = await fetch(`${API_URL}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })
+    })
+    const data = await response.json()
+    if (response.ok) {
       message.value = 'Contraseña actualizada exitosamente'
-      setTimeout(() => {
-        closeForgotModal()
-      }, 2000)
+      setTimeout(() => closeForgotModal(), 2000)
     } else {
-      message.value = 'Contraseña actualizada exitosamente'
-      setTimeout(() => {
-        closeForgotModal()
-      }, 2000)
+      message.value = data.error || 'Error al resetear contraseña'
     }
-  } catch (error) {
-    message.value = error.message || 'Error al resetear contraseña'
-  }
-}
-
-const irAlInicio = () => {
-  router.push('/inicio')
+  } catch { message.value = 'Error de conexión' }
 }
 </script>
 

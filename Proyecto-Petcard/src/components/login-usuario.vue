@@ -1,11 +1,9 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ref, reactive } from 'vue'
-import { loginAPI } from '../api.js'
-import { useAuth } from '../composables/useAuth'
+import { loginAPI, API_URL } from '../api.js'
 
 const router = useRouter()
-const { setSession } = useAuth()
 
 const formData = reactive({
   correo: '',
@@ -21,7 +19,7 @@ const forgotEmail = ref('')
 const resetToken = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
-const modalStep = ref('email') // 'email' or 'reset'
+const modalStep = ref('email')
 const message = ref('')
 const isResetting = ref(false)
 
@@ -49,13 +47,35 @@ const handleLogin = async () => {
     const data = await loginAPI.loginUsuario(correo, contrasena)
 
     if (data.message === 'Login exitoso') {
-      successMessage.value = `¡Bienvenido/a, ${data.usuario.Nombre}! Token guardado en localStorage.`
-      setSession(data.usuario, data.token)
-      console.log('✅ Login exitoso', localStorage.getItem('petcard_token'))
+      console.log('✅ Login exitoso')
 
-      setTimeout(() => {
-        router.push('/inicio')
-      }, 1500)
+      // 🆕 Guardar usuario y token en localStorage
+      localStorage.setItem('petcard_usuario_actual', JSON.stringify(data.usuario))
+      if (data.token) {
+        localStorage.setItem('petcard_token', data.token)
+      }
+
+      // 🆕 Verificar el rol y redirigir al panel correspondiente
+      const rol = data.usuario?.Rol?.toLowerCase()
+
+      if (rol === 'administrador' || rol === 'admin') {
+        localStorage.setItem('petcard_admin_actual', JSON.stringify(data.usuario))
+        successMessage.value = `¡Bienvenido Admin ${data.usuario.Nombre}! Redirigiendo...`
+        setTimeout(() => {
+          router.push('/admin-inicio')
+        }, 1500)
+      } else if (rol === 'veterinario') {
+        localStorage.setItem('petcard_admin_actual', JSON.stringify(data.usuario))
+        successMessage.value = `¡Bienvenido Dr. ${data.usuario.Nombre}! Redirigiendo...`
+        setTimeout(() => {
+          router.push('/veterinario-inicio')
+        }, 1500)
+      } else {
+        successMessage.value = `¡Bienvenido/a, ${data.usuario.Nombre}!`
+        setTimeout(() => {
+          router.push('/inicio')
+        }, 1500)
+      }
     } else {
       errorMessage.value = data.error || 'Credenciales incorrectas'
       console.log('❌ Error:', data.error)
@@ -107,7 +127,7 @@ const requestReset = async () => {
   message.value = 'Enviando solicitud...'
 
   try {
-    const response = await fetch('http://localhost:3001/api/forgot-password', {
+    const response = await fetch(`${API_URL}/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Correo: forgotEmail.value.trim() })
@@ -115,7 +135,7 @@ const requestReset = async () => {
     const data = await response.json()
     
     if (response.ok) {
-      message.value = `Token generado: ${data.token}\n\nCopia este token para resetear tu contraseña.`
+      message.value = 'Si tu correo está registrado, recibirás las instrucciones de recuperación en breve.'
       modalStep.value = 'reset'
     } else {
       message.value = data.error || 'Error al solicitar reset'
@@ -144,7 +164,7 @@ const resetPassword = async () => {
   message.value = 'Reseteando contraseña...'
 
   try {
-    const response = await fetch('http://localhost:3001/api/reset-password', {
+    const response = await fetch(`${API_URL}/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })

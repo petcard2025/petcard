@@ -17,19 +17,16 @@ export function useAuth() {
     if (t && isTokenValid(t)) {
       token.value = t
       isAuthenticated.value = true
-      // try to read user from localStorage (saved at login), else decode from token
       const stored = localStorage.getItem('petcard_usuario_actual')
       if (stored) {
         try { usuarioLogueado.value = JSON.parse(stored) } catch { usuarioLogueado.value = null }
       } else {
         const payload = parseJwt(t)
-        usuarioLogueado.value = payload ? { Nombre: payload.nombre || payload.sub, Rol: payload.rol } : null
+        usuarioLogueado.value = payload
+          ? { Nombre: payload.nombre || payload.sub, Rol: payload.rol, ID_veterinario: payload.id_veterinario || payload.id }
+          : null
       }
     } else {
-      // No valid JWT token. Support legacy/sessionless logins where the backend
-      // does not issue a token by falling back to a stored `petcard_usuario_actual`.
-      // If an explicit stored user exists, treat it as an authenticated session
-      // (keeps UX working for current backend). If not present, clear session.
       const stored = localStorage.getItem('petcard_usuario_actual')
       if (stored) {
         try {
@@ -44,7 +41,6 @@ export function useAuth() {
           isAuthenticated.value = false
         }
       } else {
-        // no stored user either: ensure clean state
         localStorage.removeItem('petcard_token')
         token.value = null
         isAuthenticated.value = false
@@ -76,10 +72,23 @@ export function useAuth() {
     router.push('/inicio')
   }
 
+  // ── Helpers de navegación ────────────────────────────────
   const irALogin = () => router.push('/login-usuario')
   const irALoginAdmin = () => router.push('/login-admin')
   const irARegistro = () => router.push('/registro-usuario')
   const irARegistroAdmin = () => router.push('/registro-admin')
+
+  // ── Redirección según rol tras login ─────────────────────
+  const redirigirSegunRol = () => {
+    const rol = usuarioLogueado.value?.Rol?.toLowerCase()
+    if (rol === 'administrador' || rol === 'admin') {
+      router.push('/admin-inicio')
+    } else if (rol === 'veterinario') {
+      router.push('/veterinario-inicio')
+    } else {
+      router.push('/inicio')
+    }
+  }
 
   return {
     usuarioLogueado,
@@ -87,6 +96,7 @@ export function useAuth() {
     isAuthenticated,
     setSession,
     cerrarSesion,
+    redirigirSegunRol,
     irALogin,
     irALoginAdmin,
     irARegistro,

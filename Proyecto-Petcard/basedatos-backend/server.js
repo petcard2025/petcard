@@ -8,9 +8,87 @@ const jwt = require('jsonwebtoken')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
+const rateLimit = require('express-rate-limit')
 require('dotenv').config()
 
-// ===== GOOGLE CALENDAR =====
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: La variable de entorno JWT_SECRET no esta definida.')
+  console.error('Agrega JWT_SECRET=<secreto-largo-y-aleatorio> en tu archivo .env')
+  process.exit(1)
+}
+const JWT_SECRET = process.env.JWT_SECRET
+
+function verifyToken(req, res, next) {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+  if (!token) return res.status(401).json({ error: 'Acceso denegado. Token no proporcionado.' })
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET)
+    req.usuario = decoded
+    next()
+  } catch (error) {
+    return res.status(403).json({ error: 'Token invalido o expirado.' })
+  }
+}
+
+function verifyAdmin(req, res, next) {
+  if (!req.usuario || req.usuario.Rol !== 'administrador') {
+    return res.status(403).json({ error: 'Acceso denegado. Se requieren permisos de administrador.' })
+  }
+  next()
+}
+
+// 🆕 ── Middleware: carga ID_veterinario y Especialidad del usuario logueado (si es veterinario) ──
+function cargarVeterinario(req, res, next) {
+  if (req.usuario.Rol !== 'veterinario') return next()
+  db.query(
+    'SELECT ID_veterinario, Cargo, Especialidad FROM veterinario WHERE ID_usuario = ?',
+    [req.usuario.ID_usuario],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (rows.length === 0) return res.status(403).json({ error: 'No se encontro perfil de veterinario asociado.' })
+      req.veterinario = rows[0]
+      next()
+    }
+  )
+}
+
+// 🆕 ── Middleware: verifica que el veterinario haya atendido esa mascota con ese servicio ──
+// (usado para que un veterinario solo edite planes de alimentacion de mascotas/servicios que el atendio)
+function verificarVetAtendioMascotaServicio(req, res, next) {
+  if (req.usuario.Rol !== 'veterinario') return next() // admin pasa libre
+
+  const verificar = (idMascota, idServicio) => {
+    db.query(
+      'SELECT 1 FROM cita WHERE ID_veterinario = ? AND ID_mascota = ? AND ID_servicio = ? LIMIT 1',
+      [req.veterinario.ID_veterinario, idMascota, idServicio],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message })
+        if (rows.length === 0) {
+          return res.status(403).json({ error: 'Solo puedes modificar planes de alimentacion de mascotas y servicios que has atendido.' })
+        }
+        next()
+      }
+    )
+  }
+
+  // Si viene un :id de plan existente (PUT), primero hay que leer el plan para saber su mascota/servicio
+  if (req.params.id) {
+    return db.query(
+      'SELECT ID_mascota, ID_servicio FROM planalimentacion WHERE ID_planAlimentacion = ?',
+      [req.params.id],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message })
+        if (rows.length === 0) return res.status(404).json({ error: 'Plan no encontrado' })
+        verificar(rows[0].ID_mascota, rows[0].ID_servicio)
+      }
+    )
+  }
+
+  // Si es creacion (POST), los datos vienen en el body
+  verificar(req.body.ID_mascota, req.body.ID_servicio)
+}
+
 const { google } = require('googleapis')
 
 async function getCalendarClient() {
@@ -24,12 +102,11 @@ async function getCalendarClient() {
 
 async function crearEventoCalendar(cita) {
   const calendar = await getCalendarClient()
-  // Sanitizar Fecha y Hora para evitar "Invalid time value"
-  const fechaStr = String(cita.Fecha).substring(0, 10)   // "YYYY-MM-DD"
-  const horaStr  = String(cita.Hora).substring(0, 5)     // "HH:MM"
+  const fechaStr = String(cita.Fecha).substring(0, 10)
+  const horaStr  = String(cita.Hora).substring(0, 5)
   const fechaInicio = new Date(`${fechaStr}T${horaStr}:00`)
   if (isNaN(fechaInicio.getTime())) throw new Error(`Fecha/Hora inválida: ${fechaStr} ${horaStr}`)
-  const fechaFin = new Date(fechaInicio.getTime() + 60 * 60 * 1000) // +1 hora
+  const fechaFin = new Date(fechaInicio.getTime() + 60 * 60 * 1000)
 
   const event = {
     summary: `Cita PetCard — ${cita.Nombre_mascota || 'Mascota'}`,
@@ -45,7 +122,6 @@ async function crearEventoCalendar(cita) {
   return response.data.id
 }
 
-// ===== TWILIO - SERVICIO DE SMS =====
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
@@ -82,21 +158,17 @@ async function enviarSMS(telefono, mensaje) {
   }
 }
 
-// ===== NOTIFICACIONES AUTOMÁTICAS =====
-// Crea una notificación en BD y opcionalmente envía SMS al usuario dueño
 async function crearNotificacionAutomatica(ID_usuario, mensaje, tipo, canal = 'Sistema') {
   return new Promise((resolve) => {
     db.query(
       'INSERT INTO notificacion (ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal, Fecha_envio) VALUES (?,?,?,?,?,NOW())',
-      [ID_usuario, 1, mensaje, tipo, canal],   // ID 1 = Gmail SMTP (sistema por defecto)
+      [ID_usuario, 1, mensaje, tipo, canal],
       async (err, result) => {
         if (err) {
           console.error('Error creando notificación automática:', err.message)
           return resolve({ success: false })
         }
         console.log(`🔔 Notificación automática creada (ID: ${result.insertId}) → Usuario ${ID_usuario}`)
-
-        // Si el canal es SMS, intentar enviar mensaje de texto
         if (canal === 'SMS') {
           db.query('SELECT Telefono FROM usuario WHERE ID_usuario = ?', [ID_usuario], async (errU, rows) => {
             if (!errU && rows.length > 0 && rows[0].Telefono) {
@@ -112,43 +184,51 @@ async function crearNotificacionAutomatica(ID_usuario, mensaje, tipo, canal = 'S
   })
 }
 
-
-// ===== ENCRIPTACION =====
 const SALT_ROUNDS = 10
 const resetTokens = new Map()
 
 const app = express()
-app.use(cors())
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://localhost:5173'
+app.use(cors({
+  origin: FRONTEND_URL,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}))
+
 app.use(express.json())
 
-// ===== MIDDLEWARE JWT =====
-const verificarToken = (req, res, next) => {
-  const authHeader = req.headers['authorization']
-  const token = authHeader && authHeader.split(' ')[1]
-  if (!token) return res.status(401).json({ error: 'Token requerido.' })
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.usuario = decoded
-    next()
-  } catch (err) {
-    return res.status(403).json({ error: 'Token inválido o expirado.' })
-  }
-}
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de login. Intenta de nuevo en 15 minutos.' }
+})
 
-const soloAdmin = (req, res, next) => {
-  if (req.usuario.Rol !== 'Admin') {
-    return res.status(403).json({ error: 'Solo administradores.' })
-  }
-  next()
-}
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes de recuperacion. Intenta de nuevo en 1 hora.' }
+})
 
-// ===== CONEXION =====
+// ✅ FIX (antes: charset: 'utf8mb4_general_ci'):
+// mysql2 espera aquí el nombre de un CHARSET (ej. 'utf8mb4'), no una COLLATION
+// (ej. 'utf8mb4_general_ci'). Pasarle una collation hacía que la negociación de
+// codificación fallara silenciosamente y los caracteres con tildes/ñ llegaran
+// corruptos (ej. "Antirrábica" -> "Antirr??bica"), aunque los datos en la base
+// estaban guardados correctamente en utf8mb4. Si necesitas fijar la collation de
+// la conexión, usa la opción separada `collation`, no `charset`.
 const db = mysql.createConnection({
   host: process.env.DB_HOST || '127.0.0.1',
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'petcard'
+  database: process.env.DB_NAME || 'petcard',
+  charset: 'utf8mb4'
 })
 
 db.connect(err => {
@@ -160,8 +240,10 @@ db.connect(err => {
   console.log('✓ Conectado a MySQL correctamente')
 })
 
-// ===== USUARIOS =====
-app.get('/api/usuarios', verificarToken, soloAdmin, (req, res) => {
+// =============================================================
+// USUARIOS
+// =============================================================
+app.get('/api/usuarios', verifyToken, verifyAdmin, (req, res) => {
   db.query('SELECT ID_usuario, Nombre, Correo, Telefono, Rol FROM usuario', (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
@@ -186,7 +268,7 @@ app.post('/api/usuarios', async (req, res) => {
   }
 })
 
-app.put('/api/usuarios/:id', verificarToken, (req, res) => {
+app.put('/api/usuarios/:id', verifyToken, (req, res) => {
   const { Nombre, Correo, Telefono } = req.body
   db.query(
     'UPDATE usuario SET Nombre=?, Correo=?, Telefono=? WHERE ID_usuario=?',
@@ -198,15 +280,17 @@ app.put('/api/usuarios/:id', verificarToken, (req, res) => {
   )
 })
 
-app.delete('/api/usuarios/:id', verificarToken, soloAdmin, (req, res) => {
+app.delete('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM usuario WHERE ID_usuario=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Usuario eliminado' })
   })
 })
 
-// ===== LOGIN =====
-app.post('/api/login', async (req, res) => {
+// =============================================================
+// LOGIN
+// =============================================================
+app.post('/api/login', loginLimiter, async (req, res) => {
   const { Correo, Contrasena } = req.body
   try {
     db.query(
@@ -230,16 +314,10 @@ app.post('/api/login', async (req, res) => {
             if (err) console.error('Error actualizando hash:', err.message)
           })
         }
-        const usuarioSeguro = {
-          ID_usuario: usuario.ID_usuario,
-          Nombre: usuario.Nombre,
-          Correo: usuario.Correo,
-          Telefono: usuario.Telefono,
-          Rol: usuario.Rol
-        }
+        const usuarioSeguro = { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Telefono: usuario.Telefono, Rol: usuario.Rol }
         const token = jwt.sign(
           { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
-          process.env.JWT_SECRET,
+          JWT_SECRET,
           { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
         )
         res.json({ message: 'Login exitoso', token, usuario: usuarioSeguro })
@@ -250,22 +328,65 @@ app.post('/api/login', async (req, res) => {
   }
 })
 
-// ===== FORGOT PASSWORD =====
-app.post('/api/forgot-password', (req, res) => {
+app.post('/api/login-admin', loginLimiter, async (req, res) => {
+  const { Correo, Contrasena } = req.body
+  try {
+    db.query(
+      'SELECT ID_usuario, Nombre, Correo, Telefono, Rol, Contrasena FROM usuario WHERE Correo=?',
+      [Correo],
+      async (err, results) => {
+        if (err) return res.status(500).json({ error: err.message })
+        if (results.length === 0) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+        const usuario = results[0]
+        let isPasswordValid = false
+        const storedPassword = usuario.Contrasena || ''
+        if (storedPassword.startsWith('$2')) {
+          isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
+        } else {
+          isPasswordValid = Contrasena === storedPassword
+        }
+        if (!isPasswordValid) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+        if (usuario.Rol !== 'administrador' && usuario.Rol !== 'veterinario') {
+          return res.status(403).json({ error: 'Esta cuenta no tiene permisos de acceso al panel.' })
+        }
+        if (!storedPassword.startsWith('$2')) {
+          const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
+          db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
+            if (err) console.error('Error actualizando hash:', err.message)
+          })
+        }
+        const usuarioSeguro = { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Telefono: usuario.Telefono, Rol: usuario.Rol }
+        const token = jwt.sign(
+          { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
+          JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+        )
+        res.json({ message: 'Login admin exitoso', token, usuario: usuarioSeguro })
+      }
+    )
+  } catch (error) {
+    res.status(500).json({ error: 'Error al procesar el login' })
+  }
+})
+
+// =============================================================
+// RECUPERACION DE CONTRASEÑA
+// =============================================================
+app.post('/api/forgot-password', forgotPasswordLimiter, (req, res) => {
   const { Correo } = req.body
   if (!Correo) return res.status(400).json({ error: 'Correo requerido' })
-  db.query('SELECT ID_usuario, Nombre FROM usuario WHERE Correo=?', [Correo], (err, results) => {
+  db.query('SELECT ID_usuario, Nombre, Telefono FROM usuario WHERE Correo=?', [Correo], async (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
-    if (results.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' })
+    if (results.length === 0) return res.json({ message: 'Si el correo esta registrado, recibiras las instrucciones de recuperacion.' })
     const usuario = results[0]
     const token = crypto.randomBytes(32).toString('hex')
     const expires = Date.now() + 3600000
     resetTokens.set(token, { ID_usuario: usuario.ID_usuario, expires })
-    res.json({ message: 'Token de reset generado.', token, info: 'Usa este token en /api/reset-password con la nueva contrasena' })
+    console.log(`[DEV] Token de reset para ${Correo}: ${token}`)
+    res.json({ message: 'Si el correo esta registrado, recibiras las instrucciones de recuperacion.', token, info: 'Usa este token en /api/reset-password con la nueva contrasena' })
   })
 })
 
-// ===== RESET PASSWORD =====
 app.post('/api/reset-password', async (req, res) => {
   const { token, nuevaContrasena } = req.body
   if (!token || !nuevaContrasena) return res.status(400).json({ error: 'Token y nueva contrasena requeridos' })
@@ -288,8 +409,10 @@ app.post('/api/reset-password', async (req, res) => {
   }
 })
 
-// ===== CLIENTES =====
-app.get('/api/clientes', verificarToken, (req, res) => {
+// =============================================================
+// CLIENTES
+// =============================================================
+app.get('/api/clientes', verifyToken, verifyAdmin, (req, res) => {
   db.query(
     `SELECT c.ID_cliente, c.Direccion, u.Nombre, u.Correo, u.Telefono
      FROM cliente c JOIN usuario u ON c.ID_usuario = u.ID_usuario`,
@@ -300,7 +423,7 @@ app.get('/api/clientes', verificarToken, (req, res) => {
   )
 })
 
-app.post('/api/clientes', verificarToken, (req, res) => {
+app.post('/api/clientes', (req, res) => {
   const { Direccion, ID_usuario } = req.body
   db.query('INSERT INTO cliente (Direccion, ID_usuario) VALUES (?,?)', [Direccion, ID_usuario], (err, result) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -308,15 +431,17 @@ app.post('/api/clientes', verificarToken, (req, res) => {
   })
 })
 
-app.get('/api/clientes/usuario/:id_usuario', verificarToken, (req, res) => {
+app.get('/api/clientes/usuario/:id_usuario', verifyToken, (req, res) => {
   db.query('SELECT * FROM cliente WHERE ID_usuario=?', [req.params.id_usuario], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
 
-/// ===== MASCOTAS =====
-app.get('/api/mascotas', verificarToken, (req, res) => {
+// =============================================================
+// MASCOTAS
+// =============================================================
+app.get('/api/mascotas', verifyToken, verifyAdmin, (req, res) => {
   db.query(
     `SELECT m.*, u.Nombre AS Nombre_dueno
      FROM mascota m
@@ -330,14 +455,14 @@ app.get('/api/mascotas', verificarToken, (req, res) => {
   )
 })
 
-app.get('/api/mascotas/cliente/:id_cliente', verificarToken, (req, res) => {
+app.get('/api/mascotas/cliente/:id_cliente', verifyToken, (req, res) => {
   db.query('SELECT * FROM mascota WHERE ID_cliente=? AND Estado="activo"', [req.params.id_cliente], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
 
-app.post('/api/mascotas', verificarToken, (req, res) => {
+app.post('/api/mascotas', verifyToken, (req, res) => {
   const { ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
   db.query(
     'INSERT INTO mascota (ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso) VALUES (?,?,?,?,?,?,?,?)',
@@ -349,7 +474,7 @@ app.post('/api/mascotas', verificarToken, (req, res) => {
   )
 })
 
-app.put('/api/mascotas/:id', verificarToken, (req, res) => {
+app.put('/api/mascotas/:id', verifyToken, (req, res) => {
   const { Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
   db.query(
     'UPDATE mascota SET Fecha_nacimiento=?, Nombre=?, Especie=?, Sexo=?, Foto=?, Raza=?, Peso=? WHERE ID_mascota=?',
@@ -361,14 +486,17 @@ app.put('/api/mascotas/:id', verificarToken, (req, res) => {
   )
 })
 
-app.delete('/api/mascotas/:id', verificarToken, (req, res) => {
+app.delete('/api/mascotas/:id', verifyToken, (req, res) => {
   db.query('UPDATE mascota SET Estado="inactivo" WHERE ID_mascota=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Mascota desactivada' })
   })
 })
-// ===== VETERINARIOS =====
-app.get('/api/veterinarios', verificarToken, (req, res) => {
+
+// =============================================================
+// VETERINARIOS
+// =============================================================
+app.get('/api/veterinarios', verifyToken, (req, res) => {
   db.query(
     `SELECT v.ID_veterinario, v.Cargo, v.Especialidad, u.Nombre, u.Correo, u.Telefono
      FROM veterinario v JOIN usuario u ON v.ID_usuario = u.ID_usuario`,
@@ -379,15 +507,17 @@ app.get('/api/veterinarios', verificarToken, (req, res) => {
   )
 })
 
-// ===== SERVICIOS =====
-app.get('/api/servicios', verificarToken, (req, res) => {
+// =============================================================
+// SERVICIOS
+// =============================================================
+app.get('/api/servicios', (req, res) => {
   db.query('SELECT * FROM servicio', (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
 
-app.post('/api/servicios', verificarToken, soloAdmin, (req, res) => {
+app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
   const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
     'INSERT INTO servicio (Nombre, Descripcion, Categoria, Precio) VALUES (?,?,?,?)',
@@ -399,7 +529,7 @@ app.post('/api/servicios', verificarToken, soloAdmin, (req, res) => {
   )
 })
 
-app.put('/api/servicios/:id', verificarToken, soloAdmin, (req, res) => {
+app.put('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
   const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
     'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=?, Precio=? WHERE ID_servicio=?',
@@ -411,17 +541,20 @@ app.put('/api/servicios/:id', verificarToken, soloAdmin, (req, res) => {
   )
 })
 
-app.delete('/api/servicios/:id', verificarToken, soloAdmin, (req, res) => {
+app.delete('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM servicio WHERE ID_servicio=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Servicio eliminado' })
   })
 })
 
-// ===== CITAS =====
-app.get('/api/citas', verificarToken, (req, res) => {
-  db.query(
-    `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
+// =============================================================
+// CITAS
+// =============================================================
+
+// 🆕 GET /api/citas — admin ve todas, veterinario solo ve las suyas
+app.get('/api/citas', verifyToken, cargarVeterinario, (req, res) => {
+  let sql = `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
             ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones,
             m.Nombre AS Nombre_mascota,
             u.Nombre AS Nombre_cliente,
@@ -433,92 +566,163 @@ app.get('/api/citas', verificarToken, (req, res) => {
      JOIN usuario u ON c.ID_usuario = u.ID_usuario
      JOIN servicio s ON ci.ID_servicio = s.ID_servicio
      JOIN veterinario v ON ci.ID_veterinario = v.ID_veterinario
-     JOIN usuario uv ON v.ID_usuario = uv.ID_usuario
-     ORDER BY ci.Fecha DESC`,
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json(results)
-    }
-  )
-})
+     JOIN usuario uv ON v.ID_usuario = uv.ID_usuario`
 
-app.post('/api/citas', verificarToken, async (req, res) => {
-  const { ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
-  db.query(
-    'INSERT INTO cita (ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones) VALUES (?,?,?,?,?,?,?,?)',
-    [ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones],
-    async (err, result) => {
-      if (err) return res.status(500).json({ error: err.message })
-      const ID_cita = result.insertId
+  const params = []
+  if (req.usuario.Rol === 'veterinario') {
+    sql += ' WHERE ci.ID_veterinario = ?'
+    params.push(req.veterinario.ID_veterinario)
+  }
+  sql += ' ORDER BY ci.Fecha DESC'
 
-      // ── Notificación automática de cita ──
-      try {
-        // Obtener ID_usuario del cliente para notificar
-        db.query(
-          `SELECT c.ID_usuario, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
-           FROM cliente c
-           JOIN mascota m ON m.ID_mascota = ?
-           JOIN servicio s ON s.ID_servicio = ?
-           WHERE c.ID_cliente = ?`,
-          [ID_mascota, ID_servicio, ID_cliente],
-          async (errQ, rows) => {
-            if (!errQ && rows.length > 0) {
-              const { ID_usuario, Nombre_mascota, Nombre_servicio } = rows[0]
-              const mensaje = `✅ Cita agendada para ${Nombre_mascota || 'tu mascota'} — ${Nombre_servicio || Motivo || 'Consulta'} el ${Fecha} a las ${Hora}.`
-              await crearNotificacionAutomatica(ID_usuario, mensaje, 'cita', 'Sistema')
-            }
-          }
-        )
-      } catch (notifError) {
-        console.error('Error creando notificación de cita:', notifError.message)
-      }
-
-      // ── Google Calendar ──
-      try {
-        const googleEventId = await crearEventoCalendar({ Fecha, Hora, Motivo, Observaciones })
-        db.query('UPDATE cita SET Google_Event_ID=? WHERE ID_cita=?', [googleEventId, ID_cita])
-        res.json({ ID_cita, googleEventId, ...req.body })
-      } catch (calError) {
-        console.error('Error Google Calendar:', calError.message)
-        res.json({ ID_cita, ...req.body, calendarError: calError.message })
-      }
-    }
-  )
-})
-
-app.put('/api/citas/:id', verificarToken, (req, res) => {
-  const { ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
-  db.query(
-    'UPDATE cita SET ID_servicio=?, ID_veterinario=?, Fecha=?, Hora=?, Motivo=?, Observaciones=? WHERE ID_cita=?',
-    [ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones, req.params.id],
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ message: 'Cita actualizada' })
-    }
-  )
-})
-
-app.patch('/api/citas/:id', verificarToken, (req, res) => {
-  const campos = req.body
-  const keys = Object.keys(campos)
-  if (keys.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' })
-  const set = keys.map(k => `${k}=?`).join(', ')
-  const values = [...Object.values(campos), req.params.id]
-  db.query(`UPDATE cita SET ${set} WHERE ID_cita=?`, values, (err) => {
+  db.query(sql, params, (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
-    res.json({ message: 'Cita actualizada parcialmente' })
+    res.json(results)
   })
 })
 
-app.delete('/api/citas/:id', verificarToken, (req, res) => {
+// ── NUEVO: Horas ocupadas por veterinario y fecha ────────────
+// Debe estar ANTES del POST /api/citas para que Express no confunda la ruta
+app.get('/api/citas/horas-ocupadas', verifyToken, (req, res) => {
+  const { ID_veterinario, Fecha } = req.query
+  if (!ID_veterinario || !Fecha) {
+    return res.status(400).json({ error: 'Se requieren ID_veterinario y Fecha' })
+  }
+  db.query(
+    'SELECT Hora FROM cita WHERE ID_veterinario = ? AND Fecha = ?',
+    [ID_veterinario, Fecha],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      const horasOcupadas = results.map(r => r.Hora)
+      res.json({ horasOcupadas })
+    }
+  )
+})
+
+app.post('/api/citas', verifyToken, async (req, res) => {
+  const { ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
+
+  // Verificar conflicto de horario antes de insertar
+  db.query(
+    'SELECT ID_cita FROM cita WHERE ID_veterinario=? AND Fecha=? AND Hora=?',
+    [ID_veterinario, Fecha, Hora],
+    async (errCheck, existing) => {
+      if (errCheck) return res.status(500).json({ error: errCheck.message })
+      if (existing.length > 0) {
+        return res.status(409).json({ error: 'El veterinario ya tiene una cita agendada en esa fecha y hora.' })
+      }
+
+      db.query(
+        'INSERT INTO cita (ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones) VALUES (?,?,?,?,?,?,?,?)',
+        [ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones],
+        async (err, result) => {
+          if (err) return res.status(500).json({ error: err.message })
+          const ID_cita = result.insertId
+
+          try {
+            db.query(
+              `SELECT c.ID_usuario, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
+               FROM cliente c
+               JOIN mascota m ON m.ID_mascota = ?
+               JOIN servicio s ON s.ID_servicio = ?
+               WHERE c.ID_cliente = ?`,
+              [ID_mascota, ID_servicio, ID_cliente],
+              async (errQ, rows) => {
+                if (!errQ && rows.length > 0) {
+                  const { ID_usuario, Nombre_mascota, Nombre_servicio } = rows[0]
+                  const mensaje = `✅ Cita agendada para ${Nombre_mascota || 'tu mascota'} — ${Nombre_servicio || Motivo || 'Consulta'} el ${Fecha} a las ${Hora}.`
+                  await crearNotificacionAutomatica(ID_usuario, mensaje, 'cita', 'Sistema')
+                }
+              }
+            )
+          } catch (notifError) {
+            console.error('Error creando notificación de cita:', notifError.message)
+          }
+
+          try {
+            const googleEventId = await crearEventoCalendar({ Fecha, Hora, Motivo, Observaciones })
+            db.query('UPDATE cita SET Google_Event_ID=? WHERE ID_cita=?', [googleEventId, ID_cita])
+            res.json({ ID_cita, googleEventId, ...req.body })
+          } catch (calError) {
+            console.error('Error Google Calendar:', calError.message)
+            res.json({ ID_cita, ...req.body, calendarError: calError.message })
+          }
+        }
+      )
+    }
+  )
+})
+
+// 🆕 PUT /api/citas/:id — si es veterinario, solo puede editar sus propias citas
+app.put('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
+  const { ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
+
+  const ejecutarUpdate = () => {
+    db.query(
+      'UPDATE cita SET ID_servicio=?, ID_veterinario=?, Fecha=?, Hora=?, Motivo=?, Observaciones=? WHERE ID_cita=?',
+      [ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones, req.params.id],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message })
+        res.json({ message: 'Cita actualizada' })
+      }
+    )
+  }
+
+  if (req.usuario.Rol === 'veterinario') {
+    db.query('SELECT ID_veterinario FROM cita WHERE ID_cita = ?', [req.params.id], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (rows.length === 0) return res.status(404).json({ error: 'Cita no encontrada' })
+      if (rows[0].ID_veterinario !== req.veterinario.ID_veterinario) {
+        return res.status(403).json({ error: 'No puedes modificar citas de otro veterinario.' })
+      }
+      ejecutarUpdate()
+    })
+  } else {
+    ejecutarUpdate()
+  }
+})
+
+// 🆕 PATCH /api/citas/:id — misma restriccion que el PUT
+app.patch('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
+  const campos = req.body
+  const keys = Object.keys(campos)
+  if (keys.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' })
+
+  const ejecutarPatch = () => {
+    const set = keys.map(k => `${k}=?`).join(', ')
+    const values = [...Object.values(campos), req.params.id]
+    db.query(`UPDATE cita SET ${set} WHERE ID_cita=?`, values, (err) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ message: 'Cita actualizada parcialmente' })
+    })
+  }
+
+  if (req.usuario.Rol === 'veterinario') {
+    db.query('SELECT ID_veterinario FROM cita WHERE ID_cita = ?', [req.params.id], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (rows.length === 0) return res.status(404).json({ error: 'Cita no encontrada' })
+      if (rows[0].ID_veterinario !== req.veterinario.ID_veterinario) {
+        return res.status(403).json({ error: 'No puedes modificar citas de otro veterinario.' })
+      }
+      ejecutarPatch()
+    })
+  } else {
+    ejecutarPatch()
+  }
+})
+
+// 🆕 DELETE /api/citas/:id — solo el administrador puede eliminar citas (antes era cualquier verifyToken)
+app.delete('/api/citas/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM cita WHERE ID_cita=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Cita eliminada' })
   })
 })
 
-// ===== CARNET DE VACUNAS =====
-app.get('/api/vacunas', verificarToken, (req, res) => {
+// =============================================================
+// CARNET DE VACUNAS
+// =============================================================
+app.get('/api/vacunas', verifyToken, (req, res) => {
   db.query(
     `SELECT cv.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
      FROM carnetvacunas cv
@@ -531,22 +735,20 @@ app.get('/api/vacunas', verificarToken, (req, res) => {
   )
 })
 
-app.get('/api/vacunas/mascota/:id_mascota', verificarToken, (req, res) => {
+app.get('/api/vacunas/mascota/:id_mascota', verifyToken, (req, res) => {
   db.query('SELECT * FROM carnetvacunas WHERE ID_mascota=?', [req.params.id_mascota], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
 
-app.post('/api/vacunas', verificarToken, (req, res) => {
+app.post('/api/vacunas', verifyToken, (req, res) => {
   const { ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones } = req.body
   db.query(
     'INSERT INTO carnetvacunas (ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones) VALUES (?,?,?,?,?,?,?,?)',
     [ID_mascota, ID_servicio, Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones],
     async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
-
-      // ── Notificación automática de vacuna ──
       try {
         db.query(
           `SELECT c.ID_usuario, m.Nombre AS Nombre_mascota
@@ -567,13 +769,12 @@ app.post('/api/vacunas', verificarToken, (req, res) => {
       } catch (notifError) {
         console.error('Error creando notificación de vacuna:', notifError.message)
       }
-
       res.json({ ID_carnetVacunas: result.insertId, ...req.body })
     }
   )
 })
 
-app.put('/api/vacunas/:id', verificarToken, (req, res) => {
+app.put('/api/vacunas/:id', verifyToken, (req, res) => {
   const { Nombre_vacuna, Lote, Fecha_aplicacion, Proxima_dosis, Estado, Observaciones } = req.body
   db.query(
     'UPDATE carnetvacunas SET Nombre_vacuna=?, Lote=?, Fecha_aplicacion=?, Proxima_dosis=?, Estado=?, Observaciones=? WHERE ID_carnetVacunas=?',
@@ -585,35 +786,46 @@ app.put('/api/vacunas/:id', verificarToken, (req, res) => {
   )
 })
 
-app.delete('/api/vacunas/:id', verificarToken, (req, res) => {
+app.delete('/api/vacunas/:id', verifyToken, (req, res) => {
   db.query('DELETE FROM carnetvacunas WHERE ID_carnetVacunas=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Vacuna eliminada' })
   })
 })
 
-// ===== PLAN DE ALIMENTACION =====
-app.get('/api/alimentacion', verificarToken, (req, res) => {
-  db.query(
-    `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
+// =============================================================
+// PLAN DE ALIMENTACION
+// =============================================================
+
+// 🆕 GET /api/alimentacion — admin ve todos, veterinario solo ve planes de mascotas/servicios que atendio
+app.get('/api/alimentacion', verifyToken, cargarVeterinario, (req, res) => {
+  let sql = `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
      FROM planalimentacion pa
      JOIN mascota m ON pa.ID_mascota = m.ID_mascota
-     JOIN servicio s ON pa.ID_servicio = s.ID_servicio`,
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json(results)
-    }
-  )
+     JOIN servicio s ON pa.ID_servicio = s.ID_servicio`
+  const params = []
+  if (req.usuario.Rol === 'veterinario') {
+    sql += ` WHERE EXISTS (
+      SELECT 1 FROM cita ci WHERE ci.ID_mascota = pa.ID_mascota
+      AND ci.ID_servicio = pa.ID_servicio AND ci.ID_veterinario = ?
+    )`
+    params.push(req.veterinario.ID_veterinario)
+  }
+  db.query(sql, params, (err, results) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json(results)
+  })
 })
 
-app.get('/api/alimentacion/mascota/:id_mascota', verificarToken, (req, res) => {
+app.get('/api/alimentacion/mascota/:id_mascota', verifyToken, (req, res) => {
   db.query('SELECT * FROM planalimentacion WHERE ID_mascota=?', [req.params.id_mascota], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
 })
 
-app.post('/api/alimentacion', verificarToken, (req, res) => {
+// 🆕 POST /api/alimentacion — veterinario solo puede crear si atendio esa mascota+servicio
+app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
   const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'INSERT INTO planalimentacion (ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -625,7 +837,8 @@ app.post('/api/alimentacion', verificarToken, (req, res) => {
   )
 })
 
-app.put('/api/alimentacion/:id', verificarToken, (req, res) => {
+// 🆕 PUT /api/alimentacion/:id — veterinario solo puede editar si atendio esa mascota+servicio
+app.put('/api/alimentacion/:id', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
   const { Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'UPDATE planalimentacion SET Tipo_dieta=?, Frecuencia=?, Alergias=?, Horario=?, Calorias=?, Suplementos=?, Comidas=?, Fecha_inicio=?, Fecha_fin=?, Observaciones=?, Diagnostico=?, Revision_nutricional=? WHERE ID_planAlimentacion=?',
@@ -637,15 +850,18 @@ app.put('/api/alimentacion/:id', verificarToken, (req, res) => {
   )
 })
 
-app.delete('/api/alimentacion/:id', verificarToken, (req, res) => {
+// 🆕 DELETE /api/alimentacion/:id — solo el administrador puede eliminar planes (antes era cualquier verifyToken)
+app.delete('/api/alimentacion/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM planalimentacion WHERE ID_planAlimentacion=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Plan eliminado' })
   })
 })
 
-// ===== NOTIFICACIONES =====
-app.get('/api/notificaciones', verificarToken, (req, res) => {
+// =============================================================
+// NOTIFICACIONES
+// =============================================================
+app.get('/api/notificaciones', verifyToken, (req, res) => {
   db.query(
     `SELECT n.*, u.Nombre AS Nombre_usuario
      FROM notificacion n
@@ -658,7 +874,7 @@ app.get('/api/notificaciones', verificarToken, (req, res) => {
   )
 })
 
-app.post('/api/notificaciones', verificarToken, async (req, res) => {
+app.post('/api/notificaciones', verifyToken, async (req, res) => {
   const { ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal } = req.body
   db.query(
     'INSERT INTO notificacion (ID_usuario, ID_sistemaCorreo, Mensaje, Tipo, Canal, Fecha_envio) VALUES (?,?,?,?,?,NOW())',
@@ -682,44 +898,7 @@ app.post('/api/notificaciones', verificarToken, async (req, res) => {
   )
 })
 
-app.delete('/api/notificaciones/:id', verificarToken, (req, res) => {
-  db.query('DELETE FROM notificacion WHERE ID_notificacion=?', [req.params.id], (err) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json({ message: 'Notificacion eliminada' })
-  })
-})
-
-app.get('/api/notificaciones/usuario/:idUsuario', verificarToken, (req, res) => {
-  db.query(
-    'SELECT * FROM notificacion WHERE ID_usuario = ? ORDER BY Fecha_envio DESC',
-    [req.params.idUsuario],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json(results)
-    }
-  )
-})
-
-app.get('/api/notificaciones/usuario/:idUsuario/no-leidas', verificarToken, (req, res) => {
-  db.query(
-    'SELECT * FROM notificacion WHERE ID_usuario = ? AND Leida = 0 ORDER BY Fecha_envio DESC',
-    [req.params.idUsuario],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json(results)
-    }
-  )
-})
-
-app.get('/api/notificaciones/:id', verificarToken, (req, res) => {
-  db.query('SELECT * FROM notificacion WHERE ID_notificacion = ?', [req.params.id], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message })
-    if (results.length === 0) return res.status(404).json({ error: 'Notificación no encontrada' })
-    res.json(results[0])
-  })
-})
-
-app.put('/api/notificaciones/:id', verificarToken, (req, res) => {
+app.put('/api/notificaciones/:id', verifyToken, (req, res) => {
   const { Mensaje, Tipo, Canal } = req.body
   db.query(
     'UPDATE notificacion SET Mensaje=?, Tipo=?, Canal=? WHERE ID_notificacion=?',
@@ -731,7 +910,44 @@ app.put('/api/notificaciones/:id', verificarToken, (req, res) => {
   )
 })
 
-app.patch('/api/notificaciones/:id/marcar-como-leida', verificarToken, (req, res) => {
+app.delete('/api/notificaciones/:id', verifyToken, (req, res) => {
+  db.query('DELETE FROM notificacion WHERE ID_notificacion=?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json({ message: 'Notificacion eliminada' })
+  })
+})
+
+app.get('/api/notificaciones/usuario/:idUsuario', verifyToken, (req, res) => {
+  db.query(
+    'SELECT * FROM notificacion WHERE ID_usuario = ? ORDER BY Fecha_envio DESC',
+    [req.params.idUsuario],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json(results)
+    }
+  )
+})
+
+app.get('/api/notificaciones/usuario/:idUsuario/no-leidas', verifyToken, (req, res) => {
+  db.query(
+    'SELECT * FROM notificacion WHERE ID_usuario = ? AND Leida = 0 ORDER BY Fecha_envio DESC',
+    [req.params.idUsuario],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json(results)
+    }
+  )
+})
+
+app.get('/api/notificaciones/:id', verifyToken, (req, res) => {
+  db.query('SELECT * FROM notificacion WHERE ID_notificacion = ?', [req.params.id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message })
+    if (results.length === 0) return res.status(404).json({ error: 'Notificación no encontrada' })
+    res.json(results[0])
+  })
+})
+
+app.patch('/api/notificaciones/:id/marcar-como-leida', verifyToken, (req, res) => {
   db.query(
     'UPDATE notificacion SET Leida = 1, Fecha_lectura = NOW() WHERE ID_notificacion = ?',
     [req.params.id],
@@ -742,7 +958,7 @@ app.patch('/api/notificaciones/:id/marcar-como-leida', verificarToken, (req, res
   )
 })
 
-app.patch('/api/notificaciones/marcar-como-leidas/bulk', verificarToken, (req, res) => {
+app.patch('/api/notificaciones/marcar-como-leidas/bulk', verifyToken, (req, res) => {
   const { ids } = req.body
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids debe ser un array no vacío' })
   const placeholders = ids.map(() => '?').join(',')
@@ -752,7 +968,7 @@ app.patch('/api/notificaciones/marcar-como-leidas/bulk', verificarToken, (req, r
   })
 })
 
-app.delete('/api/notificaciones/bulk', verificarToken, (req, res) => {
+app.delete('/api/notificaciones/bulk', verifyToken, (req, res) => {
   const { ids } = req.body
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids debe ser un array no vacío' })
   const placeholders = ids.map(() => '?').join(',')
@@ -762,14 +978,14 @@ app.delete('/api/notificaciones/bulk', verificarToken, (req, res) => {
   })
 })
 
-app.delete('/api/notificaciones/usuario/:idUsuario/todas', verificarToken, (req, res) => {
+app.delete('/api/notificaciones/usuario/:idUsuario/todas', verifyToken, (req, res) => {
   db.query('DELETE FROM notificacion WHERE ID_usuario = ?', [req.params.idUsuario], (err, result) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ eliminadas: result.affectedRows })
   })
 })
 
-app.get('/api/notificaciones/estadisticas', verificarToken, (req, res) => {
+app.get('/api/notificaciones/estadisticas', verifyToken, (req, res) => {
   db.query(
     `SELECT COUNT(*) as total,
      SUM(CASE WHEN Leida = 1 THEN 1 ELSE 0 END) as leidas,
@@ -782,7 +998,7 @@ app.get('/api/notificaciones/estadisticas', verificarToken, (req, res) => {
   )
 })
 
-app.get('/api/notificaciones/usuario/:idUsuario/estadisticas', verificarToken, (req, res) => {
+app.get('/api/notificaciones/usuario/:idUsuario/estadisticas', verifyToken, (req, res) => {
   db.query(
     `SELECT COUNT(*) as total,
      SUM(CASE WHEN Leida = 1 THEN 1 ELSE 0 END) as leidas,
@@ -796,8 +1012,10 @@ app.get('/api/notificaciones/usuario/:idUsuario/estadisticas', verificarToken, (
   )
 })
 
-// ===== ADMINISTRADOR =====
-app.get('/api/administradores', verificarToken, soloAdmin, (req, res) => {
+// =============================================================
+// ADMINISTRADOR
+// =============================================================
+app.get('/api/administradores', verifyToken, verifyAdmin, (req, res) => {
   db.query(
     `SELECT a.ID_administrador, a.Cargo, a.Area, a.Permisos, u.Nombre, u.Correo
      FROM administrador a JOIN usuario u ON a.ID_usuario = u.ID_usuario`,
@@ -808,8 +1026,10 @@ app.get('/api/administradores', verificarToken, soloAdmin, (req, res) => {
   )
 })
 
-// ===== SMS TWILIO =====
-app.post('/api/sms/enviar', verificarToken, async (req, res) => {
+// =============================================================
+// SMS TWILIO
+// =============================================================
+app.post('/api/sms/enviar', verifyToken, verifyAdmin, async (req, res) => {
   const { telefono, mensaje } = req.body
   if (!telefono || !mensaje) return res.status(400).json({ error: 'Se requieren telefono y mensaje' })
   const resultado = await enviarSMS(telefono, mensaje)
@@ -820,7 +1040,7 @@ app.post('/api/sms/enviar', verificarToken, async (req, res) => {
   }
 })
 
-app.post('/api/sms/confirmar-cita', verificarToken, async (req, res) => {
+app.post('/api/sms/confirmar-cita', verifyToken, verifyAdmin, async (req, res) => {
   const { ID_cita } = req.body
   if (!ID_cita) return res.status(400).json({ error: 'ID_cita requerido' })
   db.query(
@@ -856,7 +1076,7 @@ app.post('/api/sms/confirmar-cita', verificarToken, async (req, res) => {
   )
 })
 
-app.post('/api/sms/recordatorio-vacuna', verificarToken, async (req, res) => {
+app.post('/api/sms/recordatorio-vacuna', verifyToken, verifyAdmin, async (req, res) => {
   const { ID_carnetVacunas } = req.body
   if (!ID_carnetVacunas) return res.status(400).json({ error: 'ID_carnetVacunas requerido' })
   db.query(
@@ -889,23 +1109,35 @@ app.post('/api/sms/recordatorio-vacuna', verificarToken, async (req, res) => {
   )
 })
 
-// ===== INICIAR SERVIDOR HTTPS =====
+// =============================================================
+// INICIAR SERVIDOR
+// =============================================================
 const PORT = process.env.PORT || 3001
+const NODE_ENV = process.env.NODE_ENV || 'development'
 
-try {
-  const sslOptions = {
-key: fs.readFileSync(path.join(__dirname, 'certs', 'localhost.key')),
-cert: fs.readFileSync(path.join(__dirname, 'certs', 'localhost.crt')),
+if (NODE_ENV === 'production') {
+  app.listen(PORT, () => {
+    console.log(`Servidor backend corriendo en el puerto ${PORT} (HTTP interno)`)
+    console.log('IMPORTANTE: verifica que el proxy/hosting este sirviendo HTTPS hacia afuera.')
+  })
+} else {
+  const keyPath = process.env.SSL_KEY_PATH || './certs/cert.key'
+  const certPath = process.env.SSL_CERT_PATH || './certs/cert.crt'
+
+  if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+    console.error('No se encontraron los certificados SSL de desarrollo.')
+    console.error(`Se esperaban en: ${keyPath} y ${certPath}`)
+    console.error('Generalos corriendo: npm run certs')
+    process.exit(1)
   }
+
+  const sslOptions = {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath)
+  }
+
   https.createServer(sslOptions, app).listen(PORT, () => {
-    console.log('🔒 Servidor HTTPS corriendo en https://localhost:' + PORT)
-    console.log('✓ Conectado a MySQL correctamente')
+    console.log(`🔒 Servidor HTTPS de desarrollo corriendo en https://localhost:${PORT}`)
     console.log('✓ Listo para recibir peticiones en https://localhost:' + PORT + '/api/usuarios')
   })
-} catch (err) {
-  console.error('✗ Error cargando certificados SSL:', err.message)
-  console.error('  Asegúrate de que existen los archivos:')
-  console.error('  - certs/localhost.key')
-  console.error('  - certs/localhost.crt')
-  process.exit(1)
 }

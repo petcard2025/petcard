@@ -19,9 +19,12 @@ import LoginAdmin from '../components/login-admin.vue'
 import RegistroUsuario from '../components/registro-usuario.vue'
 import RegistroAdmin from '../components/registro-admin.vue'
 import TestAPI from '../components/test-api.vue'
+// ── Vistas del veterinario ────────────────────────────────
+import VeterinarioInicio from '../components/veterinario-inicio.vue'
+import VeterinarioCitas from '../components/veterinario-citas.vue'
 
 const routes = [
-  // Rutas públicas
+  // ── Rutas públicas ──────────────────────────────────────
   { path: '/',                 component: Inicio },
   { path: '/inicio',           component: Inicio },
   { path: '/servicios',        component: Servicios },
@@ -31,23 +34,27 @@ const routes = [
   { path: '/registro-admin',   component: RegistroAdmin },
   { path: '/test-api',         component: TestAPI },
 
-  // Rutas de Cliente / Veterinario
-  { path: '/citas',          component: Citas,          meta: { requiresAuth: true, roles: ['Cliente', 'Veterinario'] } },
-  { path: '/carnet',         component: Carnet,         meta: { requiresAuth: true, roles: ['Cliente', 'Veterinario'] } },
-  { path: '/alimentacion',   component: Alimentacion,   meta: { requiresAuth: true, roles: ['Cliente', 'Veterinario'] } },
-  { path: '/notificaciones', component: Notificaciones, meta: { requiresAuth: true, roles: ['Cliente', 'Veterinario'] } },
-  { path: '/perfil',         component: Perfil,         meta: { requiresAuth: true, roles: ['Cliente', 'Veterinario'] } },
-  { path: '/mis-mascotas',   component: MisMascotas,    meta: { requiresAuth: true, roles: ['Cliente', 'Veterinario'] } },
+  // ── Rutas privadas de usuario ────────────────────────────
+  { path: '/citas',          component: Citas,          meta: { requiresAuth: true } },
+  { path: '/carnet',         component: Carnet,         meta: { requiresAuth: true } },
+  { path: '/alimentacion',   component: Alimentacion,   meta: { requiresAuth: true } },
+  { path: '/notificaciones', component: Notificaciones, meta: { requiresAuth: true } },
+  { path: '/perfil',         component: Perfil,         meta: { requiresAuth: true } },
+  { path: '/mis-mascotas',   component: MisMascotas,    meta: { requiresAuth: true } },
 
-  // Rutas de Admin
-  { path: '/admin',                component: AdminInicio,         meta: { requiresAuth: true, roles: ['Admin'] } },
-  { path: '/admin-inicio',         component: AdminInicio,         meta: { requiresAuth: true, roles: ['Admin'] } },
-  { path: '/admin-citas',          component: AdminCitas,          meta: { requiresAuth: true, roles: ['Admin'] } },
-  { path: '/admin-carnet',         component: AdminCarnet,         meta: { requiresAuth: true, roles: ['Admin'] } },
-  { path: '/admin-alimentacion',   component: AdminAlimentacion,   meta: { requiresAuth: true, roles: ['Admin'] } },
-  { path: '/admin-notificaciones', component: AdminNotificaciones, meta: { requiresAuth: true, roles: ['Admin'] } },
-  { path: '/admin-servicios',      component: AdminServicios,      meta: { requiresAuth: true, roles: ['Admin'] } },
-  { path: '/admin-perfil',         component: AdminPerfil,         meta: { requiresAuth: true, roles: ['Admin'] } },
+  // ── Rutas privadas de administrador ─────────────────────
+  { path: '/admin',                component: AdminInicio,         meta: { requiresAdmin: true } },
+  { path: '/admin-inicio',         component: AdminInicio,         meta: { requiresAdmin: true } },
+  { path: '/admin-citas',          component: AdminCitas,          meta: { requiresAdmin: true } },
+  { path: '/admin-carnet',         component: AdminCarnet,         meta: { requiresAdmin: true } },
+  { path: '/admin-alimentacion',   component: AdminAlimentacion,   meta: { requiresAdmin: true } },
+  { path: '/admin-notificaciones', component: AdminNotificaciones, meta: { requiresAdmin: true } },
+  { path: '/admin-servicios',      component: AdminServicios,      meta: { requiresAdmin: true } },
+  { path: '/admin-perfil',         component: AdminPerfil,         meta: { requiresAdmin: true } },
+
+  // ── Rutas privadas de veterinario ────────────────────────
+  { path: '/veterinario-inicio', component: VeterinarioInicio, meta: { requiresVet: true } },
+  { path: '/veterinario-citas',  component: VeterinarioCitas,  meta: { requiresVet: true } },
 ]
 
 const router = createRouter({
@@ -55,27 +62,30 @@ const router = createRouter({
   routes,
 })
 
-// ===== GUARD GLOBAL DE SEGURIDAD =====
+// ── Guard global de navegación ───────────────────────────
 router.beforeEach((to, from, next) => {
-  const requiresAuth = to.meta.requiresAuth
-  const allowedRoles = to.meta.roles
-
-  if (!requiresAuth) return next()
-
   const token = localStorage.getItem('petcard_token')
-  const usuarioStr = localStorage.getItem('petcard_usuario_actual')
   let usuario = null
-  try { usuario = usuarioStr ? JSON.parse(usuarioStr) : null } catch {}
-
-  if (!token && !usuario) {
-    const esAdmin = allowedRoles && allowedRoles.includes('Admin')
-    return next(esAdmin ? '/login-admin' : '/login-usuario')
+  try {
+    const raw = localStorage.getItem('petcard_usuario_actual')
+    if (raw) usuario = JSON.parse(raw)
+  } catch {
+    usuario = null
   }
 
-  const rol = usuario?.Rol
-  if (allowedRoles && !allowedRoles.map(r => r.toLowerCase()).includes(rol?.toLowerCase())) {
-    if (rol?.toLowerCase() === 'admin') return next('/admin-inicio')
-    return next('/inicio')
+  const estaLogueado = !!(token || usuario)
+  const rolUsuario = usuario?.Rol?.toLowerCase()
+  const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin'
+  const esVeterinario = rolUsuario === 'veterinario'
+
+  if (to.meta.requiresAdmin) {
+    if (!estaLogueado) return next('/login-admin')
+    if (!esAdmin) return next('/inicio')
+  } else if (to.meta.requiresVet) {
+    if (!estaLogueado) return next('/login-admin')
+    if (!esVeterinario && !esAdmin) return next('/inicio')
+  } else if (to.meta.requiresAuth) {
+    if (!estaLogueado) return next('/login-usuario')
   }
 
   next()
