@@ -556,7 +556,7 @@ app.delete('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
 // 🆕 GET /api/citas — admin ve todas, veterinario solo ve las suyas
 app.get('/api/citas', verifyToken, cargarVeterinario, (req, res) => {
   let sql = `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
-            ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones,
+            ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones, ci.Estado,
             m.Nombre AS Nombre_mascota,
             u.Nombre AS Nombre_cliente,
             s.Nombre AS Nombre_servicio,
