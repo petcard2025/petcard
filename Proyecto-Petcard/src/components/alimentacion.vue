@@ -14,23 +14,6 @@ const plan = ref(null)
 const isLoading = ref(false)
 const errorMessage = ref('')
 const selectedTab = ref('plan')
-const nuevaComida = ref({ nombre: '', hora: '', cal: '' })
-const nuevoPlan = ref({
-  ID_servicio: 1,
-  Tipo_dieta: '',
-  Frecuencia: '',
-  Alergias: '',
-  Horario: '',
-  Calorias: '',
-  Suplementos: '',
-  Comidas: '',
-  Fecha_inicio: '',
-  Fecha_fin: '',
-  Observaciones: '',
-  Diagnostico: '',
-  Revision_nutricional: ''
-})
-const isEditingPlan = ref(false)
 
 const selectedPet = computed(() => mascotas.value.find(p => p.ID_mascota === selectedId.value) || null)
 const planLabel = computed(() => plan.value?.Tipo_dieta ? `Plan: ${plan.value.Tipo_dieta}` : 'Plan actual')
@@ -62,35 +45,6 @@ const petActividad = computed(() => plan.value?.Frecuencia || 'Moderada')
 function formatoFecha(fecha) {
   if (!fecha) return '—'
   return new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function resetNuevoPlan() {
-  nuevoPlan.value = {
-    ID_servicio: 1,
-    Tipo_dieta: '',
-    Frecuencia: '',
-    Alergias: '',
-    Horario: '',
-    Calorias: '',
-    Suplementos: '',
-    Comidas: '',
-    Fecha_inicio: '',
-    Fecha_fin: '',
-    Observaciones: '',
-    Diagnostico: '',
-    Revision_nutricional: ''
-  }
-}
-
-function iniciarEdicionPlan() {
-  if (!plan.value) return
-  nuevoPlan.value = { ...plan.value }
-  isEditingPlan.value = true
-}
-
-function cancelarEdicion() {
-  resetNuevoPlan()
-  isEditingPlan.value = false
 }
 
 async function fetchJson(endpoint, options = {}) {
@@ -176,123 +130,6 @@ async function cargarPlan(idMascota) {
   } finally {
     isLoading.value = false
   }
-}
-
-async function guardarPlan() {
-  if (!selectedId.value) {
-    errorMessage.value = 'Selecciona una mascota primero.'
-    return
-  }
-
-  if (!nuevoPlan.value.Tipo_dieta || !nuevoPlan.value.Frecuencia || !nuevoPlan.value.Horario || !nuevoPlan.value.Calorias || !nuevoPlan.value.Comidas || !nuevoPlan.value.Fecha_inicio || !nuevoPlan.value.Fecha_fin) {
-    errorMessage.value = 'Completa los campos obligatorios del plan antes de guardarlo.'
-    return
-  }
-
-  isLoading.value = true
-  errorMessage.value = ''
-  try {
-    const payload = {
-      ID_mascota: selectedId.value,
-      ID_servicio: nuevoPlan.value.ID_servicio,
-      Tipo_dieta: nuevoPlan.value.Tipo_dieta,
-      Frecuencia: nuevoPlan.value.Frecuencia,
-      Alergias: nuevoPlan.value.Alergias,
-      Horario: nuevoPlan.value.Horario,
-      Calorias: Number(nuevoPlan.value.Calorias) || 0,
-      Suplementos: nuevoPlan.value.Suplementos,
-      Comidas: nuevoPlan.value.Comidas,
-      Fecha_inicio: nuevoPlan.value.Fecha_inicio,
-      Fecha_fin: nuevoPlan.value.Fecha_fin,
-      Observaciones: nuevoPlan.value.Observaciones,
-      Diagnostico: nuevoPlan.value.Diagnostico,
-      Revision_nutricional: nuevoPlan.value.Revision_nutricional
-    }
-
-    if (isEditingPlan.value && plan.value) {
-      // Editar plan existente
-      await fetchJson(`/alimentacion/${plan.value.ID_planAlimentacion}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload)
-      })
-      plan.value = { ...payload, ID_planAlimentacion: plan.value.ID_planAlimentacion }
-      isEditingPlan.value = false
-    } else {
-      // Crear nuevo plan
-      const response = await fetchJson('/alimentacion', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-      plan.value = { ...payload, ID_planAlimentacion: response.ID_planAlimentacion }
-    }
-    resetNuevoPlan()
-  } catch (error) {
-    console.error('Error al guardar plan de alimentación:', error)
-    errorMessage.value = 'No se pudo guardar el plan de alimentación en la base de datos.'
-  } finally {
-    isLoading.value = false
-  }
-}
-
-async function actualizarPlan(updatedPlan) {
-  if (!updatedPlan?.ID_planAlimentacion) {
-    errorMessage.value = 'No hay plan para actualizar.'
-    return
-  }
-  isLoading.value = true
-  errorMessage.value = ''
-  try {
-    await fetchJson(`/alimentacion/${updatedPlan.ID_planAlimentacion}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        Tipo_dieta: updatedPlan.Tipo_dieta,
-        Frecuencia: updatedPlan.Frecuencia,
-        Alergias: updatedPlan.Alergias,
-        Horario: updatedPlan.Horario,
-        Calorias: updatedPlan.Calorias,
-        Suplementos: updatedPlan.Suplementos,
-        Comidas: updatedPlan.Comidas,
-        Fecha_inicio: updatedPlan.Fecha_inicio,
-        Fecha_fin: updatedPlan.Fecha_fin,
-        Observaciones: updatedPlan.Observaciones,
-        Diagnostico: updatedPlan.Diagnostico,
-        Revision_nutricional: updatedPlan.Revision_nutricional
-      })
-    })
-    plan.value = { ...updatedPlan }
-  } catch (error) {
-    console.error('Error al actualizar plan:', error)
-    errorMessage.value = 'No se pudo guardar el plan en la base de datos.'
-  } finally {
-    isLoading.value = false
-  }
-}
-
-async function agregarComida() {
-  if (!selectedId.value) {
-    errorMessage.value = 'Selecciona una mascota primero.'
-    return
-  }
-
-  if (!nuevaComida.value.nombre || !nuevaComida.value.hora || !nuevaComida.value.cal) {
-    errorMessage.value = 'Completa nombre, hora y calorías para agregar la comida.'
-    return
-  }
-
-  if (!plan.value) {
-    errorMessage.value = 'Primero crea un plan de alimentación completo antes de agregar comidas.'
-    return
-  }
-
-  const actualComidas = planItems.value.slice()
-  actualComidas.push(`${nuevaComida.value.nombre} ${nuevaComida.value.hora} ${nuevaComida.value.cal} cal`)
-
-  await actualizarPlan({
-    ...plan.value,
-    Comidas: actualComidas.join(', ')
-  })
-
-  nuevaComida.value = { nombre: '', hora: '', cal: '' }
 }
 
 function cambiarTab(tab) {
@@ -413,128 +250,11 @@ onMounted(async () => {
 
           <!-- TAB PLAN NUTRICIONAL -->
           <div id="plan-content" v-show="selectedTab === 'plan'">
-            <div v-if="!plan" class="card" style="margin-bottom:1rem; padding:1rem; background:#fff5f0; border:1px solid #fde2e2;">
-              <h4 style="margin:0 0 .5rem; color:#b91c1c;">Crea tu plan de alimentación desde cero</h4>
-              <p style="margin:0 0 1rem; color:#7f1d1d;">Completa todos los campos para guardar el plan en la base de datos.</p>
-
-              <div class="form-group" style="margin-bottom:.75rem;">
-                <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Tipo de dieta</label>
-                <input type="text" class="form-control" v-model="nuevoPlan.Tipo_dieta" placeholder="Balanceada, especial digestiva, etc." style="font-size:.85rem;" />
-              </div>
-              <div class="form-group" style="margin-bottom:.75rem;">
-                <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Frecuencia</label>
-                <input type="text" class="form-control" v-model="nuevoPlan.Frecuencia" placeholder="2 veces al día" style="font-size:.85rem;" />
-              </div>
-              <div class="form-row" style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:.75rem;">
-                <div style="flex:1; min-width:180px;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Horario</label>
-                  <input type="text" class="form-control" v-model="nuevoPlan.Horario" placeholder="8am - 6pm" style="font-size:.85rem;" />
-                </div>
-                <div style="flex:1; min-width:180px;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Calorías</label>
-                  <input type="number" class="form-control" v-model="nuevoPlan.Calorias" placeholder="1200" style="font-size:.85rem;" />
-                </div>
-              </div>
-              <div class="form-group" style="margin-bottom:.75rem;">
-                <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Alergias</label>
-                <input type="text" class="form-control" v-model="nuevoPlan.Alergias" placeholder="Ninguna" style="font-size:.85rem;" />
-              </div>
-              <div class="form-group" style="margin-bottom:.75rem;">
-                <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Suplementos</label>
-                <input type="text" class="form-control" v-model="nuevoPlan.Suplementos" placeholder="Vitaminas" style="font-size:.85rem;" />
-              </div>
-              <div class="form-group" style="margin-bottom:.75rem;">
-                <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Comidas</label>
-                <textarea class="form-control" v-model="nuevoPlan.Comidas" placeholder="Desayuno 8:00 400 cal, Almuerzo 1:00 500 cal" style="font-size:.85rem; min-height:90px;"></textarea>
-              </div>
-              <div class="form-row" style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:.75rem;">
-                <div style="flex:1; min-width:180px;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Fecha inicio</label>
-                  <input type="date" class="form-control" v-model="nuevoPlan.Fecha_inicio" style="font-size:.85rem;" />
-                </div>
-                <div style="flex:1; min-width:180px;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Fecha fin</label>
-                  <input type="date" class="form-control" v-model="nuevoPlan.Fecha_fin" style="font-size:.85rem;" />
-                </div>
-              </div>
-              <div class="form-group" style="margin-bottom:.75rem;">
-                <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Diagnóstico nutricional</label>
-                <textarea class="form-control" v-model="nuevoPlan.Diagnostico" placeholder="Breve diagnóstico nutricional" style="font-size:.85rem; min-height:70px;"></textarea>
-              </div>
-              <div class="form-group" style="margin-bottom:.75rem;">
-                <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Observaciones</label>
-                <textarea class="form-control" v-model="nuevoPlan.Observaciones" placeholder="Observaciones adicionales" style="font-size:.85rem; min-height:70px;"></textarea>
-              </div>
-              <div class="form-group" style="margin-bottom:.75rem;">
-                <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Revisión nutricional</label>
-                <textarea class="form-control" v-model="nuevoPlan.Revision_nutricional" placeholder="Revisión o seguimiento" style="font-size:.85rem; min-height:70px;"></textarea>
-              </div>
-              <button class="btn btn-primary" @click="guardarPlan">Guardar plan completo</button>
+            <div v-if="!plan" class="card" style="margin-bottom:1rem; padding:1.25rem; background:#fff5f0; border:1px solid #fde2e2; text-align:center;">
+              <h4 style="margin:0 0 .5rem; color:#b91c1c;">Aún no tienes un plan de alimentación asignado</h4>
+              <p style="margin:0; color:#7f1d1d;">Tu veterinario es quien crea y asigna el plan nutricional de tu mascota. Agenda una cita o consulta con tu veterinario para que registre el plan.</p>
             </div>
             <div v-else>
-              <div v-if="isEditingPlan" class="card" style="margin-bottom:1rem; padding:1rem; background:#f0f9ff; border:1px solid #bae6fd;">
-                <h4 style="margin:0 0 .5rem; color:#0369a1;">Editar plan de alimentación</h4>
-                <p style="margin:0 0 1rem; color:#0c4a6e;">Modifica los campos y guarda los cambios en la base de datos.</p>
-
-                <div class="form-group" style="margin-bottom:.75rem;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Tipo de dieta</label>
-                  <input type="text" class="form-control" v-model="nuevoPlan.Tipo_dieta" placeholder="Balanceada, especial digestiva, etc." style="font-size:.85rem;" />
-                </div>
-                <div class="form-group" style="margin-bottom:.75rem;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Frecuencia</label>
-                  <input type="text" class="form-control" v-model="nuevoPlan.Frecuencia" placeholder="2 veces al día" style="font-size:.85rem;" />
-                </div>
-                <div class="form-row" style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:.75rem;">
-                  <div style="flex:1; min-width:180px;">
-                    <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Horario</label>
-                    <input type="text" class="form-control" v-model="nuevoPlan.Horario" placeholder="8am - 6pm" style="font-size:.85rem;" />
-                  </div>
-                  <div style="flex:1; min-width:180px;">
-                    <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Calorías</label>
-                    <input type="number" class="form-control" v-model="nuevoPlan.Calorias" placeholder="1200" style="font-size:.85rem;" />
-                  </div>
-                </div>
-                <div class="form-group" style="margin-bottom:.75rem;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Alergias</label>
-                  <input type="text" class="form-control" v-model="nuevoPlan.Alergias" placeholder="Ninguna" style="font-size:.85rem;" />
-                </div>
-                <div class="form-group" style="margin-bottom:.75rem;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Suplementos</label>
-                  <input type="text" class="form-control" v-model="nuevoPlan.Suplementos" placeholder="Vitaminas" style="font-size:.85rem;" />
-                </div>
-                <div class="form-group" style="margin-bottom:.75rem;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Comidas</label>
-                  <textarea class="form-control" v-model="nuevoPlan.Comidas" placeholder="Desayuno 8:00 400 cal, Almuerzo 1:00 500 cal" style="font-size:.85rem; min-height:90px;"></textarea>
-                </div>
-                <div class="form-row" style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:.75rem;">
-                  <div style="flex:1; min-width:180px;">
-                    <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Fecha inicio</label>
-                    <input type="date" class="form-control" v-model="nuevoPlan.Fecha_inicio" style="font-size:.85rem;" />
-                  </div>
-                  <div style="flex:1; min-width:180px;">
-                    <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Fecha fin</label>
-                    <input type="date" class="form-control" v-model="nuevoPlan.Fecha_fin" style="font-size:.85rem;" />
-                  </div>
-                </div>
-                <div class="form-group" style="margin-bottom:.75rem;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Diagnóstico nutricional</label>
-                  <textarea class="form-control" v-model="nuevoPlan.Diagnostico" placeholder="Breve diagnóstico nutricional" style="font-size:.85rem; min-height:70px;"></textarea>
-                </div>
-                <div class="form-group" style="margin-bottom:.75rem;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Observaciones</label>
-                  <textarea class="form-control" v-model="nuevoPlan.Observaciones" placeholder="Observaciones adicionales" style="font-size:.85rem; min-height:70px;"></textarea>
-                </div>
-                <div class="form-group" style="margin-bottom:.75rem;">
-                  <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Revisión nutricional</label>
-                  <textarea class="form-control" v-model="nuevoPlan.Revision_nutricional" placeholder="Revisión o seguimiento" style="font-size:.85rem; min-height:70px;"></textarea>
-                </div>
-                <div style="display:flex; gap:.5rem;">
-                  <button class="btn btn-primary" @click="guardarPlan">Guardar cambios</button>
-                  <button class="btn btn-secondary" @click="cancelarEdicion">Cancelar</button>
-                </div>
-              </div>
-
-              <div v-else>
                 <!-- Stats -->
                 <div class="stats-row">
                 <div class="stat-box orange">
@@ -565,24 +285,6 @@ onMounted(async () => {
               <div style="font-size:.75rem; color:var(--muted);">Suplementos:</div>
               <div style="font-weight:700; font-size:.85rem;">{{ suplementos }}</div>
             </div>
-          </div>
-
-          <!-- Formulario para agregar comidas -->
-          <div style="background:#f9fafb; padding:1rem; border-radius:6px; margin-bottom:1.5rem;">
-            <h5 style="font-family:'Nunito',sans-serif; font-weight:700; margin:0 0 .75rem; color:var(--dark);">Agregar nuevo horario</h5>
-            <div class="form-group" style="margin-bottom:.5rem;">
-              <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Nombre</label>
-              <input type="text" class="form-control" v-model="nuevaComida.nombre" placeholder="Ej: Desayuno" style="font-size:.85rem;"/>
-            </div>
-            <div class="form-group" style="margin-bottom:.5rem;">
-              <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Hora</label>
-              <input type="time" class="form-control" v-model="nuevaComida.hora" style="font-size:.85rem;"/>
-            </div>
-            <div class="form-group" style="margin-bottom:.75rem;">
-              <label style="display:block; font-size:.85rem; color:var(--muted); margin-bottom:.25rem;">Calorías</label>
-              <input type="text" class="form-control" v-model="nuevaComida.cal" placeholder="Ej: 400" style="font-size:.85rem;"/>
-            </div>
-            <button class="btn btn-primary btn-full" @click.prevent="agregarComida">Agregar Comida</button>
           </div>
 
           <!-- Horarios -->
@@ -635,7 +337,6 @@ onMounted(async () => {
           <!-- Observaciones -->
           <h4 style="font-family:'Nunito',sans-serif; font-weight:800; margin:1.25rem 0 .75rem;">Observaciones</h4>
           <div class="observaciones">{{ observaciones }}</div>
-          </div>
           </div><!-- Cierre plan-content -->
 
           <!-- TAB HISTORIAL DE CAMBIOS -->

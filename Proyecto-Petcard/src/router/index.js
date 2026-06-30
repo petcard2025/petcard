@@ -22,6 +22,7 @@ import TestAPI from '../components/test-api.vue'
 // ── Vistas del veterinario ────────────────────────────────
 import VeterinarioInicio from '../components/veterinario-inicio.vue'
 import VeterinarioCitas from '../components/veterinario-citas.vue'
+import VeterinarioAlimentacion from '../components/veterinario-alimentacion.vue'
 
 const routes = [
   // ── Rutas públicas ──────────────────────────────────────
@@ -55,6 +56,7 @@ const routes = [
   // ── Rutas privadas de veterinario ────────────────────────
   { path: '/veterinario-inicio', component: VeterinarioInicio, meta: { requiresVet: true } },
   { path: '/veterinario-citas',  component: VeterinarioCitas,  meta: { requiresVet: true } },
+  { path: '/veterinario-alimentacion', component: VeterinarioAlimentacion, meta: { requiresVet: true } },
 ]
 
 const router = createRouter({

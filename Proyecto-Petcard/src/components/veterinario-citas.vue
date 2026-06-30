@@ -162,6 +162,7 @@ async function guardarObservaciones() {
     <ul class="nav-links" style="margin-left:1.5rem;">
       <li><router-link to="/veterinario-inicio">Inicio</router-link></li>
       <li><router-link to="/veterinario-citas" class="active">Mis Citas</router-link></li>
+      <li><router-link to="/veterinario-alimentacion">Alimentación</router-link></li>
     </ul>
     <div class="nav-actions" style="margin-left:auto;">
       <button class="btn btn-danger btn-sm" @click="cerrarSesion">Cerrar Sesión</button>

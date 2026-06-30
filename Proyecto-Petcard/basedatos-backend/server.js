@@ -74,7 +74,7 @@ function verificarVetAtendioMascotaServicio(req, res, next) {
 
   // Si viene un :id de plan existente (PUT), primero hay que leer el plan para saber su mascota/servicio
   if (req.params.id) {
-    return db.query(
+    db.query(
       'SELECT ID_mascota, ID_servicio FROM planalimentacion WHERE ID_planAlimentacion = ?',
       [req.params.id],
       (err, rows) => {
@@ -83,6 +83,7 @@ function verificarVetAtendioMascotaServicio(req, res, next) {
         verificar(rows[0].ID_mascota, rows[0].ID_servicio)
       }
     )
+    return
   }
 
   // Si es creacion (POST), los datos vienen en el body
