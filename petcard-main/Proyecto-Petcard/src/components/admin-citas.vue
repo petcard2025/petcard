@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
@@ -21,6 +21,43 @@ const mostrarModalEliminar = ref(false)
 const citaSeleccionada = ref(null)
 const citaAEliminar = ref(null)
 
+// 🆕 Mismas horas fijas que en la vista del cliente, para mantener consistencia
+const TODAS_LAS_HORAS = [
+  '08:00 AM',
+  '09:00 AM',
+  '10:00 AM',
+  '11:00 AM',
+  '02:00 PM',
+  '03:00 PM',
+  '04:00 PM'
+]
+
+const horasDisponiblesNuevo = ref(TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true })))
+const cargandoHorasNuevo = ref(false)
+const horasDisponiblesEditar = ref(TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true })))
+const cargandoHorasEditar = ref(false)
+
+function getToken() {
+  return localStorage.getItem('petcard_token')
+}
+
+// 🆕 Convierte cualquier formato de hora a "HH:MM" 24h para comparar de forma confiable
+function horaA24(horaStr) {
+  if (!horaStr) return ''
+  const str = String(horaStr).trim()
+  const ampmMatch = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+  if (ampmMatch) {
+    let h = parseInt(ampmMatch[1], 10)
+    const m = ampmMatch[2]
+    const ap = ampmMatch[3].toUpperCase()
+    if (ap === 'PM' && h !== 12) h += 12
+    if (ap === 'AM' && h === 12) h = 0
+    return `${String(h).padStart(2, '0')}:${m}`
+  }
+  const parts = str.split(':')
+  return `${parts[0].padStart(2, '0')}:${parts[1]}`
+}
+
 const nuevaCita = ref({
   ID_cliente: '', ID_mascota: '', ID_servicio: '',
   ID_veterinario: '', Fecha: '', Hora: '', Motivo: '', Observaciones: ''
@@ -37,7 +74,9 @@ async function cargarCitas() {
   cargando.value = true
   error.value = ''
   try {
-    const res = await fetch(`${API}/citas`)
+    const res = await fetch(`${API}/citas`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    })
     if (!res.ok) throw new Error()
     citas.value = await res.json()
   } catch {
@@ -49,7 +88,9 @@ async function cargarCitas() {
 
 async function cargarMascotas() {
   try {
-    const res = await fetch(`${API}/mascotas`)
+    const res = await fetch(`${API}/mascotas`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    })
     mascotas.value = await res.json()
   } catch {}
 }
@@ -63,10 +104,74 @@ async function cargarServicios() {
 
 async function cargarVeterinarios() {
   try {
-    const res = await fetch(`${API}/veterinarios`)
+    const res = await fetch(`${API}/veterinarios`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    })
     veterinarios.value = await res.json()
   } catch {}
 }
+
+// 🆕 Carga las horas ocupadas para el modal de Nueva Cita y oculta las que ya están tomadas
+async function cargarHorasNuevo() {
+  if (!nuevaCita.value.ID_veterinario || !nuevaCita.value.Fecha) {
+    horasDisponiblesNuevo.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    return
+  }
+  cargandoHorasNuevo.value = true
+  try {
+    const res = await fetch(
+      `${API}/citas/horas-ocupadas?ID_veterinario=${nuevaCita.value.ID_veterinario}&Fecha=${nuevaCita.value.Fecha}`,
+      { headers: { Authorization: `Bearer ${getToken()}` } }
+    )
+    const data = await res.json()
+    const ocupadas24 = (data.horasOcupadas || []).map(horaA24)
+    horasDisponiblesNuevo.value = TODAS_LAS_HORAS.map(h => ({
+      hora: h,
+      disponible: !ocupadas24.includes(horaA24(h))
+    }))
+    if (nuevaCita.value.Hora && ocupadas24.includes(horaA24(nuevaCita.value.Hora))) {
+      nuevaCita.value.Hora = ''
+    }
+  } catch {
+    horasDisponiblesNuevo.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+  } finally {
+    cargandoHorasNuevo.value = false
+  }
+}
+
+// 🆕 Igual que arriba pero para el modal de Editar (excluyendo la propia cita que se está editando)
+async function cargarHorasEditar() {
+  if (!citaSeleccionada.value?.ID_veterinario || !citaSeleccionada.value?.Fecha) {
+    horasDisponiblesEditar.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    return
+  }
+  cargandoHorasEditar.value = true
+  try {
+    const fechaSolo = String(citaSeleccionada.value.Fecha).slice(0, 10)
+    const res = await fetch(
+      `${API}/citas/horas-ocupadas?ID_veterinario=${citaSeleccionada.value.ID_veterinario}&Fecha=${fechaSolo}`,
+      { headers: { Authorization: `Bearer ${getToken()}` } }
+    )
+    const data = await res.json()
+    let ocupadas24 = (data.horasOcupadas || []).map(horaA24)
+    // No ocultar la hora que la propia cita ya tiene asignada
+    const horaActual24 = horaA24(citaSeleccionada.value.Hora)
+    ocupadas24 = ocupadas24.filter(h => h !== horaActual24)
+    horasDisponiblesEditar.value = TODAS_LAS_HORAS.map(h => ({
+      hora: h,
+      disponible: !ocupadas24.includes(horaA24(h))
+    }))
+  } catch {
+    horasDisponiblesEditar.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+  } finally {
+    cargandoHorasEditar.value = false
+  }
+}
+
+watch(() => nuevaCita.value.ID_veterinario, cargarHorasNuevo)
+watch(() => nuevaCita.value.Fecha, cargarHorasNuevo)
+watch(() => citaSeleccionada.value?.ID_veterinario, cargarHorasEditar)
+watch(() => citaSeleccionada.value?.Fecha, cargarHorasEditar)
 
 const citasFiltradas = computed(() => {
   return citas.value.filter(c => {
@@ -89,15 +194,22 @@ function badgeClass(estado) {
 }
 
 function abrirEditar(cita) {
-  citaSeleccionada.value = { ...cita }
+  citaSeleccionada.value = { ...cita, Fecha: String(cita.Fecha).slice(0, 10) }
   mostrarModalEditar.value = true
+  cargarHorasEditar()
+}
+
+function abrirNuevo() {
+  nuevaCita.value = { ID_cliente: '', ID_mascota: '', ID_servicio: '', ID_veterinario: '', Fecha: '', Hora: '', Motivo: '', Observaciones: '' }
+  horasDisponiblesNuevo.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+  mostrarModalNuevo.value = true
 }
 
 async function guardarEdicion() {
   try {
     const res = await fetch(`${API}/citas/${citaSeleccionada.value.ID_cita}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(citaSeleccionada.value)
     })
     if (!res.ok) throw new Error()
@@ -115,7 +227,10 @@ function confirmarEliminar(cita) {
 
 async function eliminarCita() {
   try {
-    const res = await fetch(`${API}/citas/${citaAEliminar.value.ID_cita}`, { method: 'DELETE' })
+    const res = await fetch(`${API}/citas/${citaAEliminar.value.ID_cita}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${getToken()}` }
+    })
     if (!res.ok) throw new Error()
     await cargarCitas()
     mostrarModalEliminar.value = false
@@ -131,7 +246,7 @@ async function crearCita() {
   try {
     const res = await fetch(`${API}/citas`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(nuevaCita.value)
     })
     if (!res.ok) throw new Error()
@@ -139,7 +254,10 @@ async function crearCita() {
     nuevaCita.value = { ID_cliente: '', ID_mascota: '', ID_servicio: '', ID_veterinario: '', Fecha: '', Hora: '', Motivo: '', Observaciones: '' }
     mostrarModalNuevo.value = false
   } catch {
-    alert('Error al crear la cita.')
+    // 🆕 Si el conflicto es por horario ocupado, no mostramos alerta:
+    // solo refrescamos la grilla para que esa hora desaparezca de las opciones.
+    nuevaCita.value.Hora = ''
+    await cargarHorasNuevo()
   }
 }
 </script>
@@ -176,11 +294,11 @@ async function crearCita() {
         <div class="gestion-sub">Administra todas las citas veterinarias</div>
       </div>
       <div class="gestion-btns">
-        <button class="btn btn-success btn-sm" @click="mostrarModalNuevo = true">+ Nueva Cita</button>
+        <button class="btn btn-success btn-sm" @click="abrirNuevo">+ Nueva Cita</button>
       </div>
     </div>
 
-    <div v-if="error" style="background:#fee2e2;color:#dc2626;padding:.75rem 1rem;border-radius:8px;margin-bottom:1rem;">⚠️ {{ error }}</div>
+    <div v-if="error" class="alert alert-danger"><span>{{ error }}</span></div>
 
     <div class="search-filter" style="margin-bottom:1.25rem;">
       <div class="search-wrap">
@@ -255,8 +373,31 @@ async function crearCita() {
         </select>
         <label>Fecha</label>
         <input type="date" v-model="nuevaCita.Fecha" />
-        <label>Hora</label>
-        <input type="time" v-model="nuevaCita.Hora" />
+
+        <label>
+          Hora
+          <span v-if="cargandoHorasNuevo" style="font-weight:400;color:#888;font-size:.78rem;"> Cargando disponibilidad...</span>
+        </label>
+        <div v-if="!nuevaCita.ID_veterinario || !nuevaCita.Fecha" class="horas-hint">
+          Selecciona veterinario y fecha para ver los horarios disponibles
+        </div>
+        <div v-else class="horas-grid">
+          <template v-for="item in horasDisponiblesNuevo" :key="item.hora">
+            <button
+              v-if="item.disponible"
+              type="button"
+              class="hora-btn hora-disponible"
+              :class="{ 'hora-seleccionada': nuevaCita.Hora === item.hora }"
+              @click="nuevaCita.Hora = item.hora"
+            >
+              {{ item.hora }}
+            </button>
+          </template>
+          <div v-if="horasDisponiblesNuevo.every(h => !h.disponible)" class="horas-llenas">
+            📅 No hay horarios disponibles para este día con este veterinario.
+          </div>
+        </div>
+
         <label>Motivo</label>
         <input v-model="nuevaCita.Motivo" placeholder="Motivo de la cita..." />
         <label>Observaciones</label>
@@ -264,7 +405,7 @@ async function crearCita() {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary btn-sm" @click="mostrarModalNuevo = false">Cancelar</button>
-        <button class="btn btn-success btn-sm" @click="crearCita">Crear</button>
+        <button class="btn btn-success btn-sm" :disabled="!nuevaCita.Hora" @click="crearCita">Crear</button>
       </div>
     </div>
   </div>
@@ -284,8 +425,31 @@ async function crearCita() {
         </select>
         <label>Fecha</label>
         <input type="date" v-model="citaSeleccionada.Fecha" />
-        <label>Hora</label>
-        <input type="time" v-model="citaSeleccionada.Hora" />
+
+        <label>
+          Hora
+          <span v-if="cargandoHorasEditar" style="font-weight:400;color:#888;font-size:.78rem;"> Cargando disponibilidad...</span>
+        </label>
+        <div v-if="!citaSeleccionada.ID_veterinario || !citaSeleccionada.Fecha" class="horas-hint">
+          Selecciona veterinario y fecha para ver los horarios disponibles
+        </div>
+        <div v-else class="horas-grid">
+          <template v-for="item in horasDisponiblesEditar" :key="item.hora">
+            <button
+              v-if="item.disponible"
+              type="button"
+              class="hora-btn hora-disponible"
+              :class="{ 'hora-seleccionada': citaSeleccionada.Hora === item.hora }"
+              @click="citaSeleccionada.Hora = item.hora"
+            >
+              {{ item.hora }}
+            </button>
+          </template>
+          <div v-if="horasDisponiblesEditar.every(h => !h.disponible)" class="horas-llenas">
+            📅 No hay otros horarios disponibles para este día con este veterinario.
+          </div>
+        </div>
+
         <label>Motivo</label>
         <input v-model="citaSeleccionada.Motivo" />
         <label>Observaciones</label>
@@ -293,7 +457,7 @@ async function crearCita() {
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary btn-sm" @click="mostrarModalEditar = false">Cancelar</button>
-        <button class="btn btn-success btn-sm" @click="guardarEdicion">Guardar</button>
+        <button class="btn btn-success btn-sm" :disabled="!citaSeleccionada.Hora" @click="guardarEdicion">Guardar</button>
       </div>
     </div>
   </div>
@@ -319,4 +483,90 @@ async function crearCita() {
 .modal-body label { font-weight:600;font-size:.85rem;color:#555;margin-top:.25rem; }
 .modal-body input,.modal-body select,.modal-body textarea { padding:.5rem .75rem;border:1px solid #ddd;border-radius:6px;font-size:.95rem;width:100%;box-sizing:border-box; }
 .modal-footer { display:flex;gap:.75rem;justify-content:flex-end; }
+
+/* 🆕 Alerta de error general, mismo estilo que la vista del cliente */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  font-size: .9rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  border: 1.5px solid;
+}
+.alert-danger {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+.alert-danger::before {
+  content: "⚠️";
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+/* 🆕 Selector de horas dentro de los modales: mismo comportamiento que en Citas.vue,
+   las horas ocupadas simplemente no se renderizan (ver v-if="item.disponible") */
+.horas-hint {
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: .7rem .9rem;
+  font-size: .82rem;
+  color: #64748b;
+  text-align: center;
+}
+
+.horas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
+  gap: .5rem;
+  padding: .75rem;
+  background: #fafbff;
+  border: 1px solid #e7e9f5;
+  border-radius: 10px;
+}
+
+.hora-btn {
+  padding: .5rem .4rem;
+  border-radius: 8px;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all .15s ease;
+}
+
+.hora-disponible {
+  background: #fff;
+  border-color: #c7e8d0;
+  color: #15803d;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.hora-disponible:hover {
+  background: #f0fdf4;
+  border-color: #4ade80;
+  transform: translateY(-1px);
+}
+
+.hora-seleccionada {
+  background: #7c3aed !important;
+  border-color: #7c3aed !important;
+  color: #fff !important;
+  box-shadow: 0 4px 10px rgba(124,58,237,.3);
+}
+
+.horas-llenas {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: .85rem;
+  font-size: .8rem;
+  font-weight: 600;
+  color: #92400e;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  border-radius: 8px;
+  border: 1.5px dashed #fbbf24;
+}
 </style>

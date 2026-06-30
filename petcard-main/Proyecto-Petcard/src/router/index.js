@@ -19,6 +19,9 @@ import LoginAdmin from '../components/login-admin.vue'
 import RegistroUsuario from '../components/registro-usuario.vue'
 import RegistroAdmin from '../components/registro-admin.vue'
 import TestAPI from '../components/test-api.vue'
+// ── Vistas del veterinario ────────────────────────────────
+import VeterinarioInicio from '../components/veterinario-inicio.vue'
+import VeterinarioCitas from '../components/veterinario-citas.vue'
 
 const routes = [
   // ── Rutas públicas ──────────────────────────────────────
@@ -40,7 +43,6 @@ const routes = [
   { path: '/mis-mascotas',   component: MisMascotas,    meta: { requiresAuth: true } },
 
   // ── Rutas privadas de administrador ─────────────────────
-  // SEGURIDAD: requiresAdmin verifica rol en el guard, independiente del frontend
   { path: '/admin',                component: AdminInicio,         meta: { requiresAdmin: true } },
   { path: '/admin-inicio',         component: AdminInicio,         meta: { requiresAdmin: true } },
   { path: '/admin-citas',          component: AdminCitas,          meta: { requiresAdmin: true } },
@@ -49,6 +51,10 @@ const routes = [
   { path: '/admin-notificaciones', component: AdminNotificaciones, meta: { requiresAdmin: true } },
   { path: '/admin-servicios',      component: AdminServicios,      meta: { requiresAdmin: true } },
   { path: '/admin-perfil',         component: AdminPerfil,         meta: { requiresAdmin: true } },
+
+  // ── Rutas privadas de veterinario ────────────────────────
+  { path: '/veterinario-inicio', component: VeterinarioInicio, meta: { requiresVet: true } },
+  { path: '/veterinario-citas',  component: VeterinarioCitas,  meta: { requiresVet: true } },
 ]
 
 const router = createRouter({
@@ -57,7 +63,6 @@ const router = createRouter({
 })
 
 // ── Guard global de navegación ───────────────────────────
-// SEGURIDAD: verifica sesión y rol antes de cada navegación
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('petcard_token')
   let usuario = null
@@ -71,22 +76,16 @@ router.beforeEach((to, from, next) => {
   const estaLogueado = !!(token || usuario)
   const rolUsuario = usuario?.Rol?.toLowerCase()
   const esAdmin = rolUsuario === 'administrador' || rolUsuario === 'admin'
+  const esVeterinario = rolUsuario === 'veterinario'
 
   if (to.meta.requiresAdmin) {
-    // Ruta de admin: debe haber sesión Y ser admin
-    if (!estaLogueado) {
-      return next('/login-admin')
-    }
-    if (!esAdmin) {
-      // Usuario normal intentando entrar al panel admin → redirigir a inicio
-      return next('/inicio')
-    }
+    if (!estaLogueado) return next('/login-admin')
+    if (!esAdmin) return next('/inicio')
+  } else if (to.meta.requiresVet) {
+    if (!estaLogueado) return next('/login-admin')
+    if (!esVeterinario && !esAdmin) return next('/inicio')
   } else if (to.meta.requiresAuth) {
-    // Ruta privada de usuario: solo necesita estar logueado
-    if (!estaLogueado) {
-      return next('/login-usuario')
-    }
-    // Admin intentando entrar a zona de usuario → permitir (pueden usar la app normalmente)
+    if (!estaLogueado) return next('/login-usuario')
   }
 
   next()

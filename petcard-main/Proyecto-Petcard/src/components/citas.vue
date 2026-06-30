@@ -33,6 +33,7 @@ const TODAS_LAS_HORAS = [
 
 const horasDisponibles = ref(TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true })))
 const cargandoHoras = ref(false)
+const resaltarHoras = ref(false) // 🆕 resalta el recuadro de horas cuando es el único campo faltante
 
 const form = reactive({
   mascota: '',
@@ -51,6 +52,24 @@ const fechaMin = ref((() => {
   return `${y}-${m}-${d}`
 })())
 
+// 🆕 Convierte cualquier formato de hora ("08:00 AM", "08:00:00", "20:00") a "HH:MM" 24h,
+// para poder comparar de forma confiable sin importar cómo la haya guardado el admin o el cliente.
+function horaA24(horaStr) {
+  if (!horaStr) return ''
+  const str = String(horaStr).trim()
+  const ampmMatch = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+  if (ampmMatch) {
+    let h = parseInt(ampmMatch[1], 10)
+    const m = ampmMatch[2]
+    const ap = ampmMatch[3].toUpperCase()
+    if (ap === 'PM' && h !== 12) h += 12
+    if (ap === 'AM' && h === 12) h = 0
+    return `${String(h).padStart(2, '0')}:${m}`
+  }
+  const parts = str.split(':')
+  return `${parts[0].padStart(2, '0')}:${parts[1]}`
+}
+
 async function cargarHorasDisponibles() {
   if (!form.veterinario || !form.fecha) {
     horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
@@ -64,12 +83,12 @@ async function cargarHorasDisponibles() {
       { headers: { Authorization: `Bearer ${token}` } }
     )
     const data = await res.json()
-    const ocupadas = data.horasOcupadas || []
+    const ocupadas24 = (data.horasOcupadas || []).map(horaA24)
     horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({
       hora: h,
-      disponible: !ocupadas.includes(h)
+      disponible: !ocupadas24.includes(horaA24(h))
     }))
-    if (form.hora && ocupadas.includes(form.hora)) {
+    if (form.hora && ocupadas24.includes(horaA24(form.hora))) {
       form.hora = ''
     }
   } catch (e) {
@@ -197,12 +216,32 @@ function resetForm() {
 }
 
 function validateForm() {
+  resaltarHoras.value = false
   if (!clienteActual.value) {
     errorMessage.value = 'No se encontró información de cliente.'
     return false
   }
-  if (!form.mascota || !form.servicio || !form.veterinario || !form.fecha || !form.hora) {
-    errorMessage.value = 'Completa todos los campos obligatorios.'
+  // 🆕 Mensajes específicos por campo, para que quede claro qué falta exactamente
+  if (!form.mascota) {
+    errorMessage.value = 'Selecciona una mascota.'
+    return false
+  }
+  if (!form.servicio) {
+    errorMessage.value = 'Selecciona un servicio.'
+    return false
+  }
+  if (!form.veterinario) {
+    errorMessage.value = 'Selecciona un veterinario.'
+    return false
+  }
+  if (!form.fecha) {
+    errorMessage.value = 'Selecciona una fecha.'
+    return false
+  }
+  if (!form.hora) {
+    errorMessage.value = 'Falta seleccionar la hora: haz clic en uno de los horarios disponibles.'
+    resaltarHoras.value = true
+    setTimeout(() => { resaltarHoras.value = false }, 2000)
     return false
   }
   const [y, m, d] = form.fecha.split('-').map(Number)
@@ -246,7 +285,15 @@ async function agendarCita() {
     resetForm()
   } catch (error) {
     console.error('Error al agendar cita:', error)
-    errorMessage.value = error.message || 'Error al registrar la cita.'
+    // 🆕 Si el horario se ocupó justo antes de confirmar (carrera entre usuarios),
+    // no mostramos ninguna alerta: solo limpiamos la hora y refrescamos la grilla
+    // para que esa hora desaparezca de las opciones disponibles.
+    if (error.message && error.message.toLowerCase().includes('ya tiene una cita agendada')) {
+      form.hora = ''
+      await cargarHorasDisponibles()
+    } else {
+      errorMessage.value = error.message || 'Error al registrar la cita.'
+    }
   } finally {
     isLoading.value = false
   }
@@ -304,8 +351,8 @@ onMounted(async () => {
       <div class="card">
         <div class="card-title" style="color:var(--purple);">Agendar Nueva Cita</div>
 
-        <div v-if="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
-        <div v-if="successMessage" class="alert alert-success">{{ successMessage }}</div>
+        <div v-if="errorMessage" class="alert alert-danger"><span>{{ errorMessage }}</span></div>
+        <div v-if="successMessage" class="alert alert-success"><span>{{ successMessage }}</span></div>
 
         <div v-if="mascotas.length === 0" style="text-align:center; padding:2.5rem 1rem;">
           <div style="font-size:3.5rem; margin-bottom:1rem;">🐾</div>
@@ -361,7 +408,7 @@ onMounted(async () => {
               Selecciona veterinario y fecha para ver los horarios disponibles
             </div>
 
-            <div v-else class="horas-grid">
+            <div v-else class="horas-grid" :class="{ 'horas-grid-alerta': resaltarHoras }">
               <template v-for="item in horasDisponibles" :key="item.hora">
                 <button
                   v-if="item.disponible"
@@ -375,9 +422,11 @@ onMounted(async () => {
               </template>
               <div
                 v-if="horasDisponibles.every(h => !h.disponible)"
-                style="grid-column:1/-1; text-align:center; padding:.85rem; font-size:.85rem; color:var(--muted); background:#f8fafc; border-radius:8px; border:1.5px dashed #cbd5e1;"
+                class="horas-llenas"
               >
+                <span style="font-size:1.3rem;">📅</span>
                 No hay horarios disponibles para este día con este veterinario.
+                <br><span style="font-weight:400; color:var(--muted);">Prueba con otra fecha o elige otro veterinario.</span>
               </div>
             </div>
           </div>
@@ -502,6 +551,50 @@ onMounted(async () => {
 .btn-logout { background-color: #dc3545; border: 1px solid #dc3545; }
 .btn-logout:hover { background-color: #c82333; border-color: #c82333; }
 
+/* 🆕 Alertas con icono y animación, mas llamativas que el texto plano anterior */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  font-size: .9rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  border: 1.5px solid;
+  animation: shakeIn .35s ease;
+}
+
+@keyframes shakeIn {
+  0%   { transform: translateX(0); opacity: 0; }
+  25%  { transform: translateX(-6px); }
+  50%  { transform: translateX(6px); }
+  75%  { transform: translateX(-3px); }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+.alert-danger {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+.alert-danger::before {
+  content: "⚠️";
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.alert-success {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border-color: #86efac;
+  color: #166534;
+}
+.alert-success::before {
+  content: "✅";
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
 .horas-hint {
   background: #f8fafc;
   border: 1.5px dashed #cbd5e1;
@@ -512,11 +605,29 @@ onMounted(async () => {
   text-align: center;
 }
 
+/* 🆕 Contenedor de la grilla con mas jerarquia visual, tipo panel de clinica */
 .horas-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: .5rem;
-  margin-top: .4rem;
+  gap: .6rem;
+  margin-top: .5rem;
+  padding: .9rem;
+  background: #fafbff;
+  border: 1px solid #e7e9f5;
+  border-radius: 12px;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+/* 🆕 Resalta el recuadro cuando el usuario intenta agendar sin elegir hora */
+.horas-grid-alerta {
+  border: 2px solid #ef4444 !important;
+  box-shadow: 0 0 0 4px rgba(239,68,68,.12);
+  animation: pulseAlerta 1s ease 2;
+}
+
+@keyframes pulseAlerta {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(239,68,68,.12); }
+  50% { box-shadow: 0 0 0 7px rgba(239,68,68,.18); }
 }
 
 .hora-btn {
@@ -535,15 +646,18 @@ onMounted(async () => {
   line-height: 1.2;
 }
 
+/* 🆕 Solo se renderizan las horas disponibles (las ocupadas no aparecen en el DOM, ver v-if en template) */
 .hora-disponible {
-  background: #f0fdf4;
-  border-color: #86efac;
-  color: #166534;
+  background: #fff;
+  border-color: #c7e8d0;
+  color: #15803d;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
 }
 .hora-disponible:hover {
-  background: #dcfce7;
+  background: #f0fdf4;
   border-color: #4ade80;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(34,197,94,.15);
 }
 
 .hora-seleccionada {
@@ -551,6 +665,21 @@ onMounted(async () => {
   border-color: #7c3aed !important;
   color: #fff !important;
   box-shadow: 0 4px 12px rgba(124, 58, 237, .3);
+  transform: translateY(-1px);
+}
+
+/* 🆕 Recuadro cuando no quedan horarios disponibles ese día con ese veterinario */
+.horas-llenas {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 1.1rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: #92400e;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  border-radius: 10px;
+  border: 1.5px dashed #fbbf24;
+  line-height: 1.6;
 }
 
 .cita-item-card { padding: .75rem 0; border-bottom: 1px solid var(--border); }

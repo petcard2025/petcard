@@ -47,13 +47,35 @@ const handleLogin = async () => {
     const data = await loginAPI.loginUsuario(correo, contrasena)
 
     if (data.message === 'Login exitoso') {
-      successMessage.value = `¡Bienvenido/a, ${data.usuario.Nombre}!`
-      localStorage.setItem('petcard_usuario_actual', JSON.stringify(data.usuario))
       console.log('✅ Login exitoso')
 
-      setTimeout(() => {
-        router.push('/inicio')
-      }, 1500)
+      // 🆕 Guardar usuario y token en localStorage
+      localStorage.setItem('petcard_usuario_actual', JSON.stringify(data.usuario))
+      if (data.token) {
+        localStorage.setItem('petcard_token', data.token)
+      }
+
+      // 🆕 Verificar el rol y redirigir al panel correspondiente
+      const rol = data.usuario?.Rol?.toLowerCase()
+
+      if (rol === 'administrador' || rol === 'admin') {
+        localStorage.setItem('petcard_admin_actual', JSON.stringify(data.usuario))
+        successMessage.value = `¡Bienvenido Admin ${data.usuario.Nombre}! Redirigiendo...`
+        setTimeout(() => {
+          router.push('/admin-inicio')
+        }, 1500)
+      } else if (rol === 'veterinario') {
+        localStorage.setItem('petcard_admin_actual', JSON.stringify(data.usuario))
+        successMessage.value = `¡Bienvenido Dr. ${data.usuario.Nombre}! Redirigiendo...`
+        setTimeout(() => {
+          router.push('/veterinario-inicio')
+        }, 1500)
+      } else {
+        successMessage.value = `¡Bienvenido/a, ${data.usuario.Nombre}!`
+        setTimeout(() => {
+          router.push('/inicio')
+        }, 1500)
+      }
     } else {
       errorMessage.value = data.error || 'Credenciales incorrectas'
       console.log('❌ Error:', data.error)

@@ -38,6 +38,57 @@ function verifyAdmin(req, res, next) {
   next()
 }
 
+// 🆕 ── Middleware: carga ID_veterinario y Especialidad del usuario logueado (si es veterinario) ──
+function cargarVeterinario(req, res, next) {
+  if (req.usuario.Rol !== 'veterinario') return next()
+  db.query(
+    'SELECT ID_veterinario, Cargo, Especialidad FROM veterinario WHERE ID_usuario = ?',
+    [req.usuario.ID_usuario],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (rows.length === 0) return res.status(403).json({ error: 'No se encontro perfil de veterinario asociado.' })
+      req.veterinario = rows[0]
+      next()
+    }
+  )
+}
+
+// 🆕 ── Middleware: verifica que el veterinario haya atendido esa mascota con ese servicio ──
+// (usado para que un veterinario solo edite planes de alimentacion de mascotas/servicios que el atendio)
+function verificarVetAtendioMascotaServicio(req, res, next) {
+  if (req.usuario.Rol !== 'veterinario') return next() // admin pasa libre
+
+  const verificar = (idMascota, idServicio) => {
+    db.query(
+      'SELECT 1 FROM cita WHERE ID_veterinario = ? AND ID_mascota = ? AND ID_servicio = ? LIMIT 1',
+      [req.veterinario.ID_veterinario, idMascota, idServicio],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message })
+        if (rows.length === 0) {
+          return res.status(403).json({ error: 'Solo puedes modificar planes de alimentacion de mascotas y servicios que has atendido.' })
+        }
+        next()
+      }
+    )
+  }
+
+  // Si viene un :id de plan existente (PUT), primero hay que leer el plan para saber su mascota/servicio
+  if (req.params.id) {
+    return db.query(
+      'SELECT ID_mascota, ID_servicio FROM planalimentacion WHERE ID_planAlimentacion = ?',
+      [req.params.id],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message })
+        if (rows.length === 0) return res.status(404).json({ error: 'Plan no encontrado' })
+        verificar(rows[0].ID_mascota, rows[0].ID_servicio)
+      }
+    )
+  }
+
+  // Si es creacion (POST), los datos vienen en el body
+  verificar(req.body.ID_mascota, req.body.ID_servicio)
+}
+
 const { google } = require('googleapis')
 
 async function getCalendarClient() {
@@ -164,12 +215,20 @@ const forgotPasswordLimiter = rateLimit({
   message: { error: 'Demasiadas solicitudes de recuperacion. Intenta de nuevo en 1 hora.' }
 })
 
+// ✅ FIX (antes: charset: 'utf8mb4_general_ci'):
+// mysql2 espera aquí el nombre de un CHARSET (ej. 'utf8mb4'), no una COLLATION
+// (ej. 'utf8mb4_general_ci'). Pasarle una collation hacía que la negociación de
+// codificación fallara silenciosamente y los caracteres con tildes/ñ llegaran
+// corruptos (ej. "Antirrábica" -> "Antirr??bica"), aunque los datos en la base
+// estaban guardados correctamente en utf8mb4. Si necesitas fijar la collation de
+// la conexión, usa la opción separada `collation`, no `charset`.
 const db = mysql.createConnection({
   host: process.env.DB_HOST || '127.0.0.1',
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'petcard'
+  database: process.env.DB_NAME || 'petcard',
+  charset: 'utf8mb4'
 })
 
 db.connect(err => {
@@ -287,7 +346,9 @@ app.post('/api/login-admin', loginLimiter, async (req, res) => {
           isPasswordValid = Contrasena === storedPassword
         }
         if (!isPasswordValid) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-        if (usuario.Rol !== 'administrador') return res.status(403).json({ error: 'Esta cuenta no tiene permisos de administrador.' })
+        if (usuario.Rol !== 'administrador' && usuario.Rol !== 'veterinario') {
+          return res.status(403).json({ error: 'Esta cuenta no tiene permisos de acceso al panel.' })
+        }
         if (!storedPassword.startsWith('$2')) {
           const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
           db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
@@ -490,9 +551,10 @@ app.delete('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
 // =============================================================
 // CITAS
 // =============================================================
-app.get('/api/citas', verifyToken, (req, res) => {
-  db.query(
-    `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
+
+// 🆕 GET /api/citas — admin ve todas, veterinario solo ve las suyas
+app.get('/api/citas', verifyToken, cargarVeterinario, (req, res) => {
+  let sql = `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
             ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones,
             m.Nombre AS Nombre_mascota,
             u.Nombre AS Nombre_cliente,
@@ -504,13 +566,19 @@ app.get('/api/citas', verifyToken, (req, res) => {
      JOIN usuario u ON c.ID_usuario = u.ID_usuario
      JOIN servicio s ON ci.ID_servicio = s.ID_servicio
      JOIN veterinario v ON ci.ID_veterinario = v.ID_veterinario
-     JOIN usuario uv ON v.ID_usuario = uv.ID_usuario
-     ORDER BY ci.Fecha DESC`,
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json(results)
-    }
-  )
+     JOIN usuario uv ON v.ID_usuario = uv.ID_usuario`
+
+  const params = []
+  if (req.usuario.Rol === 'veterinario') {
+    sql += ' WHERE ci.ID_veterinario = ?'
+    params.push(req.veterinario.ID_veterinario)
+  }
+  sql += ' ORDER BY ci.Fecha DESC'
+
+  db.query(sql, params, (err, results) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json(results)
+  })
 })
 
 // ── NUEVO: Horas ocupadas por veterinario y fecha ────────────
@@ -585,31 +653,66 @@ app.post('/api/citas', verifyToken, async (req, res) => {
   )
 })
 
-app.put('/api/citas/:id', verifyToken, (req, res) => {
+// 🆕 PUT /api/citas/:id — si es veterinario, solo puede editar sus propias citas
+app.put('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   const { ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
-  db.query(
-    'UPDATE cita SET ID_servicio=?, ID_veterinario=?, Fecha=?, Hora=?, Motivo=?, Observaciones=? WHERE ID_cita=?',
-    [ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones, req.params.id],
-    (err) => {
+
+  const ejecutarUpdate = () => {
+    db.query(
+      'UPDATE cita SET ID_servicio=?, ID_veterinario=?, Fecha=?, Hora=?, Motivo=?, Observaciones=? WHERE ID_cita=?',
+      [ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones, req.params.id],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message })
+        res.json({ message: 'Cita actualizada' })
+      }
+    )
+  }
+
+  if (req.usuario.Rol === 'veterinario') {
+    db.query('SELECT ID_veterinario FROM cita WHERE ID_cita = ?', [req.params.id], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message })
-      res.json({ message: 'Cita actualizada' })
-    }
-  )
+      if (rows.length === 0) return res.status(404).json({ error: 'Cita no encontrada' })
+      if (rows[0].ID_veterinario !== req.veterinario.ID_veterinario) {
+        return res.status(403).json({ error: 'No puedes modificar citas de otro veterinario.' })
+      }
+      ejecutarUpdate()
+    })
+  } else {
+    ejecutarUpdate()
+  }
 })
 
-app.patch('/api/citas/:id', verifyToken, (req, res) => {
+// 🆕 PATCH /api/citas/:id — misma restriccion que el PUT
+app.patch('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   const campos = req.body
   const keys = Object.keys(campos)
   if (keys.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' })
-  const set = keys.map(k => `${k}=?`).join(', ')
-  const values = [...Object.values(campos), req.params.id]
-  db.query(`UPDATE cita SET ${set} WHERE ID_cita=?`, values, (err) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json({ message: 'Cita actualizada parcialmente' })
-  })
+
+  const ejecutarPatch = () => {
+    const set = keys.map(k => `${k}=?`).join(', ')
+    const values = [...Object.values(campos), req.params.id]
+    db.query(`UPDATE cita SET ${set} WHERE ID_cita=?`, values, (err) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ message: 'Cita actualizada parcialmente' })
+    })
+  }
+
+  if (req.usuario.Rol === 'veterinario') {
+    db.query('SELECT ID_veterinario FROM cita WHERE ID_cita = ?', [req.params.id], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (rows.length === 0) return res.status(404).json({ error: 'Cita no encontrada' })
+      if (rows[0].ID_veterinario !== req.veterinario.ID_veterinario) {
+        return res.status(403).json({ error: 'No puedes modificar citas de otro veterinario.' })
+      }
+      ejecutarPatch()
+    })
+  } else {
+    ejecutarPatch()
+  }
 })
 
-app.delete('/api/citas/:id', verifyToken, (req, res) => {
+// 🆕 DELETE /api/citas/:id — solo el administrador puede eliminar citas (antes era cualquier verifyToken)
+app.delete('/api/citas/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM cita WHERE ID_cita=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Cita eliminada' })
@@ -693,17 +796,25 @@ app.delete('/api/vacunas/:id', verifyToken, (req, res) => {
 // =============================================================
 // PLAN DE ALIMENTACION
 // =============================================================
-app.get('/api/alimentacion', verifyToken, (req, res) => {
-  db.query(
-    `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
+
+// 🆕 GET /api/alimentacion — admin ve todos, veterinario solo ve planes de mascotas/servicios que atendio
+app.get('/api/alimentacion', verifyToken, cargarVeterinario, (req, res) => {
+  let sql = `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
      FROM planalimentacion pa
      JOIN mascota m ON pa.ID_mascota = m.ID_mascota
-     JOIN servicio s ON pa.ID_servicio = s.ID_servicio`,
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json(results)
-    }
-  )
+     JOIN servicio s ON pa.ID_servicio = s.ID_servicio`
+  const params = []
+  if (req.usuario.Rol === 'veterinario') {
+    sql += ` WHERE EXISTS (
+      SELECT 1 FROM cita ci WHERE ci.ID_mascota = pa.ID_mascota
+      AND ci.ID_servicio = pa.ID_servicio AND ci.ID_veterinario = ?
+    )`
+    params.push(req.veterinario.ID_veterinario)
+  }
+  db.query(sql, params, (err, results) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json(results)
+  })
 })
 
 app.get('/api/alimentacion/mascota/:id_mascota', verifyToken, (req, res) => {
@@ -713,7 +824,8 @@ app.get('/api/alimentacion/mascota/:id_mascota', verifyToken, (req, res) => {
   })
 })
 
-app.post('/api/alimentacion', verifyToken, (req, res) => {
+// 🆕 POST /api/alimentacion — veterinario solo puede crear si atendio esa mascota+servicio
+app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
   const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'INSERT INTO planalimentacion (ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -725,7 +837,8 @@ app.post('/api/alimentacion', verifyToken, (req, res) => {
   )
 })
 
-app.put('/api/alimentacion/:id', verifyToken, (req, res) => {
+// 🆕 PUT /api/alimentacion/:id — veterinario solo puede editar si atendio esa mascota+servicio
+app.put('/api/alimentacion/:id', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
   const { Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'UPDATE planalimentacion SET Tipo_dieta=?, Frecuencia=?, Alergias=?, Horario=?, Calorias=?, Suplementos=?, Comidas=?, Fecha_inicio=?, Fecha_fin=?, Observaciones=?, Diagnostico=?, Revision_nutricional=? WHERE ID_planAlimentacion=?',
@@ -737,7 +850,8 @@ app.put('/api/alimentacion/:id', verifyToken, (req, res) => {
   )
 })
 
-app.delete('/api/alimentacion/:id', verifyToken, (req, res) => {
+// 🆕 DELETE /api/alimentacion/:id — solo el administrador puede eliminar planes (antes era cualquier verifyToken)
+app.delete('/api/alimentacion/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM planalimentacion WHERE ID_planAlimentacion=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Plan eliminado' })
