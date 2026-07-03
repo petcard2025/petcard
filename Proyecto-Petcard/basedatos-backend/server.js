@@ -46,10 +46,16 @@ async function crearEventoCalendar(cita) {
 }
 
 // ===== TWILIO - SERVICIO DE SMS =====
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-)
+let twilioClient = null
+try {
+  twilioClient = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN
+  )
+} catch (e) {
+  console.warn('⚠ Twilio no configurado:', e.message)
+  console.warn('  Las funciones de SMS no estarán disponibles hasta configurar TWILIO_ACCOUNT_SID y TWILIO_AUTH_TOKEN en .env')
+}
 
 function normalizarTelefono(telefono) {
   let num = telefono.toString().replace(/[\s\-().]/g, '')
@@ -66,6 +72,10 @@ function normalizarTelefono(telefono) {
 }
 
 async function enviarSMS(telefono, mensaje) {
+  if (!twilioClient) {
+    console.warn('⚠ Twilio no configurado. No se puede enviar SMS.')
+    return { success: false, error: 'Twilio no configurado' }
+  }
   try {
     const telefonoFormateado = normalizarTelefono(telefono)
     console.log(`📞 Enviando SMS a: ${telefono} → ${telefonoFormateado}`)
