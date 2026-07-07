@@ -59,6 +59,7 @@ console.log("ROL:", response.usuario?.Rol)
         return
       }
 
+      localStorage.setItem('petcard_token', response.token)
       localStorage.setItem('petcard_usuario_actual', JSON.stringify(response.usuario))
       localStorage.setItem('petcard_admin_actual', JSON.stringify(response.usuario))
 

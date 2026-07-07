@@ -269,11 +269,11 @@ app.post('/api/usuarios', async (req, res) => {
   }
 })
 
-app.put('/api/usuarios/:id', verifyToken, (req, res) => {
-  const { Nombre, Correo, Telefono } = req.body
+app.put('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
+  const { Nombre, Rol } = req.body
   db.query(
-    'UPDATE usuario SET Nombre=?, Correo=?, Telefono=? WHERE ID_usuario=?',
-    [Nombre, Correo, Telefono, req.params.id],
+    'UPDATE usuario SET Nombre=?, Rol=? WHERE ID_usuario=?',
+    [Nombre, Rol, req.params.id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ message: 'Usuario actualizado' })

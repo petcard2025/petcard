@@ -17,11 +17,11 @@ onMounted(() => {
     return
   }
   const rol = usuario?.Rol
-  if (rol !== 'Admin') {
+  if (rol !== 'administrador' && rol !== 'admin') {
     router.push('/inicio')
   }
 })
-const API = 'http://localhost:3001/api/usuarios'
+const API = 'https://localhost:3001/api/usuarios'
 
 const editando = ref(false)
 const guardando = ref(false)
@@ -127,3 +127,4 @@ function toggleEdicion() {
     </footer>
   </div>
 </template>
+

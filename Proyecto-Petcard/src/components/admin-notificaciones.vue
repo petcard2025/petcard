@@ -16,13 +16,14 @@ onMounted(() => {
     router.push('/login-admin')
     return
   }
-  const rol = usuario?.Rol
-  if (rol !== 'Admin') {
+  const rol = usuario?.Rol?.toLowerCase()
+  if (rol !== 'administrador' && rol !== 'admin') {
     router.push('/inicio')
   }
 })
-const API = 'http://localhost:3001/api/notificaciones'
-const API_USUARIOS = 'http://localhost:3001/api/usuarios'
+const API = 'https://localhost:3001/api/notificaciones'
+const API_USUARIOS = 'https://localhost:3001/api/usuarios'
+const headersAuth = () => ({ Authorization: `Bearer ${localStorage.getItem('petcard_token')}` })
 
 const notificaciones = ref([])
 const usuarios = ref([])
@@ -44,7 +45,7 @@ async function cargarNotificaciones() {
   cargando.value = true
   error.value = ''
   try {
-    const res = await fetch(API)
+    const res = await fetch(API, { headers: headersAuth() })
     if (!res.ok) throw new Error()
     notificaciones.value = await res.json()
   } catch {
@@ -56,7 +57,7 @@ async function cargarNotificaciones() {
 
 async function cargarUsuarios() {
   try {
-    const res = await fetch(API_USUARIOS)
+    const res = await fetch(API_USUARIOS, { headers: headersAuth() })
     usuarios.value = await res.json()
   } catch {}
 }
@@ -71,7 +72,7 @@ function confirmarEliminar(n) { notifAEliminar.value = n; mostrarModalEliminar.v
 
 async function eliminarNotif() {
   try {
-    const res = await fetch(`${API}/${notifAEliminar.value.ID_notificacion}`, { method: 'DELETE' })
+    const res = await fetch(`${API}/${notifAEliminar.value.ID_notificacion}`, { method: 'DELETE', headers: headersAuth() })
     if (!res.ok) throw new Error()
     await cargarNotificaciones()
     mostrarModalEliminar.value = false
@@ -82,7 +83,7 @@ async function crearNotificacion() {
   try {
     const res = await fetch(API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...headersAuth() },
       body: JSON.stringify(nuevaNotif.value)
     })
     if (!res.ok) throw new Error()

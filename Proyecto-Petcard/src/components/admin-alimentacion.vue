@@ -16,13 +16,14 @@ onMounted(() => {
     router.push('/login-admin')
     return
   }
-  const rol = usuario?.Rol
-  if (rol !== 'Admin') {
+  const rol = usuario?.Rol?.toLowerCase()
+  if (rol !== 'administrador' && rol !== 'admin') {
     router.push('/inicio')
   }
 })
 
-const API = 'http://localhost:3001/api'
+const API = 'https://localhost:3001/api'
+const headersAuth = () => ({ Authorization: `Bearer ${localStorage.getItem('petcard_token')}` })
 
 const busqueda = ref('')
 const filtroEstado = ref('Todos')
@@ -55,7 +56,7 @@ async function cargarPlanes() {
   cargando.value = true
   error.value = ''
   try {
-    const res = await fetch(`${API}/alimentacion`)
+    const res = await fetch(`${API}/alimentacion`, { headers: headersAuth() })
     if (!res.ok) throw new Error()
     planes.value = await res.json()
   } catch (e) {
@@ -67,14 +68,14 @@ async function cargarPlanes() {
 
 async function cargarMascotas() {
   try {
-    const res = await fetch(`${API}/mascotas`)
+    const res = await fetch(`${API}/mascotas`, { headers: headersAuth() })
     mascotas.value = await res.json()
   } catch (e) {}
 }
 
 async function cargarServicios() {
   try {
-    const res = await fetch(`${API}/servicios`)
+    const res = await fetch(`${API}/servicios`, { headers: headersAuth() })
     servicios.value = await res.json()
   } catch (e) {}
 }
@@ -99,7 +100,7 @@ async function guardarEdicion() {
   try {
     const res = await fetch(`${API}/alimentacion/${planSeleccionado.value.ID_planAlimentacion}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...headersAuth() },
       body: JSON.stringify(planSeleccionado.value)
     })
     if (!res.ok) throw new Error()
@@ -118,7 +119,8 @@ function confirmarEliminar(plan) {
 async function eliminarPlan() {
   try {
     const res = await fetch(`${API}/alimentacion/${planAEliminar.value.ID_planAlimentacion}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: headersAuth()
     })
     if (!res.ok) throw new Error()
     await cargarPlanes()
@@ -133,7 +135,7 @@ async function agregarPlan() {
   try {
     const res = await fetch(`${API}/alimentacion`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...headersAuth() },
       body: JSON.stringify(nuevoPlan.value)
     })
     if (!res.ok) throw new Error()

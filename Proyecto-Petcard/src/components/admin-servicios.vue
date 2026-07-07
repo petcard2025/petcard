@@ -17,11 +17,11 @@ onMounted(() => {
     return
   }
   const rol = usuario?.Rol
-  if (rol !== 'Admin') {
+  if (rol !== 'administrador' && rol !== 'admin') {
     router.push('/inicio')
   }
 })
-const API = 'http://localhost:3001/api/servicios'
+const API = 'https://localhost:3001/api/servicios'
 
 const servicios = ref([])
 const busqueda = ref('')
@@ -227,3 +227,4 @@ async function crearServicio() {
 .modal-body input,.modal-body select { padding:.5rem .75rem;border:1px solid #ddd;border-radius:6px;font-size:.95rem;width:100%;box-sizing:border-box; }
 .modal-footer { display:flex;gap:.75rem;justify-content:flex-end; }
 </style>
+
