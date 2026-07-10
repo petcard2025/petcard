@@ -109,7 +109,7 @@ onMounted(() => {
     return
   }
   const rol = usuario?.Rol
-  if (rol !== 'Admin') {
+  if (rol !== 'administrador' && rol !== 'admin') {
     router.push('/inicio')
   }
 })

@@ -17,11 +17,11 @@ onMounted(() => {
     return
   }
   const rol = usuario?.Rol
-  if (rol !== 'Admin') {
+  if (rol !== 'administrador' && rol !== 'admin') {
     router.push('/inicio')
   }
 })
-const API = 'http://localhost:3001/api/servicios'
+const API = 'https://localhost:3001/api/servicios'
 
 const servicios = ref([])
 const busqueda = ref('')

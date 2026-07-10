@@ -16,8 +16,8 @@ onMounted(() => {
     router.push('/login-admin')
     return
   }
-  const rol = usuario?.Rol
-  if (rol !== 'Admin') {
+  const rol = usuario?.Rol?.toLowerCase()
+  if (rol !== 'administrador' && rol !== 'admin') {
     router.push('/inicio')
   }
 })
@@ -36,6 +36,7 @@ onMounted(() => {
       <li><router-link to="/admin-notificaciones">Notificaciones</router-link></li>
       <li><router-link to="/admin-servicios">Servicios</router-link></li>
       <li><router-link to="/admin-citas">Citas</router-link></li>
+      <li><router-link to="/admin-usuarios">Usuarios</router-link></li>
     </ul>
     <div class="nav-actions">
       <span style="color: white; margin-right: 1rem; font-weight: 500;">{{ isAuthenticated ? usuarioLogueado?.Nombre : 'Admin' }}</span>
