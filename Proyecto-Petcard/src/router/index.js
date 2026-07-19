@@ -14,6 +14,7 @@ import AdminNotificaciones from '../components/admin-notificaciones.vue'
 import AdminServicios from '../components/admin-servicios.vue'
 import AdminPerfil from '../components/admin-perfil.vue'
 import AdminUsuarios from '../components/admin-usuarios.vue'
+import AdminMascotas from '../components/admin-mascotas.vue'
 import MisMascotas from '../components/mis-mascotas.vue'
 import LoginUsuario from '../components/login-usuario.vue'
 import LoginAdmin from '../components/login-admin.vue'
@@ -54,6 +55,7 @@ const routes = [
   { path: '/admin-servicios',      component: AdminServicios,      meta: { requiresAdmin: true } },
   { path: '/admin-perfil',         component: AdminPerfil,         meta: { requiresAdmin: true } },
   { path: '/admin-usuarios',       component: AdminUsuarios,       meta: { requiresAdmin: true } },
+  { path: '/admin-mascotas',       component: AdminMascotas,       meta: { requiresAdmin: true } },
 
   // ── Rutas privadas de veterinario ────────────────────────
   { path: '/veterinario-inicio', component: VeterinarioInicio, meta: { requiresVet: true } },

@@ -1,127 +1,235 @@
 <script setup>
-import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuth } from '../composables/useAuth'
+import { ref, computed, onMounted } from 'vue'
+import AdminLayout from './AdminLayout.vue'
+import { notificacionesAPI, usuariosAPI } from '../api'
 
-const router = useRouter()
-const { usuarioLogueado, isAuthenticated, cerrarSesion } = useAuth()
+const notificaciones = ref([])
+const usuarios = ref([])
+const cargando = ref(true)
+const error = ref('')
 
-// ===== GUARD DE SEGURIDAD =====
-onMounted(() => {
-  const token = localStorage.getItem('petcard_token')
-  const usuarioStr = localStorage.getItem('petcard_usuario_actual')
-  let usuario = null
-  try { usuario = usuarioStr ? JSON.parse(usuarioStr) : null } catch {}
-  if (!token && !usuario) {
-    router.push('/login-admin')
+const busqueda = ref('')
+const filtroTipo = ref('Todos')
+const filtroLeida = ref('Todas')
+
+const mostrarModalNuevo = ref(false)
+const mostrarModalEliminar = ref(false)
+const notificacionAEliminar = ref(null)
+const enviando = ref(false)
+
+const nuevaNotificacion = ref({ ID_usuario: '', Mensaje: '', Tipo: 'General', Canal: 'Sistema' })
+
+onMounted(cargarTodo)
+
+async function cargarTodo() {
+  cargando.value = true
+  error.value = ''
+  try {
+    const [n, u] = await Promise.all([
+      notificacionesAPI.obtener(),
+      usuariosAPI.obtener()
+    ])
+    notificaciones.value = n
+    usuarios.value = u
+  } catch (e) {
+    error.value = 'No se pudo conectar con el servidor.'
+  } finally {
+    cargando.value = false
+  }
+}
+
+const tipos = computed(() => {
+  const set = new Set(notificaciones.value.map(n => n.Tipo).filter(Boolean))
+  return ['Todos', ...set]
+})
+
+const notificacionesFiltradas = computed(() => {
+  return notificaciones.value
+    .filter(n => {
+      const texto = `${n.Mensaje} ${n.Nombre_usuario}`.toLowerCase()
+      const coincideBusqueda = texto.includes(busqueda.value.toLowerCase())
+      const coincideTipo = filtroTipo.value === 'Todos' || n.Tipo === filtroTipo.value
+      const coincideLeida =
+        filtroLeida.value === 'Todas' ||
+        (filtroLeida.value === 'Leídas' && Number(n.Leida) === 1) ||
+        (filtroLeida.value === 'No leídas' && Number(n.Leida) !== 1)
+      return coincideBusqueda && coincideTipo && coincideLeida
+    })
+    .sort((a, b) => new Date(b.Fecha_envio) - new Date(a.Fecha_envio))
+})
+
+function iconoTipo(tipo) {
+  const t = (tipo || '').toLowerCase()
+  if (t.includes('cita')) return '📅'
+  if (t.includes('vacuna')) return '💉'
+  if (t.includes('aliment')) return '🍽️'
+  return '🔔'
+}
+
+async function marcarLeida(n) {
+  try {
+    await notificacionesAPI.marcarComoLeida(n.ID_notificacion)
+    n.Leida = 1
+  } catch (e) {
+    alert('No se pudo marcar como leída.')
+  }
+}
+
+function confirmarEliminar(n) {
+  notificacionAEliminar.value = n
+  mostrarModalEliminar.value = true
+}
+
+async function eliminarNotificacion() {
+  try {
+    await notificacionesAPI.eliminar(notificacionAEliminar.value.ID_notificacion)
+    await cargarTodo()
+    mostrarModalEliminar.value = false
+  } catch (e) {
+    alert('Error al eliminar la notificación: ' + e.message)
+  }
+}
+
+function abrirNueva() {
+  nuevaNotificacion.value = { ID_usuario: '', Mensaje: '', Tipo: 'General', Canal: 'Sistema' }
+  mostrarModalNuevo.value = true
+}
+
+async function enviarNotificacion() {
+  if (!nuevaNotificacion.value.ID_usuario || !nuevaNotificacion.value.Mensaje) {
+    alert('Selecciona el usuario y escribe un mensaje.')
     return
   }
-  const rol = usuario?.Rol?.toLowerCase()
-  if (rol !== 'administrador' && rol !== 'admin') {
-    router.push('/inicio')
+  enviando.value = true
+  try {
+    await notificacionesAPI.crear(nuevaNotificacion.value)
+    await cargarTodo()
+    mostrarModalNuevo.value = false
+  } catch (e) {
+    alert('Error al enviar la notificación: ' + e.message)
+  } finally {
+    enviando.value = false
   }
-})
+}
 </script>
 
 <template>
+  <AdminLayout title="Notificaciones" subtitle="Consulta y envía notificaciones a los usuarios">
+    <template #actions>
+      <button class="btn btn-primary btn-sm" @click="abrirNueva">+ Nueva Notificación</button>
+    </template>
 
-<nav class="navbar">
-    <router-link to="/admin" class="nav-logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="currentColor" opacity=".15"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/><path d="M9 14s1 1.5 3 1.5 3-1.5 3-1.5" stroke-linecap="round"/></svg>
-      PETCARD
-    </router-link>
-    <ul class="nav-links" style="margin-left:1.5rem;">
-      <li><router-link to="/admin-alimentacion">Alimentación</router-link></li>
-      <li><router-link to="/admin-carnet">Carnet de Vacunas</router-link></li>
-      <li><router-link to="/admin-notificaciones">Notificaciones</router-link></li>
-      <li><router-link to="/admin-servicios">Servicios</router-link></li>
-      <li><router-link to="/admin-citas">Citas</router-link></li>
-      <li><router-link to="/admin-usuarios">Usuarios</router-link></li>
-    </ul>
-    <div class="nav-actions">
-      <span style="color: white; margin-right: 1rem; font-weight: 500;">{{ isAuthenticated ? usuarioLogueado?.Nombre : 'Admin' }}</span>
-      <router-link to="/admin-perfil" class="btn btn-outline-white btn-sm" title="Ver Perfil" style="text-decoration:none;display:inline-block;">👤</router-link>
-      <button class="btn btn-danger btn-sm" @click="cerrarSesion">Cerrar Sesión</button>
-    </div>
-  </nav>
+    <div v-if="error" class="alert alert-danger"><span>{{ error }}</span></div>
 
-  <!-- HERO -->
-  <section class="hero-inicio">
-    <div class="hero-content">
-      <h1>Cuidado Veterinario de Excelencia</h1>
-      <p>Tu plataforma completa de cuidado veterinario. Gestiona citas, historial y salud de tus mascotas en un solo lugar.</p>
-      <div class="hero-btns">
-        <button class="btn btn-primary btn-lg" id="btn-agendar">Agendar Cita</button>
-        <button class="btn btn-outline-white btn-lg" id="btn-servicios">Ver Servicios</button>
+    <div class="search-filter">
+      <div class="search-wrap">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Buscar por mensaje o usuario..." v-model="busqueda" />
       </div>
+      <select class="filter-select" v-model="filtroTipo">
+        <option v-for="t in tipos" :key="t" :value="t">{{ t }}</option>
+      </select>
+      <select class="filter-select" v-model="filtroLeida">
+        <option>Todas</option>
+        <option>Leídas</option>
+        <option>No leídas</option>
+      </select>
     </div>
-  </section>
 
-  <!-- SERVICIOS COMPLETOS -->
-  <section class="section" style="background:#fff;">
-    <div class="container">
-      <h2 class="section-title">Servicios Completos para tu Mascota</h2>
-      <p class="section-sub">Ofrecemos una gama completa de servicios veterinarios con la más alta calidad y tecnología para asegurar el bienestar de tu mascota.</p>
-      <div class="cards-grid-3">
-        <div class="feature-card card">
-          <div class="feature-icon blue"><svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
-          <h3>Agendar Citas</h3>
-          <p>Programa tus horarios de forma online y ten todas las citas de las mascotas de tu familia.</p>
-          <router-link to="/admin-citas" class="feature-link">Agendar →</router-link>
+    <div v-if="cargando" style="text-align:center;padding:2rem;color:#888;">Cargando notificaciones...</div>
+    <div v-else-if="notificacionesFiltradas.length === 0" class="empty-state">No hay notificaciones que mostrar.</div>
+
+    <div v-else class="notif-list">
+      <div class="notif-item" v-for="n in notificacionesFiltradas" :key="n.ID_notificacion" :class="{ leida: Number(n.Leida) === 1 }">
+        <div class="notif-icon">{{ iconoTipo(n.Tipo) }}</div>
+        <div class="notif-body">
+          <div class="notif-top">
+            <strong>{{ n.Nombre_usuario }}</strong>
+            <span class="badge badge-blue">{{ n.Tipo }}</span>
+            <span class="badge badge-gray">{{ n.Canal }}</span>
+            <span v-if="Number(n.Leida) !== 1" class="badge badge-yellow">No leída</span>
+          </div>
+          <p class="notif-msg">{{ n.Mensaje }}</p>
+          <span class="notif-fecha">{{ new Date(n.Fecha_envio).toLocaleString('es-CO') }}</span>
         </div>
-        <div class="feature-card card">
-          <div class="feature-icon green"><svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></div>
-          <h3>Servicios Veterinarios</h3>
-          <p>Consultas generales, especializadas, análisis de laboratorio, cirugías menores y mayores.</p>
-          <router-link to="/admin-servicios" class="feature-link">Ver servicios →</router-link>
-        </div>
-        <div class="feature-card card">
-          <div class="feature-icon purple"><svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div>
-          <h3>Gestión de Mascotas</h3>
-          <p>Administra el perfil completo de las mascotas, historial médico y medicamentos.</p>
-          <a href="#" class="feature-link">Gestionar →</a>
+        <div class="notif-actions">
+          <button v-if="Number(n.Leida) !== 1" class="btn btn-secondary btn-sm" @click="marcarLeida(n)">Marcar leída</button>
+          <button class="btn btn-danger btn-sm" @click="confirmarEliminar(n)">Eliminar</button>
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- TODO LO QUE NECESITAS -->
-  <section class="section">
-    <div class="container">
-      <div class="two-features">
-        <div class="features-text">
-          <h2>Todo lo que necesitas para el cuidado de tu mascota</h2>
-          <p style="color:var(--text-secondary); margin:1rem 0 1.5rem;">Nuestra plataforma integra todos los tratamientos necesarios para brindar un rango completo de cuidado veterinario.</p>
-          <ul class="features-list">
-            <li><span class="feat-dot blue"></span><div><strong>Historial Médico Completo</strong><p>Accede a todos tus registros, vacunas, tratamientos y medicamentos.</p></div></li>
-            <li><span class="feat-dot blue"></span><div><strong>Recordatorios Automáticos</strong><p>Nunca olvides citas o fechas de vacunas con nuestros alertas de notificaciones.</p></div></li>
-            <li><span class="feat-dot blue"></span><div><strong>Profesionales Certificados</strong><p>Equipo de veterinarios especializados con años de experiencia.</p></div></li>
-          </ul>
+    <!-- Modal Nueva -->
+    <div v-if="mostrarModalNuevo" class="modal-overlay" @click.self="mostrarModalNuevo = false">
+      <div class="modal">
+        <h3>Nueva Notificación</h3>
+        <div class="modal-body">
+          <label>Usuario</label>
+          <select v-model="nuevaNotificacion.ID_usuario">
+            <option value="" disabled>-- Selecciona usuario --</option>
+            <option v-for="u in usuarios" :key="u.ID_usuario" :value="u.ID_usuario">{{ u.Nombre }} ({{ u.Rol }})</option>
+          </select>
+          <label>Tipo</label>
+          <select v-model="nuevaNotificacion.Tipo">
+            <option>General</option>
+            <option>cita</option>
+            <option>vacuna</option>
+            <option>alimentacion</option>
+          </select>
+          <label>Canal</label>
+          <select v-model="nuevaNotificacion.Canal">
+            <option>Sistema</option>
+            <option>SMS</option>
+          </select>
+          <label>Mensaje</label>
+          <textarea v-model="nuevaNotificacion.Mensaje" rows="3" placeholder="Escribe el mensaje..."></textarea>
         </div>
-        <div><img src="https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=500&q=80" alt="Mascota" style="border-radius:12px; width:100%; height:300px; object-fit:cover;"/></div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" @click="mostrarModalNuevo = false">Cancelar</button>
+          <button class="btn btn-success btn-sm" :disabled="enviando" @click="enviarNotificacion">{{ enviando ? 'Enviando...' : 'Enviar' }}</button>
+        </div>
       </div>
     </div>
-  </section>
 
-  <!-- CTA -->
-  <section class="cta-section">
-    <h2>¿Tu mascota necesita atención?</h2>
-    <p>No esperes más. Agenda una cita hoy mismo y dale a tu compañero el cuidado que merece.</p>
-    <div class="cta-btns">
-      <button class="btn btn-outline-white btn-lg" id="btn-agendar-cta">Agendar Cita Ahora</button>
-      <button class="btn btn-outline-white btn-lg" id="btn-ver-cta">Ver Servicios</button>
+    <!-- Modal Eliminar -->
+    <div v-if="mostrarModalEliminar" class="modal-overlay" @click.self="mostrarModalEliminar = false">
+      <div class="modal">
+        <h3>¿Eliminar notificación?</h3>
+        <p>Esta acción no se puede deshacer.</p>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" @click="mostrarModalEliminar = false">Cancelar</button>
+          <button class="btn btn-danger btn-sm" @click="eliminarNotificacion">Eliminar</button>
+        </div>
+      </div>
     </div>
-  </section>
-
-  <!-- FOOTER -->
-  <footer class="footer">
-    <div class="footer-grid">
-      <div class="footer-brand"><span class="nav-logo" style="color:#fff; margin-bottom:.5rem; display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div>
-      <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div>
-      <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
-      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
-    </div>
-    <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
-  </footer>
-
+  </AdminLayout>
 </template>
+
+<style scoped>
+.notif-list { display: flex; flex-direction: column; gap: .75rem; }
+
+.notif-item {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--purple);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--card-shadow);
+}
+.notif-item.leida { border-left-color: var(--border); opacity: .75; }
+
+.notif-icon { font-size: 1.4rem; line-height: 1; }
+.notif-body { flex: 1; min-width: 0; }
+.notif-top { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: .3rem; }
+.notif-msg { font-size: .9rem; color: var(--text); margin: .2rem 0 .4rem; }
+.notif-fecha { font-size: .75rem; color: var(--muted); }
+.notif-actions { display: flex; flex-direction: column; gap: .4rem; flex-shrink: 0; }
+
+.modal-body select, .modal-body textarea {
+  padding: .55rem .75rem; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-size: .9rem; width: 100%; box-sizing: border-box; font-family: 'Lato', sans-serif;
+}
+</style>
