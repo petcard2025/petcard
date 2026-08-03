@@ -1,0 +1,460 @@
+{
+  "info": {
+    "_postman_id": "petcard-notificaciones",
+    "name": "PetCard - API Notificaciones",
+    "description": "Colección completa de endpoints para la API de Notificaciones de PetCard",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Notificaciones - GET",
+      "item": [
+        {
+          "name": "Obtener todas las notificaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones"]
+            },
+            "description": "Obtiene la lista de todas las notificaciones del sistema"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener notificaciones por usuario",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/usuario/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "usuario", "1"]
+            },
+            "description": "Obtiene todas las notificaciones de un usuario específico (cambiar el 1 por el ID del usuario)"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener notificación por ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "1"]
+            },
+            "description": "Obtiene los detalles de una notificación específica"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener notificaciones no leídas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/usuario/1/no-leidas",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "usuario", "1", "no-leidas"]
+            },
+            "description": "Obtiene las notificaciones no leídas de un usuario"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener notificaciones por tipo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/tipo/Recordatorio",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "tipo", "Recordatorio"]
+            },
+            "description": "Obtiene notificaciones de un tipo específico (Recordatorio, Confirmación, Alerta)"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener notificaciones por canal",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/canal/Correo",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "canal", "Correo"]
+            },
+            "description": "Obtiene notificaciones por canal de envío (Correo, SMS, Sistema)"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener notificaciones por rango de fechas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/fecha/rango?fechaInicio=2026-01-01&fechaFin=2026-12-31",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "fecha", "rango"],
+              "query": [
+                {
+                  "key": "fechaInicio",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "fechaFin",
+                  "value": "2026-12-31"
+                }
+              ]
+            },
+            "description": "Obtiene notificaciones dentro de un rango de fechas"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener estadísticas generales",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/estadisticas",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "estadisticas"]
+            },
+            "description": "Obtiene estadísticas generales del sistema de notificaciones"
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener estadísticas por usuario",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/usuario/1/estadisticas",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "usuario", "1", "estadisticas"]
+            },
+            "description": "Obtiene estadísticas de notificaciones de un usuario específico"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notificaciones - POST",
+      "item": [
+        {
+          "name": "Crear notificación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ID_usuario\": 1,\n  \"ID_sistemaCorreo\": 1,\n  \"Mensaje\": \"Recordatorio: Tu mascota Max necesita ser vacunado pronto\",\n  \"Tipo\": \"Recordatorio\",\n  \"Canal\": \"Correo\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones"]
+            },
+            "description": "Crea una nueva notificación en el sistema"
+          },
+          "response": []
+        },
+        {
+          "name": "Crear múltiples notificaciones",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notificaciones\": [\n    {\n      \"ID_usuario\": 1,\n      \"ID_sistemaCorreo\": 1,\n      \"Mensaje\": \"Notificación 1 - Recordatorio de vacuna\",\n      \"Tipo\": \"Recordatorio\",\n      \"Canal\": \"Correo\"\n    },\n    {\n      \"ID_usuario\": 2,\n      \"ID_sistemaCorreo\": 1,\n      \"Mensaje\": \"Notificación 2 - Confirmación de cita\",\n      \"Tipo\": \"Confirmación\",\n      \"Canal\": \"SMS\"\n    },\n    {\n      \"ID_usuario\": 1,\n      \"ID_sistemaCorreo\": 1,\n      \"Mensaje\": \"Notificación 3 - Alerta de medicamento\",\n      \"Tipo\": \"Alerta\",\n      \"Canal\": \"Sistema\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/bulk",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "bulk"]
+            },
+            "description": "Crea múltiples notificaciones en una sola petición"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notificaciones - PUT",
+      "item": [
+        {
+          "name": "Actualizar notificación",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Mensaje\": \"Mensaje actualizado de la notificación\",\n  \"Tipo\": \"Confirmación\",\n  \"Canal\": \"SMS\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "1"]
+            },
+            "description": "Actualiza los datos de una notificación existente"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notificaciones - PATCH",
+      "item": [
+        {
+          "name": "Marcar como leída",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/1/marcar-como-leida",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "1", "marcar-como-leida"]
+            },
+            "description": "Marca una notificación como leída"
+          },
+          "response": []
+        },
+        {
+          "name": "Marcar múltiples como leídas",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [1, 2, 3]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/marcar-como-leidas/bulk",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "marcar-como-leidas", "bulk"]
+            },
+            "description": "Marca múltiples notificaciones como leídas en una sola petición"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notificaciones - DELETE",
+      "item": [
+        {
+          "name": "Eliminar notificación",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "1"]
+            },
+            "description": "Elimina una notificación específica"
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar múltiples notificaciones",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [1, 2, 3]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/bulk",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "bulk"]
+            },
+            "description": "Elimina múltiples notificaciones en una sola petición"
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar todas las notificaciones de un usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones/usuario/1/todas",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones", "usuario", "1", "todas"]
+            },
+            "description": "Elimina todas las notificaciones de un usuario específico"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Variables de entorno",
+      "item": [
+        {
+          "name": "Configuración",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3001/api/notificaciones",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "notificaciones"]
+            },
+            "description": "VARIABLES DE ENTORNO RECOMENDADAS:\n\nNombre: base_url\nValor: http://localhost:3001/api\n\nNombre: usuario_id\nValor: 1\n\nNombre: notificacion_id\nValor: 1\n\nLuego puedes usar {{base_url}}, {{usuario_id}}, {{notificacion_id}} en las URLs"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001/api",
+      "type": "string"
+    },
+    {
+      "key": "usuario_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "notificacion_id",
+      "value": "1",
+      "type": "string"
+    }
+  ]
+}
