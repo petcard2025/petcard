@@ -18,15 +18,19 @@ if (!process.env.JWT_SECRET) {
 }
 const JWT_SECRET = process.env.JWT_SECRET
 
+// =============================================================
+// verifyToken: valida el JWT propio (web y app movil por igual)
+// =============================================================
 function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization']
   const token = authHeader && authHeader.split(' ')[1]
   if (!token) return res.status(401).json({ error: 'Acceso denegado. Token no proporcionado.' })
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET)
     req.usuario = decoded
     next()
-  } catch (error) {
+  } catch (jwtError) {
     return res.status(403).json({ error: 'Token invalido o expirado.' })
   }
 }
@@ -54,9 +58,8 @@ function cargarVeterinario(req, res, next) {
 }
 
 // 🆕 ── Middleware: verifica que el veterinario haya atendido esa mascota con ese servicio ──
-// (usado para que un veterinario solo edite planes de alimentacion de mascotas/servicios que el atendio)
 function verificarVetAtendioMascotaServicio(req, res, next) {
-  if (req.usuario.Rol !== 'veterinario') return next() // admin pasa libre
+  if (req.usuario.Rol !== 'veterinario') return next()
 
   const verificar = (idMascota, idServicio) => {
     db.query(
@@ -72,7 +75,6 @@ function verificarVetAtendioMascotaServicio(req, res, next) {
     )
   }
 
-  // Si viene un :id de plan existente (PUT), primero hay que leer el plan para saber su mascota/servicio
   if (req.params.id) {
     db.query(
       'SELECT ID_mascota, ID_servicio FROM planalimentacion WHERE ID_planAlimentacion = ?',
@@ -86,7 +88,6 @@ function verificarVetAtendioMascotaServicio(req, res, next) {
     return
   }
 
-  // Si es creacion (POST), los datos vienen en el body
   verificar(req.body.ID_mascota, req.body.ID_servicio)
 }
 
@@ -216,13 +217,6 @@ const forgotPasswordLimiter = rateLimit({
   message: { error: 'Demasiadas solicitudes de recuperacion. Intenta de nuevo en 1 hora.' }
 })
 
-// ✅ FIX (antes: charset: 'utf8mb4_general_ci'):
-// mysql2 espera aquí el nombre de un CHARSET (ej. 'utf8mb4'), no una COLLATION
-// (ej. 'utf8mb4_general_ci'). Pasarle una collation hacía que la negociación de
-// codificación fallara silenciosamente y los caracteres con tildes/ñ llegaran
-// corruptos (ej. "Antirrábica" -> "Antirr??bica"), aunque los datos en la base
-// estaban guardados correctamente en utf8mb4. Si necesitas fijar la collation de
-// la conexión, usa la opción separada `collation`, no `charset`.
 const db = mysql.createConnection({
   host: process.env.DB_HOST || '127.0.0.1',
   port: process.env.DB_PORT || 3306,
@@ -289,7 +283,7 @@ app.delete('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
 })
 
 // =============================================================
-// LOGIN
+// LOGIN (web — sin cambios)
 // =============================================================
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { Correo, Contrasena } = req.body
@@ -552,8 +546,6 @@ app.delete('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
 // =============================================================
 // CITAS
 // =============================================================
-
-// 🆕 GET /api/citas — admin ve todas, veterinario solo ve las suyas
 app.get('/api/citas', verifyToken, cargarVeterinario, (req, res) => {
   let sql = `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
             ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones, ci.Estado,
@@ -582,8 +574,6 @@ app.get('/api/citas', verifyToken, cargarVeterinario, (req, res) => {
   })
 })
 
-// ── NUEVO: Horas ocupadas por veterinario y fecha ────────────
-// Debe estar ANTES del POST /api/citas para que Express no confunda la ruta
 app.get('/api/citas/horas-ocupadas', verifyToken, (req, res) => {
   const { ID_veterinario, Fecha } = req.query
   if (!ID_veterinario || !Fecha) {
@@ -603,7 +593,6 @@ app.get('/api/citas/horas-ocupadas', verifyToken, (req, res) => {
 app.post('/api/citas', verifyToken, async (req, res) => {
   const { ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
 
-  // Verificar conflicto de horario antes de insertar
   db.query(
     'SELECT ID_cita FROM cita WHERE ID_veterinario=? AND Fecha=? AND Hora=?',
     [ID_veterinario, Fecha, Hora],
@@ -654,7 +643,6 @@ app.post('/api/citas', verifyToken, async (req, res) => {
   )
 })
 
-// 🆕 PUT /api/citas/:id — si es veterinario, solo puede editar sus propias citas
 app.put('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   const { ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
 
@@ -683,7 +671,6 @@ app.put('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   }
 })
 
-// 🆕 PATCH /api/citas/:id — misma restriccion que el PUT
 app.patch('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   const campos = req.body
   const keys = Object.keys(campos)
@@ -712,7 +699,6 @@ app.patch('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   }
 })
 
-// 🆕 DELETE /api/citas/:id — solo el administrador puede eliminar citas (antes era cualquier verifyToken)
 app.delete('/api/citas/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM cita WHERE ID_cita=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -797,8 +783,6 @@ app.delete('/api/vacunas/:id', verifyToken, (req, res) => {
 // =============================================================
 // PLAN DE ALIMENTACION
 // =============================================================
-
-// 🆕 GET /api/alimentacion — admin ve todos, veterinario solo ve planes de mascotas/servicios que atendio
 app.get('/api/alimentacion', verifyToken, cargarVeterinario, (req, res) => {
   let sql = `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
      FROM planalimentacion pa
@@ -825,7 +809,6 @@ app.get('/api/alimentacion/mascota/:id_mascota', verifyToken, (req, res) => {
   })
 })
 
-// 🆕 POST /api/alimentacion — veterinario solo puede crear si atendio esa mascota+servicio
 app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
   const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
@@ -838,7 +821,6 @@ app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendi
   )
 })
 
-// 🆕 PUT /api/alimentacion/:id — veterinario solo puede editar si atendio esa mascota+servicio
 app.put('/api/alimentacion/:id', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
   const { Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
@@ -851,7 +833,6 @@ app.put('/api/alimentacion/:id', verifyToken, cargarVeterinario, verificarVetAte
   )
 })
 
-// 🆕 DELETE /api/alimentacion/:id — solo el administrador puede eliminar planes (antes era cualquier verifyToken)
 app.delete('/api/alimentacion/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM planalimentacion WHERE ID_planAlimentacion=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
