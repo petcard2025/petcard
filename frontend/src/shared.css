@@ -665,3 +665,162 @@ tbody tr:hover { background: #f9fafb; }
   .footer-grid { grid-template-columns: 1fr; }
   .hero h1 { font-size: 1.5rem; }
 }
+
+/* ════════════════════════════════════════
+   AGREGADO — Estilos usados por las vistas
+   de administrador (antes faltaban en este
+   archivo y las vistas se veían sin estilo)
+════════════════════════════════════════ */
+
+/* Encabezado de secciones de gestión (admin-*) */
+.gestion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.gestion-title {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 900;
+  font-size: 1.3rem;
+  color: var(--text);
+}
+.gestion-sub { font-size: .88rem; color: var(--muted); margin-top: .2rem; }
+.gestion-btns { display: flex; gap: .6rem; }
+
+/* Tarjetas de administración (usadas en citas, servicios, carnet, alimentación, mascotas...) */
+.admin-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  box-shadow: var(--card-shadow);
+  transition: box-shadow .2s, transform .2s;
+  display: flex;
+  flex-direction: column;
+}
+.admin-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,.1); transform: translateY(-2px); }
+
+.admin-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .85rem;
+}
+.admin-card-title { font-weight: 800; font-size: 1.02rem; color: var(--text); }
+.admin-card-tipo { font-size: .8rem; color: var(--muted); margin-top: .15rem; }
+.admin-card-body { flex: 1; margin-bottom: .9rem; }
+.admin-card-meta { font-size: .82rem; color: var(--text-secondary); margin-bottom: .3rem; }
+.admin-card-actions { display: flex; gap: .5rem; border-top: 1px solid var(--border); padding-top: .85rem; }
+.detail { font-size: .95rem; font-weight: 700; color: var(--text); margin-bottom: .4rem; }
+
+/* Tarjetas estadísticas del dashboard */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.1rem;
+  margin-bottom: 1.75rem;
+}
+.stat-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.stat-icon {
+  width: 46px; height: 46px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.stat-icon.blue   { background: var(--purple-bg); color: var(--purple); }
+.stat-icon.green  { background: var(--green-bg);  color: var(--green); }
+.stat-icon.yellow { background: var(--yellow-bg); color: var(--yellow); }
+.stat-icon.red    { background: var(--red-bg);    color: var(--red); }
+.stat-value { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.4rem; color: var(--text); line-height: 1.1; }
+.stat-label { font-size: .8rem; color: var(--muted); margin-top: .15rem; }
+
+/* Alerta general */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  font-size: .9rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  border: 1.5px solid;
+}
+.alert-danger {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+.alert-danger::before { content: "⚠️"; font-size: 1.2rem; line-height: 1; }
+.alert-info {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+.alert-info::before { content: "ℹ️"; font-size: 1.2rem; line-height: 1; }
+
+/* Modales (usados por todas las vistas admin-*) */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+.modal {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  width: 100%;
+  max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+}
+.modal h3 { margin: 0 0 1rem; font-size: 1.15rem; font-weight: 800; font-family: 'Nunito', sans-serif; }
+.modal-body { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.5rem; }
+.modal-body label { font-weight: 700; font-size: .82rem; color: var(--text-secondary); margin-top: .3rem; }
+.modal-footer { display: flex; gap: .75rem; justify-content: flex-end; }
+
+/* Estado vacío genérico */
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--muted);
+  font-size: .95rem;
+}
+
+/* Pestañas simples (usadas en mascotas / usuarios) */
+.pill-tabs { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.pill-tab {
+  padding: .45rem 1rem;
+  border-radius: 999px;
+  font-size: .82rem;
+  font-weight: 700;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text-secondary);
+}
+.pill-tab.active { background: var(--purple); border-color: var(--purple); color: #fff; }
+
+@media (max-width: 900px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .admin-card-header { flex-direction: column; }
+}
