@@ -1,5 +1,5 @@
 const express = require('express')
-const mysql = require('mysql2')
+const { Pool, types } = require('pg')
 const cors = require('cors')
 const bcrypt = require('bcrypt')
 const crypto = require('crypto')
@@ -19,7 +19,8 @@ if (!process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET
 
 // =============================================================
-// verifyToken: valida el JWT propio (web y app movil por igual)
+// verifyToken: valida el JWT propio (web y app movil, ya que
+// ambos usan /api/login)
 // =============================================================
 function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization']
@@ -94,11 +95,11 @@ function verificarVetAtendioMascotaServicio(req, res, next) {
 const { google } = require('googleapis')
 
 async function getCalendarClient() {
-  const auth = new google.auth.GoogleAuth({
+  const authGoogle = new google.auth.GoogleAuth({
     keyFile: process.env.GOOGLE_CREDENTIALS_PATH,
     scopes: ['https://www.googleapis.com/auth/calendar']
   })
-  const authClient = await auth.getClient()
+  const authClient = await authGoogle.getClient()
   return google.calendar({ version: 'v3', auth: authClient })
 }
 
@@ -217,23 +218,182 @@ const forgotPasswordLimiter = rateLimit({
   message: { error: 'Demasiadas solicitudes de recuperacion. Intenta de nuevo en 1 hora.' }
 })
 
-const db = mysql.createConnection({
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'petcard',
-  charset: 'utf8mb4'
+// =============================================================
+// CONEXION A SUPABASE (POSTGRESQL)
+//
+// DATABASE_URL debe estar en tu .env, con el formato que te da
+// Supabase en Project Settings > Database > Connection string (URI):
+//   postgresql://postgres:[TU-PASSWORD]@[HOST]:[PUERTO]/postgres
+// =============================================================
+
+if (!process.env.DATABASE_URL) {
+  console.error('FATAL: La variable de entorno DATABASE_URL no esta definida.')
+  console.error('Agrega DATABASE_URL=<tu cadena de conexion de Supabase> en tu archivo .env')
+  process.exit(1)
+}
+
+// Evita que node-postgres convierta columnas DATE/TIMESTAMP a objetos
+// Date de JS; las devolvemos como texto plano ("YYYY-MM-DD" / "YYYY-MM-DD
+// HH:MM:SS"), que es el formato que ya espera el resto del codigo (por
+// ejemplo cita.Fecha.substring(0,10) en crearEventoCalendar).
+types.setTypeParser(1082, val => val) // DATE
+types.setTypeParser(1114, val => val) // TIMESTAMP WITHOUT TIME ZONE
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 })
 
-db.connect(err => {
-  if (err) {
-    console.error('ERROR conectando a MySQL:', err.message)
-    console.error('Asegurate que MySQL este corriendo en XAMPP')
-    return
+pool.query('SELECT 1')
+  .then(() => console.log('✓ Conectado a Supabase (PostgreSQL) correctamente'))
+  .catch(err => {
+    console.error('ERROR conectando a Supabase:', err.message)
+    console.error('Revisa que DATABASE_URL en tu .env sea correcta y que el proyecto de Supabase este activo.')
+  })
+
+// =============================================================
+// Postgres, cuando un identificador no va entre comillas dobles,
+// lo guarda y lo devuelve TODO en minusculas (ID_usuario -> id_usuario).
+// Esta tabla traduce esas columnas de vuelta al mismo "PascalCase" que
+// usaba mysql2, para que el resto del archivo (results[0].ID_usuario,
+// usuario.Contrasena, cita.Nombre_mascota, etc.) siga funcionando
+// exactamente igual sin tener que tocar cada ruta una por una.
+// =============================================================
+const COLUMN_CASE_MAP = {
+  id_usuario: 'ID_usuario',
+  id_cliente: 'ID_cliente',
+  id_veterinario: 'ID_veterinario',
+  id_administrador: 'ID_administrador',
+  id_servicio: 'ID_servicio',
+  id_mascota: 'ID_mascota',
+  id_cita: 'ID_cita',
+  id_carnetvacunas: 'ID_carnetVacunas',
+  id_planalimentacion: 'ID_planAlimentacion',
+  id_sistemacorreo: 'ID_sistemaCorreo',
+  id_notificacion: 'ID_notificacion',
+  nombre: 'Nombre',
+  correo: 'Correo',
+  telefono: 'Telefono',
+  contrasena: 'Contrasena',
+  rol: 'Rol',
+  firebase_uid: 'firebase_uid',
+  direccion: 'Direccion',
+  cargo: 'Cargo',
+  especialidad: 'Especialidad',
+  area: 'Area',
+  permisos: 'Permisos',
+  descripcion: 'Descripcion',
+  categoria: 'Categoria',
+  precio: 'Precio',
+  fecha_nacimiento: 'Fecha_nacimiento',
+  especie: 'Especie',
+  sexo: 'Sexo',
+  foto: 'Foto',
+  raza: 'Raza',
+  peso: 'Peso',
+  estado: 'Estado',
+  fecha: 'Fecha',
+  hora: 'Hora',
+  motivo: 'Motivo',
+  observaciones: 'Observaciones',
+  google_event_id: 'Google_Event_ID',
+  nombre_vacuna: 'Nombre_vacuna',
+  laboratorio: 'Laboratorio',
+  lote: 'Lote',
+  fecha_aplicacion: 'Fecha_aplicacion',
+  proxima_dosis: 'Proxima_dosis',
+  tipo_dieta: 'Tipo_dieta',
+  frecuencia: 'Frecuencia',
+  alergias: 'Alergias',
+  horario: 'Horario',
+  calorias: 'Calorias',
+  suplementos: 'Suplementos',
+  comidas: 'Comidas',
+  fecha_inicio: 'Fecha_inicio',
+  fecha_fin: 'Fecha_fin',
+  diagnostico: 'Diagnostico',
+  revision_nutricional: 'Revision_nutricional',
+  protocolo: 'Protocolo',
+  mensaje: 'Mensaje',
+  tipo: 'Tipo',
+  canal: 'Canal',
+  fecha_envio: 'Fecha_envio',
+  leida: 'Leida',
+  fecha_lectura: 'Fecha_lectura',
+  nombre_dueno: 'Nombre_dueno',
+  nombre_mascota: 'Nombre_mascota',
+  nombre_cliente: 'Nombre_cliente',
+  nombre_servicio: 'Nombre_servicio',
+  nombre_veterinario: 'Nombre_veterinario',
+  nombre_usuario: 'Nombre_usuario'
+}
+
+function restaurarMayusculas(row) {
+  const nuevo = {}
+  for (const key of Object.keys(row)) {
+    nuevo[COLUMN_CASE_MAP[key] || key] = row[key]
   }
-  console.log('✓ Conectado a MySQL correctamente')
-})
+  return nuevo
+}
+
+// =============================================================
+// "db" - capa de compatibilidad para no reescribir cada ruta.
+//
+// Permite seguir llamando exactamente igual que con mysql2:
+//   db.query('SELECT ... WHERE Correo=?', [correo], (err, results) => {...})
+// pero por debajo usa el driver de PostgreSQL (pg):
+//   - Convierte los "?" de MySQL a "$1, $2, $3..." de Postgres.
+//   - A los INSERT sin RETURNING les agrega "RETURNING *", para poder
+//     simular result.insertId (toma el valor de la primera columna,
+//     que en todas las tablas es la llave primaria).
+//   - Expone result.affectedRows (equivalente a rowCount de pg).
+//   - Restaura las mayusculas originales de cada columna en los
+//     resultados de SELECT, usando COLUMN_CASE_MAP.
+// =============================================================
+const db = {
+  query(sql, paramsOrCallback, maybeCallback) {
+    let params = []
+    let callback
+    if (typeof paramsOrCallback === 'function') {
+      callback = paramsOrCallback
+    } else {
+      params = paramsOrCallback || []
+      callback = maybeCallback
+    }
+
+    let index = 0
+    const pgSql = sql.replace(/\?/g, () => `$${++index}`)
+
+    const esInsert = /^\s*INSERT\s+INTO/i.test(pgSql)
+    const esUpdateODelete = /^\s*(UPDATE|DELETE)/i.test(pgSql)
+    const sqlFinal = (esInsert && !/RETURNING/i.test(pgSql)) ? `${pgSql} RETURNING *` : pgSql
+
+    const promesa = pool.query(sqlFinal, params)
+
+    if (!callback) {
+      // Llamadas "fire and forget" (sin callback), igual que se usaban
+      // con mysql2 en un par de sitios puntuales.
+      promesa.catch(err => console.error('Error en query sin callback:', err.message))
+      return
+    }
+
+    promesa
+      .then((pgResult) => {
+        const filas = (pgResult.rows || []).map(restaurarMayusculas)
+
+        if (esInsert || esUpdateODelete) {
+          const result = {
+            affectedRows: pgResult.rowCount,
+            insertId: esInsert && filas[0] ? Object.values(pgResult.rows[0])[0] : undefined
+          }
+          callback(null, result)
+        } else {
+          callback(null, filas)
+        }
+      })
+      .catch((err) => callback(err))
+  }
+}
 
 // =============================================================
 // USUARIOS
@@ -365,7 +525,7 @@ app.post('/api/login-admin', loginLimiter, async (req, res) => {
 })
 
 // =============================================================
-// RECUPERACION DE CONTRASEÑA
+// RECUPERACION DE CONTRASEÑA (web — sin cambios)
 // =============================================================
 app.post('/api/forgot-password', forgotPasswordLimiter, (req, res) => {
   const { Correo } = req.body
