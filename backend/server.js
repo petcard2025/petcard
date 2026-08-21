@@ -1,5 +1,5 @@
 const express = require('express')
-const mysql = require('mysql2')
+const { Pool, types } = require('pg')
 const cors = require('cors')
 const bcrypt = require('bcrypt')
 const crypto = require('crypto')
@@ -19,15 +19,20 @@ if (!process.env.JWT_SECRET) {
 //
 const JWT_SECRET = process.env.JWT_SECRET
 
+// =============================================================
+// verifyToken: valida el JWT propio (web y app movil, ya que
+// ambos usan /api/login)
+// =============================================================
 function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization']
   const token = authHeader && authHeader.split(' ')[1]
   if (!token) return res.status(401).json({ error: 'Acceso denegado. Token no proporcionado.' })
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET)
     req.usuario = decoded
     next()
-  } catch (error) {
+  } catch (jwtError) {
     return res.status(403).json({ error: 'Token invalido o expirado.' })
   }
 }
@@ -55,9 +60,8 @@ function cargarVeterinario(req, res, next) {
 }
 
 // 🆕 ── Middleware: verifica que el veterinario haya atendido esa mascota con ese servicio ──
-// (usado para que un veterinario solo edite planes de alimentacion de mascotas/servicios que el atendio)
 function verificarVetAtendioMascotaServicio(req, res, next) {
-  if (req.usuario.Rol !== 'veterinario') return next() // admin pasa libre
+  if (req.usuario.Rol !== 'veterinario') return next()
 
   const verificar = (idMascota, idServicio) => {
     db.query(
@@ -73,7 +77,6 @@ function verificarVetAtendioMascotaServicio(req, res, next) {
     )
   }
 
-  // Si viene un :id de plan existente (PUT), primero hay que leer el plan para saber su mascota/servicio
   if (req.params.id) {
     db.query(
       'SELECT ID_mascota, ID_servicio FROM planalimentacion WHERE ID_planAlimentacion = ?',
@@ -87,18 +90,17 @@ function verificarVetAtendioMascotaServicio(req, res, next) {
     return
   }
 
-  // Si es creacion (POST), los datos vienen en el body
   verificar(req.body.ID_mascota, req.body.ID_servicio)
 }
 
 const { google } = require('googleapis')
 
 async function getCalendarClient() {
-  const auth = new google.auth.GoogleAuth({
+  const authGoogle = new google.auth.GoogleAuth({
     keyFile: process.env.GOOGLE_CREDENTIALS_PATH,
     scopes: ['https://www.googleapis.com/auth/calendar']
   })
-  const authClient = await auth.getClient()
+  const authClient = await authGoogle.getClient()
   return google.calendar({ version: 'v3', auth: authClient })
 }
 
@@ -217,30 +219,182 @@ const forgotPasswordLimiter = rateLimit({
   message: { error: 'Demasiadas solicitudes de recuperacion. Intenta de nuevo en 1 hora.' }
 })
 
-// ✅ FIX (antes: charset: 'utf8mb4_general_ci'):
-// mysql2 espera aquí el nombre de un CHARSET (ej. 'utf8mb4'), no una COLLATION
-// (ej. 'utf8mb4_general_ci'). Pasarle una collation hacía que la negociación de
-// codificación fallara silenciosamente y los caracteres con tildes/ñ llegaran
-// corruptos (ej. "Antirrábica" -> "Antirr??bica"), aunque los datos en la base
-// estaban guardados correctamente en utf8mb4. Si necesitas fijar la collation de
-// la conexión, usa la opción separada `collation`, no `charset`.
-const db = mysql.createConnection({
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'petcard',
-  charset: 'utf8mb4'
+// =============================================================
+// CONEXION A SUPABASE (POSTGRESQL)
+//
+// DATABASE_URL debe estar en tu .env, con el formato que te da
+// Supabase en Project Settings > Database > Connection string (URI):
+//   postgresql://postgres:[TU-PASSWORD]@[HOST]:[PUERTO]/postgres
+// =============================================================
+
+if (!process.env.DATABASE_URL) {
+  console.error('FATAL: La variable de entorno DATABASE_URL no esta definida.')
+  console.error('Agrega DATABASE_URL=<tu cadena de conexion de Supabase> en tu archivo .env')
+  process.exit(1)
+}
+
+// Evita que node-postgres convierta columnas DATE/TIMESTAMP a objetos
+// Date de JS; las devolvemos como texto plano ("YYYY-MM-DD" / "YYYY-MM-DD
+// HH:MM:SS"), que es el formato que ya espera el resto del codigo (por
+// ejemplo cita.Fecha.substring(0,10) en crearEventoCalendar).
+types.setTypeParser(1082, val => val) // DATE
+types.setTypeParser(1114, val => val) // TIMESTAMP WITHOUT TIME ZONE
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 })
 
-db.connect(err => {
-  if (err) {
-    console.error('ERROR conectando a MySQL:', err.message)
-    console.error('Asegurate que MySQL este corriendo en XAMPP')
-    return
+pool.query('SELECT 1')
+  .then(() => console.log('✓ Conectado a Supabase (PostgreSQL) correctamente'))
+  .catch(err => {
+    console.error('ERROR conectando a Supabase:', err.message)
+    console.error('Revisa que DATABASE_URL en tu .env sea correcta y que el proyecto de Supabase este activo.')
+  })
+
+// =============================================================
+// Postgres, cuando un identificador no va entre comillas dobles,
+// lo guarda y lo devuelve TODO en minusculas (ID_usuario -> id_usuario).
+// Esta tabla traduce esas columnas de vuelta al mismo "PascalCase" que
+// usaba mysql2, para que el resto del archivo (results[0].ID_usuario,
+// usuario.Contrasena, cita.Nombre_mascota, etc.) siga funcionando
+// exactamente igual sin tener que tocar cada ruta una por una.
+// =============================================================
+const COLUMN_CASE_MAP = {
+  id_usuario: 'ID_usuario',
+  id_cliente: 'ID_cliente',
+  id_veterinario: 'ID_veterinario',
+  id_administrador: 'ID_administrador',
+  id_servicio: 'ID_servicio',
+  id_mascota: 'ID_mascota',
+  id_cita: 'ID_cita',
+  id_carnetvacunas: 'ID_carnetVacunas',
+  id_planalimentacion: 'ID_planAlimentacion',
+  id_sistemacorreo: 'ID_sistemaCorreo',
+  id_notificacion: 'ID_notificacion',
+  nombre: 'Nombre',
+  correo: 'Correo',
+  telefono: 'Telefono',
+  contrasena: 'Contrasena',
+  rol: 'Rol',
+  firebase_uid: 'firebase_uid',
+  direccion: 'Direccion',
+  cargo: 'Cargo',
+  especialidad: 'Especialidad',
+  area: 'Area',
+  permisos: 'Permisos',
+  descripcion: 'Descripcion',
+  categoria: 'Categoria',
+  precio: 'Precio',
+  fecha_nacimiento: 'Fecha_nacimiento',
+  especie: 'Especie',
+  sexo: 'Sexo',
+  foto: 'Foto',
+  raza: 'Raza',
+  peso: 'Peso',
+  estado: 'Estado',
+  fecha: 'Fecha',
+  hora: 'Hora',
+  motivo: 'Motivo',
+  observaciones: 'Observaciones',
+  google_event_id: 'Google_Event_ID',
+  nombre_vacuna: 'Nombre_vacuna',
+  laboratorio: 'Laboratorio',
+  lote: 'Lote',
+  fecha_aplicacion: 'Fecha_aplicacion',
+  proxima_dosis: 'Proxima_dosis',
+  tipo_dieta: 'Tipo_dieta',
+  frecuencia: 'Frecuencia',
+  alergias: 'Alergias',
+  horario: 'Horario',
+  calorias: 'Calorias',
+  suplementos: 'Suplementos',
+  comidas: 'Comidas',
+  fecha_inicio: 'Fecha_inicio',
+  fecha_fin: 'Fecha_fin',
+  diagnostico: 'Diagnostico',
+  revision_nutricional: 'Revision_nutricional',
+  protocolo: 'Protocolo',
+  mensaje: 'Mensaje',
+  tipo: 'Tipo',
+  canal: 'Canal',
+  fecha_envio: 'Fecha_envio',
+  leida: 'Leida',
+  fecha_lectura: 'Fecha_lectura',
+  nombre_dueno: 'Nombre_dueno',
+  nombre_mascota: 'Nombre_mascota',
+  nombre_cliente: 'Nombre_cliente',
+  nombre_servicio: 'Nombre_servicio',
+  nombre_veterinario: 'Nombre_veterinario',
+  nombre_usuario: 'Nombre_usuario'
+}
+
+function restaurarMayusculas(row) {
+  const nuevo = {}
+  for (const key of Object.keys(row)) {
+    nuevo[COLUMN_CASE_MAP[key] || key] = row[key]
   }
-  console.log('✓ Conectado a MySQL correctamente')
-})
+  return nuevo
+}
+
+// =============================================================
+// "db" - capa de compatibilidad para no reescribir cada ruta.
+//
+// Permite seguir llamando exactamente igual que con mysql2:
+//   db.query('SELECT ... WHERE Correo=?', [correo], (err, results) => {...})
+// pero por debajo usa el driver de PostgreSQL (pg):
+//   - Convierte los "?" de MySQL a "$1, $2, $3..." de Postgres.
+//   - A los INSERT sin RETURNING les agrega "RETURNING *", para poder
+//     simular result.insertId (toma el valor de la primera columna,
+//     que en todas las tablas es la llave primaria).
+//   - Expone result.affectedRows (equivalente a rowCount de pg).
+//   - Restaura las mayusculas originales de cada columna en los
+//     resultados de SELECT, usando COLUMN_CASE_MAP.
+// =============================================================
+const db = {
+  query(sql, paramsOrCallback, maybeCallback) {
+    let params = []
+    let callback
+    if (typeof paramsOrCallback === 'function') {
+      callback = paramsOrCallback
+    } else {
+      params = paramsOrCallback || []
+      callback = maybeCallback
+    }
+
+    let index = 0
+    const pgSql = sql.replace(/\?/g, () => `$${++index}`)
+
+    const esInsert = /^\s*INSERT\s+INTO/i.test(pgSql)
+    const esUpdateODelete = /^\s*(UPDATE|DELETE)/i.test(pgSql)
+    const sqlFinal = (esInsert && !/RETURNING/i.test(pgSql)) ? `${pgSql} RETURNING *` : pgSql
+
+    const promesa = pool.query(sqlFinal, params)
+
+    if (!callback) {
+      // Llamadas "fire and forget" (sin callback), igual que se usaban
+      // con mysql2 en un par de sitios puntuales.
+      promesa.catch(err => console.error('Error en query sin callback:', err.message))
+      return
+    }
+
+    promesa
+      .then((pgResult) => {
+        const filas = (pgResult.rows || []).map(restaurarMayusculas)
+
+        if (esInsert || esUpdateODelete) {
+          const result = {
+            affectedRows: pgResult.rowCount,
+            insertId: esInsert && filas[0] ? Object.values(pgResult.rows[0])[0] : undefined
+          }
+          callback(null, result)
+        } else {
+          callback(null, filas)
+        }
+      })
+      .catch((err) => callback(err))
+  }
+}
 
 // =============================================================
 // USUARIOS
@@ -290,9 +444,9 @@ app.delete('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
 })
 
 // =============================================================
-// LOGIN
+// LOGIN (web — sin cambios)
 // =============================================================
-app.post('/api/login', loginLimiter, async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {   // 👈 CAMBIADO
   const { Correo, Contrasena } = req.body
   try {
     db.query(
@@ -330,7 +484,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   }
 })
 
-app.post('/api/login-admin', loginLimiter, async (req, res) => {
+app.post('/api/auth/login-admin', loginLimiter, async (req, res) => {   // 👈 CAMBIADO
   const { Correo, Contrasena } = req.body
   try {
     db.query(
@@ -372,9 +526,9 @@ app.post('/api/login-admin', loginLimiter, async (req, res) => {
 })
 
 // =============================================================
-// RECUPERACION DE CONTRASEÑA
+// RECUPERACION DE CONTRASEÑA (web — sin cambios)
 // =============================================================
-app.post('/api/forgot-password', forgotPasswordLimiter, (req, res) => {
+app.post('/api/auth/forgot-password', forgotPasswordLimiter, (req, res) => {
   const { Correo } = req.body
   if (!Correo) return res.status(400).json({ error: 'Correo requerido' })
   db.query('SELECT ID_usuario, Nombre, Telefono FROM usuario WHERE Correo=?', [Correo], async (err, results) => {
@@ -389,7 +543,7 @@ app.post('/api/forgot-password', forgotPasswordLimiter, (req, res) => {
   })
 })
 
-app.post('/api/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', async (req, res) =>  {
   const { token, nuevaContrasena } = req.body
   if (!token || !nuevaContrasena) return res.status(400).json({ error: 'Token y nueva contrasena requeridos' })
   if (nuevaContrasena.length < 6) return res.status(400).json({ error: 'Contrasena debe tener al menos 6 caracteres' })
@@ -458,10 +612,10 @@ app.get('/api/mascotas', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.get('/api/mascotas/cliente/:id_cliente', verifyToken, (req, res) => {
-  db.query('SELECT * FROM mascota WHERE ID_cliente=? AND Estado="activo"', [req.params.id_cliente], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json(results)
-  })
+ db.query('SELECT * FROM mascota WHERE ID_cliente=? AND Estado=\'activo\'', [req.params.id_cliente], (err, results) => {
+  if (err) return res.status(500).json({ error: err.message })
+  res.json(results)
+})
 })
 
 app.post('/api/mascotas', verifyToken, (req, res) => {
@@ -489,10 +643,10 @@ app.put('/api/mascotas/:id', verifyToken, (req, res) => {
 })
 
 app.delete('/api/mascotas/:id', verifyToken, (req, res) => {
-  db.query('UPDATE mascota SET Estado="inactivo" WHERE ID_mascota=?', [req.params.id], (err) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json({ message: 'Mascota desactivada' })
-  })
+  db.query('UPDATE mascota SET Estado=\'inactivo\' WHERE ID_mascota=?', [req.params.id], (err) => {
+  if (err) return res.status(500).json({ error: err.message })
+  res.json({ message: 'Mascota desactivada' })
+})
 })
 
 // =============================================================
@@ -553,8 +707,6 @@ app.delete('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
 // =============================================================
 // CITAS
 // =============================================================
-
-// 🆕 GET /api/citas — admin ve todas, veterinario solo ve las suyas
 app.get('/api/citas', verifyToken, cargarVeterinario, (req, res) => {
   let sql = `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
             ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones, ci.Estado,
@@ -583,8 +735,6 @@ app.get('/api/citas', verifyToken, cargarVeterinario, (req, res) => {
   })
 })
 
-// ── NUEVO: Horas ocupadas por veterinario y fecha ────────────
-// Debe estar ANTES del POST /api/citas para que Express no confunda la ruta
 app.get('/api/citas/horas-ocupadas', verifyToken, (req, res) => {
   const { ID_veterinario, Fecha } = req.query
   if (!ID_veterinario || !Fecha) {
@@ -604,7 +754,6 @@ app.get('/api/citas/horas-ocupadas', verifyToken, (req, res) => {
 app.post('/api/citas', verifyToken, async (req, res) => {
   const { ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
 
-  // Verificar conflicto de horario antes de insertar
   db.query(
     'SELECT ID_cita FROM cita WHERE ID_veterinario=? AND Fecha=? AND Hora=?',
     [ID_veterinario, Fecha, Hora],
@@ -655,7 +804,6 @@ app.post('/api/citas', verifyToken, async (req, res) => {
   )
 })
 
-// 🆕 PUT /api/citas/:id — si es veterinario, solo puede editar sus propias citas
 app.put('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   const { ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
 
@@ -684,7 +832,6 @@ app.put('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   }
 })
 
-// 🆕 PATCH /api/citas/:id — misma restriccion que el PUT
 app.patch('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   const campos = req.body
   const keys = Object.keys(campos)
@@ -713,7 +860,6 @@ app.patch('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
   }
 })
 
-// 🆕 DELETE /api/citas/:id — solo el administrador puede eliminar citas (antes era cualquier verifyToken)
 app.delete('/api/citas/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM cita WHERE ID_cita=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -798,8 +944,6 @@ app.delete('/api/vacunas/:id', verifyToken, (req, res) => {
 // =============================================================
 // PLAN DE ALIMENTACION
 // =============================================================
-
-// 🆕 GET /api/alimentacion — admin ve todos, veterinario solo ve planes de mascotas/servicios que atendio
 app.get('/api/alimentacion', verifyToken, cargarVeterinario, (req, res) => {
   let sql = `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
      FROM planalimentacion pa
@@ -826,7 +970,6 @@ app.get('/api/alimentacion/mascota/:id_mascota', verifyToken, (req, res) => {
   })
 })
 
-// 🆕 POST /api/alimentacion — veterinario solo puede crear si atendio esa mascota+servicio
 app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
   const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
@@ -839,7 +982,6 @@ app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendi
   )
 })
 
-// 🆕 PUT /api/alimentacion/:id — veterinario solo puede editar si atendio esa mascota+servicio
 app.put('/api/alimentacion/:id', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
   const { Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
@@ -852,7 +994,6 @@ app.put('/api/alimentacion/:id', verifyToken, cargarVeterinario, verificarVetAte
   )
 })
 
-// 🆕 DELETE /api/alimentacion/:id — solo el administrador puede eliminar planes (antes era cualquier verifyToken)
 app.delete('/api/alimentacion/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM planalimentacion WHERE ID_planAlimentacion=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
