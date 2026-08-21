@@ -445,7 +445,7 @@ app.delete('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
 // =============================================================
 // LOGIN (web — sin cambios)
 // =============================================================
-app.post('/api/login', loginLimiter, async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {   // 👈 CAMBIADO
   const { Correo, Contrasena } = req.body
   try {
     db.query(
@@ -483,7 +483,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   }
 })
 
-app.post('/api/login-admin', loginLimiter, async (req, res) => {
+app.post('/api/auth/login-admin', loginLimiter, async (req, res) => {   // 👈 CAMBIADO
   const { Correo, Contrasena } = req.body
   try {
     db.query(
@@ -527,7 +527,7 @@ app.post('/api/login-admin', loginLimiter, async (req, res) => {
 // =============================================================
 // RECUPERACION DE CONTRASEÑA (web — sin cambios)
 // =============================================================
-app.post('/api/forgot-password', forgotPasswordLimiter, (req, res) => {
+app.post('/api/auth/forgot-password', forgotPasswordLimiter, (req, res) => {
   const { Correo } = req.body
   if (!Correo) return res.status(400).json({ error: 'Correo requerido' })
   db.query('SELECT ID_usuario, Nombre, Telefono FROM usuario WHERE Correo=?', [Correo], async (err, results) => {
@@ -542,7 +542,7 @@ app.post('/api/forgot-password', forgotPasswordLimiter, (req, res) => {
   })
 })
 
-app.post('/api/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', async (req, res) =>  {
   const { token, nuevaContrasena } = req.body
   if (!token || !nuevaContrasena) return res.status(400).json({ error: 'Token y nueva contrasena requeridos' })
   if (nuevaContrasena.length < 6) return res.status(400).json({ error: 'Contrasena debe tener al menos 6 caracteres' })
@@ -611,10 +611,10 @@ app.get('/api/mascotas', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.get('/api/mascotas/cliente/:id_cliente', verifyToken, (req, res) => {
-  db.query('SELECT * FROM mascota WHERE ID_cliente=? AND Estado="activo"', [req.params.id_cliente], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json(results)
-  })
+ db.query('SELECT * FROM mascota WHERE ID_cliente=? AND Estado=\'activo\'', [req.params.id_cliente], (err, results) => {
+  if (err) return res.status(500).json({ error: err.message })
+  res.json(results)
+})
 })
 
 app.post('/api/mascotas', verifyToken, (req, res) => {
@@ -642,10 +642,10 @@ app.put('/api/mascotas/:id', verifyToken, (req, res) => {
 })
 
 app.delete('/api/mascotas/:id', verifyToken, (req, res) => {
-  db.query('UPDATE mascota SET Estado="inactivo" WHERE ID_mascota=?', [req.params.id], (err) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json({ message: 'Mascota desactivada' })
-  })
+  db.query('UPDATE mascota SET Estado=\'inactivo\' WHERE ID_mascota=?', [req.params.id], (err) => {
+  if (err) return res.status(500).json({ error: err.message })
+  res.json({ message: 'Mascota desactivada' })
+})
 })
 
 // =============================================================
