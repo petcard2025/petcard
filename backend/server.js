@@ -16,6 +16,7 @@ if (!process.env.JWT_SECRET) {
   console.error('Agrega JWT_SECRET=<secreto-largo-y-aleatorio> en tu archivo .env')
   process.exit(1)
 }
+//
 const JWT_SECRET = process.env.JWT_SECRET
 
 function verifyToken(req, res, next) {
