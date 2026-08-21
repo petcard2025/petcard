@@ -70,7 +70,7 @@ export const usuariosAPI = {
 // Guarda el token JWT en localStorage automaticamente al hacer login
 export const loginAPI = {
   loginUsuario: async (correo, contrasena) => {
-    const data = await fetchAPI('/login', {
+    const data = await fetchAPI('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ Correo: correo, Contrasena: contrasena })
     })
@@ -81,7 +81,7 @@ export const loginAPI = {
     return data
   },
   loginAdmin: async (correo, contrasena) => {
-    const data = await fetchAPI('/login-admin', {
+    const data = await fetchAPI('/auth/login-admin', {
       method: 'POST',
       body: JSON.stringify({ Correo: correo, Contrasena: contrasena })
     })
@@ -232,11 +232,11 @@ export const notificacionesAPI = {
 
 // ========== AUTENTICACIÓN (Olvidé contraseña / Reset) ==========
 export const authAPI = {
-  requestForgotPassword: (correo) => fetchAPI('/forgot-password', {
+  requestForgotPassword: (correo) => fetchAPI('/auth/forgot-password', {
     method: 'POST',
     body: JSON.stringify({ Correo: correo })
   }),
-  resetPassword: (token, nuevaContrasena) => fetchAPI('/reset-password', {
+  resetPassword: (token, nuevaContrasena) => fetchAPI('/auth/reset-password', {
     method: 'POST',
     body: JSON.stringify({ token, nuevaContrasena })
   })

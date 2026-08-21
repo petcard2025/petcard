@@ -18,7 +18,7 @@ db.connect(async (err) => {
   }
   
   console.log('✓ Conectado a MySQL')
-  console.log('🔐 Iniciando encriptación de contraseñas...\n')
+  console.log(' Iniciando encriptación de contraseñas...\n')
 
   try {
     // ===== ENCRIPTACION: Obtener todos los usuarios =====
@@ -43,7 +43,7 @@ db.connect(async (err) => {
               [hash, usuario.ID_usuario],
               (err) => {
                 if (err) {
-                  console.error(`❌ Error actualizando usuario ${usuario.ID_usuario}:`, err.message)
+                  console.error(` Error actualizando usuario ${usuario.ID_usuario}:`, err.message)
                 } else {
                   console.log(`✓ Usuario ${usuario.ID_usuario} encriptado`)
                   actualizadas++
@@ -51,17 +51,17 @@ db.connect(async (err) => {
               }
             )
           } else {
-            console.log(`⚠ Usuario ${usuario.ID_usuario} ya está encriptado`)
+            console.log(` Usuario ${usuario.ID_usuario} ya está encriptado`)
           }
         } catch (error) {
-          console.error(`❌ Error al hashear usuario ${usuario.ID_usuario}:`, error.message)
+          console.error(` Error al hashear usuario ${usuario.ID_usuario}:`, error.message)
         }
       }
 
       // Esperar un poco y mostrar resumen
       setTimeout(() => {
-        console.log(`\n✅ Proceso completado! ${actualizadas} contraseñas encriptadas con bcrypt`)
-        console.log('🔐 Todas las contraseñas ahora están seguras\n')
+        console.log(`Proceso completado! ${actualizadas} contraseñas encriptadas con bcrypt`)
+        console.log(' Todas las contraseñas ahora están seguras\n')
         db.end()
       }, 1000)
     })
