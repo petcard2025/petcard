@@ -14,7 +14,7 @@ const servicioSeleccionado = ref(null)
 const servicioAEliminar = ref(null)
 const guardando = ref(false)
 
-const nuevoServicio = ref({ Nombre: '', Descripcion: '', Categoria: '', Precio: '' })
+const nuevoServicio = ref({ Nombre: '', Descripcion: '', Categoria: '',   })
 
 onMounted(cargarServicios)
 
@@ -58,15 +58,15 @@ async function eliminarServicio() {
 }
 
 async function crearServicio() {
-  if (!nuevoServicio.value.Nombre || !nuevoServicio.value.Precio) {
-    alert('El nombre y el precio son obligatorios.')
+  if (!nuevoServicio.value.Nombre ) {
+    alert('El nombre es obligatorio.')
     return
   }
   guardando.value = true
   try {
     await serviciosAPI.crear(nuevoServicio.value)
     await cargarServicios()
-    nuevoServicio.value = { Nombre: '', Descripcion: '', Categoria: '', Precio: '' }
+    nuevoServicio.value = { Nombre: '', Descripcion: '', Categoria:  '' }
     mostrarModalNuevo.value = false
   } catch { alert('Error al crear el servicio.') } finally { guardando.value = false }
 }
@@ -101,9 +101,6 @@ async function crearServicio() {
         </div>
         <div class="admin-card-body">
           <div class="admin-card-meta">{{ s.Descripcion }}</div>
-          <div style="margin-top:.6rem;font-size:1.1rem;font-weight:800;color:var(--purple);">${{ s.Precio }}</div>
-        </div>
-        <div class="admin-card-actions">
           <button class="btn btn-secondary btn-sm" @click="abrirEditar(s)">Editar</button>
           <button class="btn btn-danger btn-sm" @click="confirmarEliminar(s)">Eliminar</button>
         </div>
@@ -118,7 +115,6 @@ async function crearServicio() {
           <label>Nombre</label><input v-model="nuevoServicio.Nombre" />
           <label>Descripción</label><input v-model="nuevoServicio.Descripcion" />
           <label>Categoría</label><input v-model="nuevoServicio.Categoria" placeholder="Ej: Consulta, Vacunación..." />
-          <label>Precio ($)</label><input type="number" v-model="nuevoServicio.Precio" />
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="mostrarModalNuevo = false">Cancelar</button>
@@ -135,7 +131,6 @@ async function crearServicio() {
           <label>Nombre</label><input v-model="servicioSeleccionado.Nombre" />
           <label>Descripción</label><input v-model="servicioSeleccionado.Descripcion" />
           <label>Categoría</label><input v-model="servicioSeleccionado.Categoria" />
-          <label>Precio ($)</label><input type="number" v-model="servicioSeleccionado.Precio" />
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="mostrarModalEditar = false">Cancelar</button>

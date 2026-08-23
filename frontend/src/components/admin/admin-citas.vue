@@ -52,6 +52,13 @@ const nuevaCita = ref({
   ID_cliente: '', ID_mascota: '', ID_servicio: '',
   ID_veterinario: '', Fecha: '', Hora: '', Motivo: '', Observaciones: ''
 })
+const fechaMinima = computed(() => {
+  const hoy = new Date()
+  const yyyy = hoy.getFullYear()
+  const mm = String(hoy.getMonth() + 1).padStart(2, '0')
+  const dd = String(hoy.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+})
 
 onMounted(async () => {
   await cargarCitas()
@@ -296,7 +303,9 @@ async function crearCita() {
             <option v-for="v in veterinarios" :key="v.ID_veterinario" :value="v.ID_veterinario">{{ v.Nombre }}</option>
           </select>
           <label>Fecha</label>
-          <input type="date" v-model="nuevaCita.Fecha" />
+          <input type="date" v-model="nuevaCita.Fecha" :min="fechaMinima" />
+          
+          
 
           <label>
             Hora
@@ -343,7 +352,7 @@ async function crearCita() {
             <option v-for="v in veterinarios" :key="v.ID_veterinario" :value="v.ID_veterinario">{{ v.Nombre }}</option>
           </select>
           <label>Fecha</label>
-          <input type="date" v-model="citaSeleccionada.Fecha" />
+          <input type="date" v-model="citaSeleccionada.Fecha" :min="fechaMinima" />
 
           <label>
             Hora

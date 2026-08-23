@@ -337,9 +337,8 @@ const onStageLeave = () => {
 
         <p class="create-account">¿No tienes cuenta? <a href="javascript:void(0)" @click="irARegistro">Crear cuenta</a></p>
 
-        <p class="admin-access" style="margin-top: 1rem; text-align: center; font-size: 0.9rem;">
-          <a href="javascript:void(0)" @click="irALoginAdmin" style="color: #764ba2; font-weight: 600; text-decoration: none;">👨‍💼 Acceso de Administrador</a>
-        </p>
+        
+        
       </div>
     </div>
   </div>

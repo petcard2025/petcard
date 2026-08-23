@@ -248,13 +248,6 @@ watch(authUsuario, () => {
           </div>
         </div>
 
-        <!-- Estadísticas -->
-        <div class="card">
-          <div class="card-title" style="font-size:.95rem;">Estado de la sesión</div>
-          <div class="estadistica-row"><span>JWT activo</span><strong>{{ token ? 'Sí' : 'No' }}</strong></div>
-          <div class="estadistica-row" v-if="token"><span>Token (inicio)</span><strong>{{ token.slice(0, 18) + '...' }}</strong></div>
-        </div>
-
         <div class="card">
           <div class="card-title" style="font-size:.95rem;">Estadísticas</div>
           <div class="estadistica-row"><span>Mascotas registradas</span><strong>3</strong></div>

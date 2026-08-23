@@ -674,10 +674,10 @@ app.get('/api/servicios', (req, res) => {
 })
 
 app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria, Precio } = req.body
+  const { Nombre, Descripcion, Categoria } = req.body   // 👈 CAMBIADO: sin Precio
   db.query(
-    'INSERT INTO servicio (Nombre, Descripcion, Categoria, Precio) VALUES (?,?,?,?)',
-    [Nombre, Descripcion, Categoria, Precio],
+    'INSERT INTO servicio (Nombre, Descripcion, Categoria) VALUES (?,?,?)',   // 👈 CAMBIADO
+    [Nombre, Descripcion, Categoria],   // 👈 CAMBIADO
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ ID_servicio: result.insertId, ...req.body })
@@ -686,10 +686,10 @@ app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.put('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria, Precio } = req.body
+  const { Nombre, Descripcion, Categoria } = req.body   // 👈 CAMBIADO: sin Precio
   db.query(
-    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=?, Precio=? WHERE ID_servicio=?',
-    [Nombre, Descripcion, Categoria, Precio, req.params.id],
+    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=? WHERE ID_servicio=?',   // 👈 CAMBIADO
+    [Nombre, Descripcion, Categoria, req.params.id],   // 👈 CAMBIADO
     (err) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ message: 'Servicio actualizado' })
