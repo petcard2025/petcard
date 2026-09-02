@@ -469,13 +469,26 @@ app.post('/api/login', loginLimiter, async (req, res) => {
             if (err) console.error('Error actualizando hash:', err.message)
           })
         }
-        const usuarioSeguro = { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Telefono: usuario.Telefono, Rol: usuario.Rol }
-        const token = jwt.sign(
-          { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
-          JWT_SECRET,
-          { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+                        db.query(
+          'SELECT ID_veterinario FROM veterinario WHERE ID_usuario = ?',
+          [usuario.ID_usuario],
+          (errVet, vetRows) => {
+            const usuarioSeguro = {
+              ID_usuario: usuario.ID_usuario,
+              Nombre: usuario.Nombre,
+              Correo: usuario.Correo,
+              Telefono: usuario.Telefono,
+              Rol: usuario.Rol,
+              ID_veterinario: (!errVet && vetRows.length > 0) ? vetRows[0].ID_veterinario : null
+            }
+            const token = jwt.sign(
+              { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
+              JWT_SECRET,
+              { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+            )
+            res.json({ message: 'Login exitoso', token, usuario: usuarioSeguro })
+          }
         )
-        res.json({ message: 'Login exitoso', token, usuario: usuarioSeguro })
       }
     )
   } catch (error) {
