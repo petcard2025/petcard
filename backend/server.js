@@ -395,6 +395,54 @@ const db = {
   }
 }
 
+
+// =============================================================
+// VALIDACIONES COMPARTIDAS (usadas por USUARIOS y LOGIN)
+// Declaradas UNA sola vez para todo el archivo.
+// =============================================================
+const EMAIL_REGEX = /^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$/
+const NAME_REGEX = /^[a-zA-ZÀ-ÖØ-öø-ÿ]+(?:\s[a-zA-ZÀ-ÖØ-öø-ÿ]+)+$/
+const PHONE_REGEX = /^3\d{9}$/ // celular colombiano: 10 dígitos, empieza en 3
+const HAS_LETTER = /[a-zA-Z]/
+const HAS_UPPER = /[A-Z]/
+const HAS_DIGIT = /[0-9]/
+
+function validarDatosRegistro({ Nombre, Correo, Contrasena, Telefono }) {
+  const nombre = (Nombre || '').trim()
+  const correo = (Correo || '').trim().toLowerCase()
+  const contrasena = Contrasena || ''
+  const telefono = (Telefono || '').toString().trim().replace(/[\s\-().]/g, '')
+
+  if (!nombre || !correo || !contrasena || !telefono) {
+    return { error: 'Faltan campos obligatorios' }
+  }
+  if (nombre.length < 3 || !NAME_REGEX.test(nombre)) {
+    return { error: 'Ingresa un nombre y apellido válidos (solo letras)' }
+  }
+  if (!EMAIL_REGEX.test(correo)) {
+    return { error: 'Correo no válido' }
+  }
+  if (!PHONE_REGEX.test(telefono)) {
+    return { error: 'Ingresa un número de teléfono válido (10 dígitos, ej: 3001234567)' }
+  }
+  if (
+    contrasena.length < 6 ||
+    !HAS_UPPER.test(contrasena) ||
+    !HAS_LETTER.test(contrasena) ||
+    !HAS_DIGIT.test(contrasena)
+  ) {
+    return { error: 'La contraseña debe tener al menos 6 caracteres, con una mayúscula y un número' }
+  }
+  return { nombre, correo, contrasena, telefono }
+}
+
+function correoYaExiste(correo, callback) {
+  db.query('SELECT ID_usuario FROM usuario WHERE Correo=?', [correo], (err, rows) => {
+    if (err) return callback(err)
+    callback(null, rows.length > 0)
+  })
+}
+
 // =============================================================
 // USUARIOS
 // =============================================================
@@ -405,19 +453,68 @@ app.get('/api/usuarios', verifyToken, verifyAdmin, (req, res) => {
   })
 })
 
-app.post('/api/usuarios', async (req, res) => {
-  const { Nombre, Correo, Telefono, Contrasena, Rol } = req.body
-  if (!Nombre || !Correo || !Contrasena || !Rol) return res.status(400).json({ error: 'Faltan campos obligatorios' })
+// -------------------------------------------------------------
+// Registro público (usado por la app / web). SIEMPRE crea
+// Rol='cliente' — el Rol nunca se toma del body para evitar que
+// cualquiera se autoasigne 'administrador' o 'veterinario'.
+// -------------------------------------------------------------
+app.post('/api/usuarios', loginLimiter, async (req, res) => {
+  const datos = validarDatosRegistro(req.body)
+  if (datos.error) return res.status(400).json({ error: datos.error })
+
+  const { nombre, correo, contrasena, telefono } = datos
+
   try {
-    const hashedPassword = await bcrypt.hash(Contrasena, SALT_ROUNDS)
-    db.query(
-      'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
-      [Nombre, Correo, Telefono, hashedPassword, Rol],
-      (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ ID_usuario: result.insertId, Nombre, Correo, Telefono, Rol })
-      }
-    )
+    correoYaExiste(correo, async (err, existe) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (existe) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo' })
+
+      const hashedPassword = await bcrypt.hash(contrasena, SALT_ROUNDS)
+      db.query(
+        'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
+        [nombre, correo, telefono, hashedPassword, 'cliente'],
+        (err, result) => {
+          if (err) return res.status(500).json({ error: err.message })
+          res.json({ ID_usuario: result.insertId, Nombre: nombre, Correo: correo, Telefono: telefono, Rol: 'cliente' })
+        }
+      )
+    })
+  } catch (error) {
+    res.status(500).json({ error: 'Error al encriptar la contrasena' })
+  }
+})
+
+// -------------------------------------------------------------
+// Creación de personal (veterinarios / administradores).
+// Solo un administrador autenticado puede llamar esta ruta,
+// y aquí sí se permite elegir el Rol explícitamente.
+// -------------------------------------------------------------
+app.post('/api/usuarios/staff', verifyToken, verifyAdmin, async (req, res) => {
+  const datos = validarDatosRegistro(req.body)
+  if (datos.error) return res.status(400).json({ error: datos.error })
+
+  const { Rol } = req.body
+  if (!['administrador', 'veterinario', 'cliente'].includes(Rol)) {
+    return res.status(400).json({ error: 'Rol inválido' })
+  }
+
+  const { nombre, correo, contrasena, telefono } = datos
+
+  try {
+    correoYaExiste(correo, async (err, existe) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (existe) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo' })
+
+      const hashedPassword = await bcrypt.hash(contrasena, SALT_ROUNDS)
+      db.query(
+        'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
+        [nombre, correo, telefono, hashedPassword, Rol],
+        (err, result) => {
+          if (err) return res.status(500).json({ error: err.message })
+          res.json({ ID_usuario: result.insertId, Nombre: nombre, Correo: correo, Telefono: telefono, Rol })
+        }
+      )
+    })
   } catch (error) {
     res.status(500).json({ error: 'Error al encriptar la contrasena' })
   }
@@ -443,137 +540,118 @@ app.delete('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
 })
 
 // =============================================================
-// LOGIN (web — sin cambios)
+// LOGIN (web) — con validación de entrada y helper compartido
 // =============================================================
-app.post('/api/login', loginLimiter, async (req, res) => {
-  const { Correo, Contrasena } = req.body
-  try {
-    db.query(
-      'SELECT ID_usuario, Nombre, Correo, Telefono, Rol, Contrasena FROM usuario WHERE Correo=?',
-      [Correo],
-      async (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        if (results.length === 0) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-        const usuario = results[0]
-        let isPasswordValid = false
-        const storedPassword = usuario.Contrasena || ''
-        if (storedPassword.startsWith('$2')) {
-          isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
-        } else {
-          isPasswordValid = Contrasena === storedPassword
-        }
-        if (!isPasswordValid) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-        if (!storedPassword.startsWith('$2')) {
-          const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
-          db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
-            if (err) console.error('Error actualizando hash:', err.message)
-          })
-        }
-                        db.query(
-          'SELECT ID_veterinario FROM veterinario WHERE ID_usuario = ?',
-          [usuario.ID_usuario],
-          (errVet, vetRows) => {
-            const usuarioSeguro = {
-              ID_usuario: usuario.ID_usuario,
-              Nombre: usuario.Nombre,
-              Correo: usuario.Correo,
-              Telefono: usuario.Telefono,
-              Rol: usuario.Rol,
-              ID_veterinario: (!errVet && vetRows.length > 0) ? vetRows[0].ID_veterinario : null
-            }
-            const token = jwt.sign(
-              { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
-              JWT_SECRET,
-              { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
-            )
-            res.json({ message: 'Login exitoso', token, usuario: usuarioSeguro })
-          }
-        )
+function validarCredenciales(req, res) {
+  const Correo = (req.body.Correo || '').trim().toLowerCase()
+  const Contrasena = req.body.Contrasena || ''
+
+  if (!Correo || !Contrasena) {
+    res.status(400).json({ error: 'Correo y contraseña son obligatorios' })
+    return null
+  }
+  if (!EMAIL_REGEX.test(Correo)) {
+    res.status(400).json({ error: 'Correo no válido' })
+    return null
+  }
+  return { Correo, Contrasena }
+}
+
+function buscarUsuarioYValidarPassword(Correo, Contrasena, res, onValid) {
+  db.query(
+    'SELECT ID_usuario, Nombre, Correo, Telefono, Rol, Contrasena FROM usuario WHERE Correo=?',
+    [Correo],
+    async (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (results.length === 0) {
+        return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
       }
-    )
+
+      const usuario = results[0]
+      const storedPassword = usuario.Contrasena || ''
+      let isPasswordValid = false
+
+      if (storedPassword.startsWith('$2')) {
+        isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
+      } else {
+        isPasswordValid = Contrasena === storedPassword
+      }
+
+      if (!isPasswordValid) {
+        return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+      }
+
+      // Migración perezosa de contraseñas en texto plano a bcrypt
+      if (!storedPassword.startsWith('$2')) {
+        const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
+        db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
+          if (err) console.error('Error actualizando hash:', err.message)
+        })
+      }
+
+      onValid(usuario)
+    }
+  )
+}
+
+app.post('/api/login', loginLimiter, async (req, res) => {
+  const credenciales = validarCredenciales(req, res)
+  if (!credenciales) return // ya se respondió el error
+
+  try {
+    buscarUsuarioYValidarPassword(credenciales.Correo, credenciales.Contrasena, res, (usuario) => {
+      db.query(
+        'SELECT ID_veterinario FROM veterinario WHERE ID_usuario = ?',
+        [usuario.ID_usuario],
+        (errVet, vetRows) => {
+          const usuarioSeguro = {
+            ID_usuario: usuario.ID_usuario,
+            Nombre: usuario.Nombre,
+            Correo: usuario.Correo,
+            Telefono: usuario.Telefono,
+            Rol: usuario.Rol,
+            ID_veterinario: (!errVet && vetRows.length > 0) ? vetRows[0].ID_veterinario : null
+          }
+          const token = jwt.sign(
+            { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
+            JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+          )
+          res.json({ message: 'Login exitoso', token, usuario: usuarioSeguro })
+        }
+      )
+    })
   } catch (error) {
     res.status(500).json({ error: 'Error al procesar el login' })
   }
 })
 
 app.post('/api/login-admin', loginLimiter, async (req, res) => {
-  const { Correo, Contrasena } = req.body
+  const credenciales = validarCredenciales(req, res)
+  if (!credenciales) return
+
   try {
-    db.query(
-      'SELECT ID_usuario, Nombre, Correo, Telefono, Rol, Contrasena FROM usuario WHERE Correo=?',
-      [Correo],
-      async (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        if (results.length === 0) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-        const usuario = results[0]
-        let isPasswordValid = false
-        const storedPassword = usuario.Contrasena || ''
-        if (storedPassword.startsWith('$2')) {
-          isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
-        } else {
-          isPasswordValid = Contrasena === storedPassword
-        }
-        if (!isPasswordValid) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-        if (usuario.Rol !== 'administrador' && usuario.Rol !== 'veterinario') {
-          return res.status(403).json({ error: 'Esta cuenta no tiene permisos de acceso al panel.' })
-        }
-        if (!storedPassword.startsWith('$2')) {
-          const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
-          db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
-            if (err) console.error('Error actualizando hash:', err.message)
-          })
-        }
-        const usuarioSeguro = { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Telefono: usuario.Telefono, Rol: usuario.Rol }
-        const token = jwt.sign(
-          { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
-          JWT_SECRET,
-          { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
-        )
-        res.json({ message: 'Login admin exitoso', token, usuario: usuarioSeguro })
+    buscarUsuarioYValidarPassword(credenciales.Correo, credenciales.Contrasena, res, (usuario) => {
+      if (usuario.Rol !== 'administrador' && usuario.Rol !== 'veterinario') {
+        return res.status(403).json({ error: 'Esta cuenta no tiene permisos de acceso al panel.' })
       }
-    )
-  } catch (error) {
-    res.status(500).json({ error: 'Error al procesar el login' })
-  }
-})
 
-// =============================================================
-// RECUPERACION DE CONTRASEÑA (web — sin cambios)
-// =============================================================
-app.post('/api/forgot-password', forgotPasswordLimiter, (req, res) => {
-  const { Correo } = req.body
-  if (!Correo) return res.status(400).json({ error: 'Correo requerido' })
-  db.query('SELECT ID_usuario, Nombre, Telefono FROM usuario WHERE Correo=?', [Correo], async (err, results) => {
-    if (err) return res.status(500).json({ error: err.message })
-    if (results.length === 0) return res.json({ message: 'Si el correo esta registrado, recibiras las instrucciones de recuperacion.' })
-    const usuario = results[0]
-    const token = crypto.randomBytes(32).toString('hex')
-    const expires = Date.now() + 3600000
-    resetTokens.set(token, { ID_usuario: usuario.ID_usuario, expires })
-    console.log(`[DEV] Token de reset para ${Correo}: ${token}`)
-    res.json({ message: 'Si el correo esta registrado, recibiras las instrucciones de recuperacion.', token, info: 'Usa este token en /api/reset-password con la nueva contrasena' })
-  })
-})
-
-app.post('/api/reset-password', async (req, res) => {
-  const { token, nuevaContrasena } = req.body
-  if (!token || !nuevaContrasena) return res.status(400).json({ error: 'Token y nueva contrasena requeridos' })
-  if (nuevaContrasena.length < 6) return res.status(400).json({ error: 'Contrasena debe tener al menos 6 caracteres' })
-  const tokenData = resetTokens.get(token)
-  if (!tokenData) return res.status(400).json({ error: 'Token invalido' })
-  if (Date.now() > tokenData.expires) {
-    resetTokens.delete(token)
-    return res.status(400).json({ error: 'Token expirado' })
-  }
-  try {
-    const hashedPassword = await bcrypt.hash(nuevaContrasena, SALT_ROUNDS)
-    db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [hashedPassword, tokenData.ID_usuario], (err) => {
-      if (err) return res.status(500).json({ error: err.message })
-      resetTokens.delete(token)
-      res.json({ message: 'Contrasena actualizada exitosamente' })
+      const usuarioSeguro = {
+        ID_usuario: usuario.ID_usuario,
+        Nombre: usuario.Nombre,
+        Correo: usuario.Correo,
+        Telefono: usuario.Telefono,
+        Rol: usuario.Rol
+      }
+      const token = jwt.sign(
+        { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
+        JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+      )
+      res.json({ message: 'Login admin exitoso', token, usuario: usuarioSeguro })
     })
   } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar contrasena' })
+    res.status(500).json({ error: 'Error al procesar el login' })
   }
 })
 
