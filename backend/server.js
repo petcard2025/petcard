@@ -375,6 +375,55 @@ const db = {
 }
 
 // =============================================================
+// VALIDACIONES COMPARTIDAS (usadas por USUARIOS y LOGIN)
+// =============================================================
+const EMAIL_REGEX = /^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$/
+const NAME_REGEX = /^[a-zA-ZÀ-ÖØ-öø-ÿ]+(?:\s[a-zA-ZÀ-ÖØ-öø-ÿ]+)+$/
+const PHONE_REGEX = /^3\d{9}$/ // celular colombiano: 10 dígitos, empieza en 3
+const HAS_LETTER = /[a-zA-Z]/
+const HAS_UPPER = /[A-Z]/
+const HAS_DIGIT = /[0-9]/
+
+function validarDatosRegistro({ Nombre, Correo, Contrasena, Telefono }) {
+  const nombre = (Nombre || '').trim()
+  const correo = (Correo || '').trim().toLowerCase()
+  const contrasena = Contrasena || ''
+  const telefono = (Telefono || '').toString().trim().replace(/[\s\-().]/g, '')
+
+  if (!nombre || !correo || !contrasena) {
+    return { error: 'Faltan campos obligatorios' }
+  }
+  if (nombre.length < 3 || !NAME_REGEX.test(nombre)) {
+    return { error: 'Ingresa un nombre y apellido válidos (solo letras)' }
+  }
+  if (!EMAIL_REGEX.test(correo)) {
+    return { error: 'Correo no válido' }
+  }
+  // El teléfono es opcional (la base de datos admite Telefono nulo),
+  // pero si se escribe algo, se valida que tenga formato de celular
+  // colombiano válido.
+  if (telefono && !PHONE_REGEX.test(telefono)) {
+    return { error: 'Ingresa un número de teléfono válido (10 dígitos, ej: 3001234567)' }
+  }
+  if (
+    contrasena.length < 6 ||
+    !HAS_UPPER.test(contrasena) ||
+    !HAS_LETTER.test(contrasena) ||
+    !HAS_DIGIT.test(contrasena)
+  ) {
+    return { error: 'La contraseña debe tener al menos 6 caracteres, con una mayúscula y un número' }
+  }
+  return { nombre, correo, contrasena, telefono: telefono || null }
+}
+
+function correoYaExiste(correo, callback) {
+  db.query('SELECT ID_usuario FROM usuario WHERE Correo=?', [correo], (err, rows) => {
+    if (err) return callback(err)
+    callback(null, rows.length > 0)
+  })
+}
+
+// =============================================================
 // USUARIOS
 // =============================================================
 app.get('/api/usuarios', verifyToken, verifyAdmin, (req, res) => {
@@ -384,19 +433,68 @@ app.get('/api/usuarios', verifyToken, verifyAdmin, (req, res) => {
   })
 })
 
-app.post('/api/usuarios', async (req, res) => {
-  const { Nombre, Correo, Telefono, Contrasena, Rol } = req.body
-  if (!Nombre || !Correo || !Contrasena || !Rol) return res.status(400).json({ error: 'Faltan campos obligatorios' })
+// -------------------------------------------------------------
+// Registro público (usado por la app / web). SIEMPRE crea
+// Rol='cliente' — el Rol nunca se toma del body, para evitar que
+// cualquiera se autoasigne 'administrador' o 'veterinario'.
+// -------------------------------------------------------------
+app.post('/api/usuarios', loginLimiter, async (req, res) => {
+  const datos = validarDatosRegistro(req.body)
+  if (datos.error) return res.status(400).json({ error: datos.error })
+
+  const { nombre, correo, contrasena, telefono } = datos
+
   try {
-    const hashedPassword = await bcrypt.hash(Contrasena, SALT_ROUNDS)
-    db.query(
-      'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
-      [Nombre, Correo, Telefono, hashedPassword, Rol],
-      (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ ID_usuario: result.insertId, Nombre, Correo, Telefono, Rol })
-      }
-    )
+    correoYaExiste(correo, async (err, existe) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (existe) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo' })
+
+      const hashedPassword = await bcrypt.hash(contrasena, SALT_ROUNDS)
+      db.query(
+        'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
+        [nombre, correo, telefono, hashedPassword, 'cliente'],
+        (err, result) => {
+          if (err) return res.status(500).json({ error: err.message })
+          res.json({ ID_usuario: result.insertId, Nombre: nombre, Correo: correo, Telefono: telefono, Rol: 'cliente' })
+        }
+      )
+    })
+  } catch (error) {
+    res.status(500).json({ error: 'Error al encriptar la contrasena' })
+  }
+})
+
+// -------------------------------------------------------------
+// Creación de personal (veterinarios / administradores).
+// Solo un administrador autenticado puede llamar esta ruta,
+// y aquí sí se permite elegir el Rol explícitamente.
+// -------------------------------------------------------------
+app.post('/api/usuarios/staff', verifyToken, verifyAdmin, async (req, res) => {
+  const datos = validarDatosRegistro(req.body)
+  if (datos.error) return res.status(400).json({ error: datos.error })
+
+  const { Rol } = req.body
+  if (!['administrador', 'veterinario', 'cliente'].includes(Rol)) {
+    return res.status(400).json({ error: 'Rol inválido' })
+  }
+
+  const { nombre, correo, contrasena, telefono } = datos
+
+  try {
+    correoYaExiste(correo, async (err, existe) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (existe) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo' })
+
+      const hashedPassword = await bcrypt.hash(contrasena, SALT_ROUNDS)
+      db.query(
+        'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
+        [nombre, correo, telefono, hashedPassword, Rol],
+        (err, result) => {
+          if (err) return res.status(500).json({ error: err.message })
+          res.json({ ID_usuario: result.insertId, Nombre: nombre, Correo: correo, Telefono: telefono, Rol })
+        }
+      )
+    })
   } catch (error) {
     res.status(500).json({ error: 'Error al encriptar la contrasena' })
   }
@@ -619,10 +717,10 @@ app.get('/api/servicios', (req, res) => {
 })
 
 app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria } = req.body
+  const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
-    'INSERT INTO servicio (Nombre, Descripcion, Categoria) VALUES (?,?,?)',
-    [Nombre, Descripcion, Categoria],
+    'INSERT INTO servicio (Nombre, Descripcion, Categoria, Precio) VALUES (?,?,?,?)',
+    [Nombre, Descripcion, Categoria, Precio],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ ID_servicio: result.insertId, ...req.body })
@@ -631,10 +729,10 @@ app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.put('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria } = req.body
+  const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
-    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=? WHERE ID_servicio=?',
-    [Nombre, Descripcion, Categoria, req.params.id],
+    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=?, Precio=? WHERE ID_servicio=?',
+    [Nombre, Descripcion, Categoria, Precio, req.params.id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ message: 'Servicio actualizado' })
