@@ -25,7 +25,7 @@ transporter.verify((error, success) => {
 async function enviarCorreoRecuperacion(destinatario, codigo) {
   try {
     const mailOptions = {
-      from: "PetCard" <${process.env.SMTP_USER}>,
+      from: `"PetCard" <${process.env.SMTP_USER}>`,
       to: destinatario,
       subject: 'Codigo de recuperacion - PetCard',
       html: `
@@ -65,7 +65,7 @@ async function enviarCorreoRecuperacion(destinatario, codigo) {
           </div>
         </div>
       `,
-      text: Recuperacion de contraseña - PetCard\n\nTu codigo de verificacion es: ${codigo}\n\nESTE CODIGO ES VALIDO POR SOLO 5 MINUTOS.\n\nSi no solicitaste este cambio, ignora este correo.,
+      text: `Recuperacion de contraseña - PetCard\n\nTu codigo de verificacion es: ${codigo}\n\nESTE CODIGO ES VALIDO POR SOLO 5 MINUTOS.\n\nSi no solicitaste este cambio, ignora este correo.`,
     };
 
     const info = await transporter.sendMail(mailOptions);
