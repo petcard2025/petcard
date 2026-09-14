@@ -11,6 +11,9 @@ const path = require('path')
 const rateLimit = require('express-rate-limit')
 require('dotenv').config()
 
+require('./mailer')
+const authController = require('./src/controllers/auth.controller')
+
 if (!process.env.JWT_SECRET) {
   console.error('FATAL: La variable de entorno JWT_SECRET no esta definida.')
   console.error('Agrega JWT_SECRET=<secreto-largo-y-aleatorio> en tu archivo .env')
@@ -44,7 +47,7 @@ function verifyAdmin(req, res, next) {
   next()
 }
 
-// 🆕 ── Middleware: carga ID_veterinario y Especialidad del usuario logueado (si es veterinario) ──
+// ── Middleware: carga ID_veterinario y Especialidad del usuario logueado (si es veterinario) ──
 function cargarVeterinario(req, res, next) {
   if (req.usuario.Rol !== 'veterinario') return next()
   db.query(
@@ -59,7 +62,7 @@ function cargarVeterinario(req, res, next) {
   )
 }
 
-// 🆕 ── Middleware: verifica que el veterinario haya atendido esa mascota con ese servicio ──
+// ── Middleware: verifica que el veterinario haya atendido esa mascota con ese servicio ──
 function verificarVetAtendioMascotaServicio(req, res, next) {
   if (req.usuario.Rol !== 'veterinario') return next()
 
@@ -189,7 +192,6 @@ async function crearNotificacionAutomatica(ID_usuario, mensaje, tipo, canal = 'S
 }
 
 const SALT_ROUNDS = 10
-const resetTokens = new Map()
 
 const app = express()
 
@@ -221,22 +223,13 @@ const forgotPasswordLimiter = rateLimit({
 
 // =============================================================
 // CONEXION A SUPABASE (POSTGRESQL)
-//
-// DATABASE_URL debe estar en tu .env, con el formato que te da
-// Supabase en Project Settings > Database > Connection string (URI):
-//   postgresql://postgres:[TU-PASSWORD]@[HOST]:[PUERTO]/postgres
 // =============================================================
-
 if (!process.env.DATABASE_URL) {
   console.error('FATAL: La variable de entorno DATABASE_URL no esta definida.')
   console.error('Agrega DATABASE_URL=<tu cadena de conexion de Supabase> en tu archivo .env')
   process.exit(1)
 }
 
-// Evita que node-postgres convierta columnas DATE/TIMESTAMP a objetos
-// Date de JS; las devolvemos como texto plano ("YYYY-MM-DD" / "YYYY-MM-DD
-// HH:MM:SS"), que es el formato que ya espera el resto del codigo (por
-// ejemplo cita.Fecha.substring(0,10) en crearEventoCalendar).
 types.setTypeParser(1082, val => val) // DATE
 types.setTypeParser(1114, val => val) // TIMESTAMP WITHOUT TIME ZONE
 
@@ -256,9 +249,7 @@ pool.query('SELECT 1')
 // Postgres, cuando un identificador no va entre comillas dobles,
 // lo guarda y lo devuelve TODO en minusculas (ID_usuario -> id_usuario).
 // Esta tabla traduce esas columnas de vuelta al mismo "PascalCase" que
-// usaba mysql2, para que el resto del archivo (results[0].ID_usuario,
-// usuario.Contrasena, cita.Nombre_mascota, etc.) siga funcionando
-// exactamente igual sin tener que tocar cada ruta una por una.
+// usaba mysql2, para que el resto del archivo siga funcionando.
 // =============================================================
 const COLUMN_CASE_MAP = {
   id_usuario: 'ID_usuario',
@@ -339,17 +330,6 @@ function restaurarMayusculas(row) {
 
 // =============================================================
 // "db" - capa de compatibilidad para no reescribir cada ruta.
-//
-// Permite seguir llamando exactamente igual que con mysql2:
-//   db.query('SELECT ... WHERE Correo=?', [correo], (err, results) => {...})
-// pero por debajo usa el driver de PostgreSQL (pg):
-//   - Convierte los "?" de MySQL a "$1, $2, $3..." de Postgres.
-//   - A los INSERT sin RETURNING les agrega "RETURNING *", para poder
-//     simular result.insertId (toma el valor de la primera columna,
-//     que en todas las tablas es la llave primaria).
-//   - Expone result.affectedRows (equivalente a rowCount de pg).
-//   - Restaura las mayusculas originales de cada columna en los
-//     resultados de SELECT, usando COLUMN_CASE_MAP.
 // =============================================================
 const db = {
   query(sql, paramsOrCallback, maybeCallback) {
@@ -372,8 +352,6 @@ const db = {
     const promesa = pool.query(sqlFinal, params)
 
     if (!callback) {
-      // Llamadas "fire and forget" (sin callback), igual que se usaban
-      // con mysql2 en un par de sitios puntuales.
       promesa.catch(err => console.error('Error en query sin callback:', err.message))
       return
     }
@@ -446,7 +424,7 @@ app.delete('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
 // =============================================================
 // LOGIN (web — sin cambios)
 // =============================================================
-app.post('/api/auth/login', loginLimiter, async (req, res) => {   // 👈 CAMBIADO
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { Correo, Contrasena } = req.body
   try {
     db.query(
@@ -484,7 +462,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {   // 👈 CAMBIA
   }
 })
 
-app.post('/api/auth/login-admin', loginLimiter, async (req, res) => {   // 👈 CAMBIADO
+app.post('/api/auth/login-admin', loginLimiter, async (req, res) => {
   const { Correo, Contrasena } = req.body
   try {
     db.query(
@@ -526,44 +504,11 @@ app.post('/api/auth/login-admin', loginLimiter, async (req, res) => {   // 👈 
 })
 
 // =============================================================
-// RECUPERACION DE CONTRASEÑA (web — sin cambios)
+// 🔥 RECUPERACION DE CONTRASEÑA — Usa el controlador de auth
 // =============================================================
-app.post('/api/auth/forgot-password', forgotPasswordLimiter, (req, res) => {
-  const { Correo } = req.body
-  if (!Correo) return res.status(400).json({ error: 'Correo requerido' })
-  db.query('SELECT ID_usuario, Nombre, Telefono FROM usuario WHERE Correo=?', [Correo], async (err, results) => {
-    if (err) return res.status(500).json({ error: err.message })
-    if (results.length === 0) return res.json({ message: 'Si el correo esta registrado, recibiras las instrucciones de recuperacion.' })
-    const usuario = results[0]
-    const token = crypto.randomBytes(32).toString('hex')
-    const expires = Date.now() + 3600000
-    resetTokens.set(token, { ID_usuario: usuario.ID_usuario, expires })
-    console.log(`[DEV] Token de reset para ${Correo}: ${token}`)
-    res.json({ message: 'Si el correo esta registrado, recibiras las instrucciones de recuperacion.', token, info: 'Usa este token en /api/reset-password con la nueva contrasena' })
-  })
-})
+app.post('/api/auth/forgot-password', forgotPasswordLimiter, authController.forgotPassword)
 
-app.post('/api/auth/reset-password', async (req, res) =>  {
-  const { token, nuevaContrasena } = req.body
-  if (!token || !nuevaContrasena) return res.status(400).json({ error: 'Token y nueva contrasena requeridos' })
-  if (nuevaContrasena.length < 6) return res.status(400).json({ error: 'Contrasena debe tener al menos 6 caracteres' })
-  const tokenData = resetTokens.get(token)
-  if (!tokenData) return res.status(400).json({ error: 'Token invalido' })
-  if (Date.now() > tokenData.expires) {
-    resetTokens.delete(token)
-    return res.status(400).json({ error: 'Token expirado' })
-  }
-  try {
-    const hashedPassword = await bcrypt.hash(nuevaContrasena, SALT_ROUNDS)
-    db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [hashedPassword, tokenData.ID_usuario], (err) => {
-      if (err) return res.status(500).json({ error: err.message })
-      resetTokens.delete(token)
-      res.json({ message: 'Contrasena actualizada exitosamente' })
-    })
-  } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar contrasena' })
-  }
-})
+app.post('/api/auth/reset-password', authController.resetPassword)
 
 // =============================================================
 // CLIENTES
@@ -674,10 +619,10 @@ app.get('/api/servicios', (req, res) => {
 })
 
 app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria } = req.body   // 👈 CAMBIADO: sin Precio
+  const { Nombre, Descripcion, Categoria } = req.body
   db.query(
-    'INSERT INTO servicio (Nombre, Descripcion, Categoria) VALUES (?,?,?)',   // 👈 CAMBIADO
-    [Nombre, Descripcion, Categoria],   // 👈 CAMBIADO
+    'INSERT INTO servicio (Nombre, Descripcion, Categoria) VALUES (?,?,?)',
+    [Nombre, Descripcion, Categoria],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ ID_servicio: result.insertId, ...req.body })
@@ -686,10 +631,10 @@ app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.put('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria } = req.body   // 👈 CAMBIADO: sin Precio
+  const { Nombre, Descripcion, Categoria } = req.body
   db.query(
-    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=? WHERE ID_servicio=?',   // 👈 CAMBIADO
-    [Nombre, Descripcion, Categoria, req.params.id],   // 👈 CAMBIADO
+    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=? WHERE ID_servicio=?',
+    [Nombre, Descripcion, Categoria, req.params.id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ message: 'Servicio actualizado' })

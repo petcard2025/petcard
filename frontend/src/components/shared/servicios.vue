@@ -64,7 +64,6 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Exámenes completos de salud, diagnósticos y seguimiento continuo de la salud de tu mascota veterinaria.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$50 – $80</span>
             </div>
             <router-link to="/citas" class="btn btn-primary btn-full" data-servicio="Consulta General" id="btn-agendar-0" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
           </div>
@@ -82,7 +81,6 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Programa completo de vacunación para prevenir enfermedades comunes y mantener las defensas naturales.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$30 – $60</span>
             </div>
             <router-link to="/citas" class="btn btn-success btn-full" data-servicio="Vacunación" id="btn-agendar-1" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
           </div>
@@ -100,7 +98,6 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Procedimientos quirúrgicos con tecnología avanzada e instrumentación moderna de procedimientos especiales.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$200 – $800</span>
             </div>
             <router-link to="/citas" class="btn btn-primary btn-full" style="background:#7c3aed;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Cirugías" id="btn-agendar-2">Agendar Cita</router-link>
           </div>
@@ -119,7 +116,6 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Tratamientos y medicación para la eliminación de parásitos internos y externos.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$25 – $60</span>
             </div>
             <router-link to="/citas" class="btn btn-primary btn-full" style="background:#92400e;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Desparasitación" id="btn-agendar-6">Agendar Cita</router-link>
           </div>
