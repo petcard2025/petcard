@@ -11,6 +11,48 @@ const path = require('path')
 const rateLimit = require('express-rate-limit')
 require('dotenv').config()
 
+// =============================================================
+// FIREBASE ADMIN (notificaciones push)
+// =============================================================
+const { initializeApp: initFirebaseApp, cert } = require('firebase-admin/app')
+const { getMessaging } = require('firebase-admin/messaging')
+
+if (!process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+  console.error('FATAL: FIREBASE_SERVICE_ACCOUNT_PATH no esta definida en .env')
+  process.exit(1)
+}
+
+initFirebaseApp({
+  credential: cert(require(path.resolve(process.env.FIREBASE_SERVICE_ACCOUNT_PATH)))
+})
+
+async function enviarPush(ID_usuario, titulo, mensaje, data = {}) {
+  return new Promise((resolve) => {
+    db.query('SELECT FCM_token FROM usuario WHERE ID_usuario = ?', [ID_usuario], async (err, rows) => {
+      if (err || rows.length === 0 || !rows[0].FCM_token) {
+        return resolve({ success: false, reason: 'sin_token' })
+      }
+      try {
+        await getMessaging().send({
+          token: rows[0].FCM_token,
+          notification: { title: titulo, body: mensaje },
+          data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]))
+        })
+        console.log(`🔔 Push enviada a usuario ${ID_usuario}`)
+        resolve({ success: true })
+      } catch (error) {
+        console.error('✗ Error enviando push:', error.message)
+        // Si el token ya no es válido (app desinstalada, etc.), lo limpiamos
+        if (error.code === 'messaging/registration-token-not-registered') {
+          db.query('UPDATE usuario SET FCM_token = NULL WHERE ID_usuario = ?', [ID_usuario])
+        }
+        resolve({ success: false, error: error.message })
+      }
+    })
+  })
+}
+
+
 if (!process.env.JWT_SECRET) {
   console.error('FATAL: La variable de entorno JWT_SECRET no esta definida.')
   console.error('Agrega JWT_SECRET=<secreto-largo-y-aleatorio> en tu archivo .env')
@@ -172,6 +214,10 @@ async function crearNotificacionAutomatica(ID_usuario, mensaje, tipo, canal = 'S
           return resolve({ success: false })
         }
         console.log(`🔔 Notificación automática creada (ID: ${result.insertId}) → Usuario ${ID_usuario}`)
+
+        // 🆕 Push (siempre, sin importar el canal, ya que va aparte del SMS)
+        enviarPush(ID_usuario, 'PetCard', mensaje, { tipo, ID_notificacion: result.insertId })
+
         if (canal === 'SMS') {
           db.query('SELECT Telefono FROM usuario WHERE ID_usuario = ?', [ID_usuario], async (errU, rows) => {
             if (!errU && rows.length > 0 && rows[0].Telefono) {
@@ -277,6 +323,7 @@ const COLUMN_CASE_MAP = {
   contrasena: 'Contrasena',
   rol: 'Rol',
   firebase_uid: 'firebase_uid',
+  fcm_token: 'FCM_token',
   direccion: 'Direccion',
   cargo: 'Cargo',
   especialidad: 'Especialidad',
@@ -497,6 +544,7 @@ app.post('/api/usuarios/staff', verifyToken, verifyAdmin, async (req, res) => {
   if (!['administrador', 'veterinario', 'cliente'].includes(Rol)) {
     return res.status(400).json({ error: 'Rol inválido' })
   }
+  
 
   const { nombre, correo, contrasena, telefono } = datos
 
@@ -519,6 +567,25 @@ app.post('/api/usuarios/staff', verifyToken, verifyAdmin, async (req, res) => {
     res.status(500).json({ error: 'Error al encriptar la contrasena' })
   }
 })
+
+// -------------------------------------------------------------
+// Guardar/actualizar el token FCM del usuario logueado (self-service,
+// cualquier usuario autenticado puede actualizar SU PROPIO token)
+// -------------------------------------------------------------
+app.put('/api/usuarios/fcm-token', verifyToken, (req, res) => {
+  const { FCM_token } = req.body
+  if (!FCM_token) return res.status(400).json({ error: 'FCM_token es requerido' })
+
+  db.query(
+    'UPDATE usuario SET FCM_token=? WHERE ID_usuario=?',
+    [FCM_token, req.usuario.ID_usuario],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json({ message: 'Token FCM actualizado' })
+    }
+  )
+})
+
 
 app.put('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
   const { Nombre, Rol } = req.body
@@ -702,7 +769,7 @@ app.get('/api/mascotas', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.get('/api/mascotas/cliente/:id_cliente', verifyToken, (req, res) => {
-  db.query('SELECT * FROM mascota WHERE ID_cliente=? AND Estado="activo"', [req.params.id_cliente], (err, results) => {
+  db.query("SELECT * FROM mascota WHERE ID_cliente=? AND Estado='activo'", [req.params.id_cliente], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })
@@ -733,7 +800,7 @@ app.put('/api/mascotas/:id', verifyToken, (req, res) => {
 })
 
 app.delete('/api/mascotas/:id', verifyToken, (req, res) => {
-  db.query('UPDATE mascota SET Estado="inactivo" WHERE ID_mascota=?', [req.params.id], (err) => {
+  db.query("UPDATE mascota SET Estado='inactivo' WHERE ID_mascota=?", [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ message: 'Mascota desactivada' })
   })

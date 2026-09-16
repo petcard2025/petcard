@@ -5,3 +5,5 @@ google-credentials.json
 npm-debug.log*
 certs/*.key
 certs/*.crt
+
+credentials/
