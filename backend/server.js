@@ -11,53 +11,15 @@ const path = require('path')
 const rateLimit = require('express-rate-limit')
 require('dotenv').config()
 
-// =============================================================
-// FIREBASE ADMIN (notificaciones push)
-// =============================================================
-const { initializeApp: initFirebaseApp, cert } = require('firebase-admin/app')
-const { getMessaging } = require('firebase-admin/messaging')
-
-if (!process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-  console.error('FATAL: FIREBASE_SERVICE_ACCOUNT_PATH no esta definida en .env')
-  process.exit(1)
-}
-
-initFirebaseApp({
-  credential: cert(require(path.resolve(process.env.FIREBASE_SERVICE_ACCOUNT_PATH)))
-})
-
-async function enviarPush(ID_usuario, titulo, mensaje, data = {}) {
-  return new Promise((resolve) => {
-    db.query('SELECT FCM_token FROM usuario WHERE ID_usuario = ?', [ID_usuario], async (err, rows) => {
-      if (err || rows.length === 0 || !rows[0].FCM_token) {
-        return resolve({ success: false, reason: 'sin_token' })
-      }
-      try {
-        await getMessaging().send({
-          token: rows[0].FCM_token,
-          notification: { title: titulo, body: mensaje },
-          data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]))
-        })
-        console.log(`🔔 Push enviada a usuario ${ID_usuario}`)
-        resolve({ success: true })
-      } catch (error) {
-        console.error('✗ Error enviando push:', error.message)
-        // Si el token ya no es válido (app desinstalada, etc.), lo limpiamos
-        if (error.code === 'messaging/registration-token-not-registered') {
-          db.query('UPDATE usuario SET FCM_token = NULL WHERE ID_usuario = ?', [ID_usuario])
-        }
-        resolve({ success: false, error: error.message })
-      }
-    })
-  })
-}
-
+require('./mailer')
+const authController = require('./src/controllers/auth.controller')
 
 if (!process.env.JWT_SECRET) {
   console.error('FATAL: La variable de entorno JWT_SECRET no esta definida.')
   console.error('Agrega JWT_SECRET=<secreto-largo-y-aleatorio> en tu archivo .env')
   process.exit(1)
 }
+//
 const JWT_SECRET = process.env.JWT_SECRET
 
 // =============================================================
@@ -85,7 +47,7 @@ function verifyAdmin(req, res, next) {
   next()
 }
 
-// 🆕 ── Middleware: carga ID_veterinario y Especialidad del usuario logueado (si es veterinario) ──
+// ── Middleware: carga ID_veterinario y Especialidad del usuario logueado (si es veterinario) ──
 function cargarVeterinario(req, res, next) {
   if (req.usuario.Rol !== 'veterinario') return next()
   db.query(
@@ -100,7 +62,7 @@ function cargarVeterinario(req, res, next) {
   )
 }
 
-// 🆕 ── Middleware: verifica que el veterinario haya atendido esa mascota con ese servicio ──
+// ── Middleware: verifica que el veterinario haya atendido esa mascota con ese servicio ──
 function verificarVetAtendioMascotaServicio(req, res, next) {
   if (req.usuario.Rol !== 'veterinario') return next()
 
@@ -214,10 +176,6 @@ async function crearNotificacionAutomatica(ID_usuario, mensaje, tipo, canal = 'S
           return resolve({ success: false })
         }
         console.log(`🔔 Notificación automática creada (ID: ${result.insertId}) → Usuario ${ID_usuario}`)
-
-        // 🆕 Push (siempre, sin importar el canal, ya que va aparte del SMS)
-        enviarPush(ID_usuario, 'PetCard', mensaje, { tipo, ID_notificacion: result.insertId })
-
         if (canal === 'SMS') {
           db.query('SELECT Telefono FROM usuario WHERE ID_usuario = ?', [ID_usuario], async (errU, rows) => {
             if (!errU && rows.length > 0 && rows[0].Telefono) {
@@ -234,7 +192,6 @@ async function crearNotificacionAutomatica(ID_usuario, mensaje, tipo, canal = 'S
 }
 
 const SALT_ROUNDS = 10
-const resetTokens = new Map()
 
 const app = express()
 
@@ -266,22 +223,13 @@ const forgotPasswordLimiter = rateLimit({
 
 // =============================================================
 // CONEXION A SUPABASE (POSTGRESQL)
-//
-// DATABASE_URL debe estar en tu .env, con el formato que te da
-// Supabase en Project Settings > Database > Connection string (URI):
-//   postgresql://postgres:[TU-PASSWORD]@[HOST]:[PUERTO]/postgres
 // =============================================================
-
 if (!process.env.DATABASE_URL) {
   console.error('FATAL: La variable de entorno DATABASE_URL no esta definida.')
   console.error('Agrega DATABASE_URL=<tu cadena de conexion de Supabase> en tu archivo .env')
   process.exit(1)
 }
 
-// Evita que node-postgres convierta columnas DATE/TIMESTAMP a objetos
-// Date de JS; las devolvemos como texto plano ("YYYY-MM-DD" / "YYYY-MM-DD
-// HH:MM:SS"), que es el formato que ya espera el resto del codigo (por
-// ejemplo cita.Fecha.substring(0,10) en crearEventoCalendar).
 types.setTypeParser(1082, val => val) // DATE
 types.setTypeParser(1114, val => val) // TIMESTAMP WITHOUT TIME ZONE
 
@@ -301,9 +249,7 @@ pool.query('SELECT 1')
 // Postgres, cuando un identificador no va entre comillas dobles,
 // lo guarda y lo devuelve TODO en minusculas (ID_usuario -> id_usuario).
 // Esta tabla traduce esas columnas de vuelta al mismo "PascalCase" que
-// usaba mysql2, para que el resto del archivo (results[0].ID_usuario,
-// usuario.Contrasena, cita.Nombre_mascota, etc.) siga funcionando
-// exactamente igual sin tener que tocar cada ruta una por una.
+// usaba mysql2, para que el resto del archivo siga funcionando.
 // =============================================================
 const COLUMN_CASE_MAP = {
   id_usuario: 'ID_usuario',
@@ -323,7 +269,6 @@ const COLUMN_CASE_MAP = {
   contrasena: 'Contrasena',
   rol: 'Rol',
   firebase_uid: 'firebase_uid',
-  fcm_token: 'FCM_token',
   direccion: 'Direccion',
   cargo: 'Cargo',
   especialidad: 'Especialidad',
@@ -385,17 +330,6 @@ function restaurarMayusculas(row) {
 
 // =============================================================
 // "db" - capa de compatibilidad para no reescribir cada ruta.
-//
-// Permite seguir llamando exactamente igual que con mysql2:
-//   db.query('SELECT ... WHERE Correo=?', [correo], (err, results) => {...})
-// pero por debajo usa el driver de PostgreSQL (pg):
-//   - Convierte los "?" de MySQL a "$1, $2, $3..." de Postgres.
-//   - A los INSERT sin RETURNING les agrega "RETURNING *", para poder
-//     simular result.insertId (toma el valor de la primera columna,
-//     que en todas las tablas es la llave primaria).
-//   - Expone result.affectedRows (equivalente a rowCount de pg).
-//   - Restaura las mayusculas originales de cada columna en los
-//     resultados de SELECT, usando COLUMN_CASE_MAP.
 // =============================================================
 const db = {
   query(sql, paramsOrCallback, maybeCallback) {
@@ -418,8 +352,6 @@ const db = {
     const promesa = pool.query(sqlFinal, params)
 
     if (!callback) {
-      // Llamadas "fire and forget" (sin callback), igual que se usaban
-      // con mysql2 en un par de sitios puntuales.
       promesa.catch(err => console.error('Error en query sin callback:', err.message))
       return
     }
@@ -442,54 +374,6 @@ const db = {
   }
 }
 
-
-// =============================================================
-// VALIDACIONES COMPARTIDAS (usadas por USUARIOS y LOGIN)
-// Declaradas UNA sola vez para todo el archivo.
-// =============================================================
-const EMAIL_REGEX = /^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$/
-const NAME_REGEX = /^[a-zA-ZÀ-ÖØ-öø-ÿ]+(?:\s[a-zA-ZÀ-ÖØ-öø-ÿ]+)+$/
-const PHONE_REGEX = /^3\d{9}$/ // celular colombiano: 10 dígitos, empieza en 3
-const HAS_LETTER = /[a-zA-Z]/
-const HAS_UPPER = /[A-Z]/
-const HAS_DIGIT = /[0-9]/
-
-function validarDatosRegistro({ Nombre, Correo, Contrasena, Telefono }) {
-  const nombre = (Nombre || '').trim()
-  const correo = (Correo || '').trim().toLowerCase()
-  const contrasena = Contrasena || ''
-  const telefono = (Telefono || '').toString().trim().replace(/[\s\-().]/g, '')
-
-  if (!nombre || !correo || !contrasena || !telefono) {
-    return { error: 'Faltan campos obligatorios' }
-  }
-  if (nombre.length < 3 || !NAME_REGEX.test(nombre)) {
-    return { error: 'Ingresa un nombre y apellido válidos (solo letras)' }
-  }
-  if (!EMAIL_REGEX.test(correo)) {
-    return { error: 'Correo no válido' }
-  }
-  if (!PHONE_REGEX.test(telefono)) {
-    return { error: 'Ingresa un número de teléfono válido (10 dígitos, ej: 3001234567)' }
-  }
-  if (
-    contrasena.length < 6 ||
-    !HAS_UPPER.test(contrasena) ||
-    !HAS_LETTER.test(contrasena) ||
-    !HAS_DIGIT.test(contrasena)
-  ) {
-    return { error: 'La contraseña debe tener al menos 6 caracteres, con una mayúscula y un número' }
-  }
-  return { nombre, correo, contrasena, telefono }
-}
-
-function correoYaExiste(correo, callback) {
-  db.query('SELECT ID_usuario FROM usuario WHERE Correo=?', [correo], (err, rows) => {
-    if (err) return callback(err)
-    callback(null, rows.length > 0)
-  })
-}
-
 // =============================================================
 // USUARIOS
 // =============================================================
@@ -500,92 +384,23 @@ app.get('/api/usuarios', verifyToken, verifyAdmin, (req, res) => {
   })
 })
 
-// -------------------------------------------------------------
-// Registro público (usado por la app / web). SIEMPRE crea
-// Rol='cliente' — el Rol nunca se toma del body para evitar que
-// cualquiera se autoasigne 'administrador' o 'veterinario'.
-// -------------------------------------------------------------
-app.post('/api/usuarios', loginLimiter, async (req, res) => {
-  const datos = validarDatosRegistro(req.body)
-  if (datos.error) return res.status(400).json({ error: datos.error })
-
-  const { nombre, correo, contrasena, telefono } = datos
-
+app.post('/api/usuarios', async (req, res) => {
+  const { Nombre, Correo, Telefono, Contrasena, Rol } = req.body
+  if (!Nombre || !Correo || !Contrasena || !Rol) return res.status(400).json({ error: 'Faltan campos obligatorios' })
   try {
-    correoYaExiste(correo, async (err, existe) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (existe) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo' })
-
-      const hashedPassword = await bcrypt.hash(contrasena, SALT_ROUNDS)
-      db.query(
-        'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
-        [nombre, correo, telefono, hashedPassword, 'cliente'],
-        (err, result) => {
-          if (err) return res.status(500).json({ error: err.message })
-          res.json({ ID_usuario: result.insertId, Nombre: nombre, Correo: correo, Telefono: telefono, Rol: 'cliente' })
-        }
-      )
-    })
+    const hashedPassword = await bcrypt.hash(Contrasena, SALT_ROUNDS)
+    db.query(
+      'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
+      [Nombre, Correo, Telefono, hashedPassword, Rol],
+      (err, result) => {
+        if (err) return res.status(500).json({ error: err.message })
+        res.json({ ID_usuario: result.insertId, Nombre, Correo, Telefono, Rol })
+      }
+    )
   } catch (error) {
     res.status(500).json({ error: 'Error al encriptar la contrasena' })
   }
 })
-
-// -------------------------------------------------------------
-// Creación de personal (veterinarios / administradores).
-// Solo un administrador autenticado puede llamar esta ruta,
-// y aquí sí se permite elegir el Rol explícitamente.
-// -------------------------------------------------------------
-app.post('/api/usuarios/staff', verifyToken, verifyAdmin, async (req, res) => {
-  const datos = validarDatosRegistro(req.body)
-  if (datos.error) return res.status(400).json({ error: datos.error })
-
-  const { Rol } = req.body
-  if (!['administrador', 'veterinario', 'cliente'].includes(Rol)) {
-    return res.status(400).json({ error: 'Rol inválido' })
-  }
-  
-
-  const { nombre, correo, contrasena, telefono } = datos
-
-  try {
-    correoYaExiste(correo, async (err, existe) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (existe) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo' })
-
-      const hashedPassword = await bcrypt.hash(contrasena, SALT_ROUNDS)
-      db.query(
-        'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
-        [nombre, correo, telefono, hashedPassword, Rol],
-        (err, result) => {
-          if (err) return res.status(500).json({ error: err.message })
-          res.json({ ID_usuario: result.insertId, Nombre: nombre, Correo: correo, Telefono: telefono, Rol })
-        }
-      )
-    })
-  } catch (error) {
-    res.status(500).json({ error: 'Error al encriptar la contrasena' })
-  }
-})
-
-// -------------------------------------------------------------
-// Guardar/actualizar el token FCM del usuario logueado (self-service,
-// cualquier usuario autenticado puede actualizar SU PROPIO token)
-// -------------------------------------------------------------
-app.put('/api/usuarios/fcm-token', verifyToken, (req, res) => {
-  const { FCM_token } = req.body
-  if (!FCM_token) return res.status(400).json({ error: 'FCM_token es requerido' })
-
-  db.query(
-    'UPDATE usuario SET FCM_token=? WHERE ID_usuario=?',
-    [FCM_token, req.usuario.ID_usuario],
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ message: 'Token FCM actualizado' })
-    }
-  )
-})
-
 
 app.put('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
   const { Nombre, Rol } = req.body
@@ -607,120 +422,93 @@ app.delete('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
 })
 
 // =============================================================
-// LOGIN (web) — con validación de entrada y helper compartido
+// LOGIN (web — sin cambios)
 // =============================================================
-function validarCredenciales(req, res) {
-  const Correo = (req.body.Correo || '').trim().toLowerCase()
-  const Contrasena = req.body.Contrasena || ''
-
-  if (!Correo || !Contrasena) {
-    res.status(400).json({ error: 'Correo y contraseña son obligatorios' })
-    return null
-  }
-  if (!EMAIL_REGEX.test(Correo)) {
-    res.status(400).json({ error: 'Correo no válido' })
-    return null
-  }
-  return { Correo, Contrasena }
-}
-
-function buscarUsuarioYValidarPassword(Correo, Contrasena, res, onValid) {
-  db.query(
-    'SELECT ID_usuario, Nombre, Correo, Telefono, Rol, Contrasena FROM usuario WHERE Correo=?',
-    [Correo],
-    async (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (results.length === 0) {
-        return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-      }
-
-      const usuario = results[0]
-      const storedPassword = usuario.Contrasena || ''
-      let isPasswordValid = false
-
-      if (storedPassword.startsWith('$2')) {
-        isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
-      } else {
-        isPasswordValid = Contrasena === storedPassword
-      }
-
-      if (!isPasswordValid) {
-        return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
-      }
-
-      // Migración perezosa de contraseñas en texto plano a bcrypt
-      if (!storedPassword.startsWith('$2')) {
-        const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
-        db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
-          if (err) console.error('Error actualizando hash:', err.message)
-        })
-      }
-
-      onValid(usuario)
-    }
-  )
-}
-
-app.post('/api/login', loginLimiter, async (req, res) => {
-  const credenciales = validarCredenciales(req, res)
-  if (!credenciales) return // ya se respondió el error
-
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
+  const { Correo, Contrasena } = req.body
   try {
-    buscarUsuarioYValidarPassword(credenciales.Correo, credenciales.Contrasena, res, (usuario) => {
-      db.query(
-        'SELECT ID_veterinario FROM veterinario WHERE ID_usuario = ?',
-        [usuario.ID_usuario],
-        (errVet, vetRows) => {
-          const usuarioSeguro = {
-            ID_usuario: usuario.ID_usuario,
-            Nombre: usuario.Nombre,
-            Correo: usuario.Correo,
-            Telefono: usuario.Telefono,
-            Rol: usuario.Rol,
-            ID_veterinario: (!errVet && vetRows.length > 0) ? vetRows[0].ID_veterinario : null
-          }
-          const token = jwt.sign(
-            { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
-            JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
-          )
-          res.json({ message: 'Login exitoso', token, usuario: usuarioSeguro })
+    db.query(
+      'SELECT ID_usuario, Nombre, Correo, Telefono, Rol, Contrasena FROM usuario WHERE Correo=?',
+      [Correo],
+      async (err, results) => {
+        if (err) return res.status(500).json({ error: err.message })
+        if (results.length === 0) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+        const usuario = results[0]
+        let isPasswordValid = false
+        const storedPassword = usuario.Contrasena || ''
+        if (storedPassword.startsWith('$2')) {
+          isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
+        } else {
+          isPasswordValid = Contrasena === storedPassword
         }
-      )
-    })
+        if (!isPasswordValid) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+        if (!storedPassword.startsWith('$2')) {
+          const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
+          db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
+            if (err) console.error('Error actualizando hash:', err.message)
+          })
+        }
+        const usuarioSeguro = { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Telefono: usuario.Telefono, Rol: usuario.Rol }
+        const token = jwt.sign(
+          { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
+          JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+        )
+        res.json({ message: 'Login exitoso', token, usuario: usuarioSeguro })
+      }
+    )
   } catch (error) {
     res.status(500).json({ error: 'Error al procesar el login' })
   }
 })
 
-app.post('/api/login-admin', loginLimiter, async (req, res) => {
-  const credenciales = validarCredenciales(req, res)
-  if (!credenciales) return
-
+app.post('/api/auth/login-admin', loginLimiter, async (req, res) => {
+  const { Correo, Contrasena } = req.body
   try {
-    buscarUsuarioYValidarPassword(credenciales.Correo, credenciales.Contrasena, res, (usuario) => {
-      if (usuario.Rol !== 'administrador' && usuario.Rol !== 'veterinario') {
-        return res.status(403).json({ error: 'Esta cuenta no tiene permisos de acceso al panel.' })
+    db.query(
+      'SELECT ID_usuario, Nombre, Correo, Telefono, Rol, Contrasena FROM usuario WHERE Correo=?',
+      [Correo],
+      async (err, results) => {
+        if (err) return res.status(500).json({ error: err.message })
+        if (results.length === 0) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+        const usuario = results[0]
+        let isPasswordValid = false
+        const storedPassword = usuario.Contrasena || ''
+        if (storedPassword.startsWith('$2')) {
+          isPasswordValid = await bcrypt.compare(Contrasena, storedPassword)
+        } else {
+          isPasswordValid = Contrasena === storedPassword
+        }
+        if (!isPasswordValid) return res.status(401).json({ error: 'Correo o contrasena incorrectos' })
+        if (usuario.Rol !== 'administrador' && usuario.Rol !== 'veterinario') {
+          return res.status(403).json({ error: 'Esta cuenta no tiene permisos de acceso al panel.' })
+        }
+        if (!storedPassword.startsWith('$2')) {
+          const newHash = await bcrypt.hash(Contrasena, SALT_ROUNDS)
+          db.query('UPDATE usuario SET Contrasena=? WHERE ID_usuario=?', [newHash, usuario.ID_usuario], (err) => {
+            if (err) console.error('Error actualizando hash:', err.message)
+          })
+        }
+        const usuarioSeguro = { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Telefono: usuario.Telefono, Rol: usuario.Rol }
+        const token = jwt.sign(
+          { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
+          JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+        )
+        res.json({ message: 'Login admin exitoso', token, usuario: usuarioSeguro })
       }
-
-      const usuarioSeguro = {
-        ID_usuario: usuario.ID_usuario,
-        Nombre: usuario.Nombre,
-        Correo: usuario.Correo,
-        Telefono: usuario.Telefono,
-        Rol: usuario.Rol
-      }
-      const token = jwt.sign(
-        { ID_usuario: usuario.ID_usuario, Nombre: usuario.Nombre, Correo: usuario.Correo, Rol: usuario.Rol },
-        JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
-      )
-      res.json({ message: 'Login admin exitoso', token, usuario: usuarioSeguro })
-    })
+    )
   } catch (error) {
     res.status(500).json({ error: 'Error al procesar el login' })
   }
 })
+
+// =============================================================
+// 🔥 RECUPERACION DE CONTRASEÑA — Usa el controlador de auth
+// =============================================================
+app.post('/api/auth/forgot-password', forgotPasswordLimiter, authController.forgotPassword)
+
+app.post('/api/auth/reset-password', authController.resetPassword)
 
 // =============================================================
 // CLIENTES
@@ -769,10 +557,10 @@ app.get('/api/mascotas', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.get('/api/mascotas/cliente/:id_cliente', verifyToken, (req, res) => {
-  db.query("SELECT * FROM mascota WHERE ID_cliente=? AND Estado='activo'", [req.params.id_cliente], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json(results)
-  })
+ db.query('SELECT * FROM mascota WHERE ID_cliente=? AND Estado=\'activo\'', [req.params.id_cliente], (err, results) => {
+  if (err) return res.status(500).json({ error: err.message })
+  res.json(results)
+})
 })
 
 app.post('/api/mascotas', verifyToken, (req, res) => {
@@ -800,10 +588,10 @@ app.put('/api/mascotas/:id', verifyToken, (req, res) => {
 })
 
 app.delete('/api/mascotas/:id', verifyToken, (req, res) => {
-  db.query("UPDATE mascota SET Estado='inactivo' WHERE ID_mascota=?", [req.params.id], (err) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json({ message: 'Mascota desactivada' })
-  })
+  db.query('UPDATE mascota SET Estado=\'inactivo\' WHERE ID_mascota=?', [req.params.id], (err) => {
+  if (err) return res.status(500).json({ error: err.message })
+  res.json({ message: 'Mascota desactivada' })
+})
 })
 
 // =============================================================
@@ -831,10 +619,10 @@ app.get('/api/servicios', (req, res) => {
 })
 
 app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria, Precio } = req.body
+  const { Nombre, Descripcion, Categoria } = req.body
   db.query(
-    'INSERT INTO servicio (Nombre, Descripcion, Categoria, Precio) VALUES (?,?,?,?)',
-    [Nombre, Descripcion, Categoria, Precio],
+    'INSERT INTO servicio (Nombre, Descripcion, Categoria) VALUES (?,?,?)',
+    [Nombre, Descripcion, Categoria],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ ID_servicio: result.insertId, ...req.body })
@@ -843,10 +631,10 @@ app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.put('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria, Precio } = req.body
+  const { Nombre, Descripcion, Categoria } = req.body
   db.query(
-    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=?, Precio=? WHERE ID_servicio=?',
-    [Nombre, Descripcion, Categoria, Precio, req.params.id],
+    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=? WHERE ID_servicio=?',
+    [Nombre, Descripcion, Categoria, req.params.id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ message: 'Servicio actualizado' })

@@ -127,7 +127,7 @@ const requestReset = async () => {
   message.value = 'Enviando solicitud...'
 
   try {
-    const response = await fetch(`${API_URL}/forgot-password`, {
+    const response = await fetch(`${API_URL}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Correo: forgotEmail.value.trim() })
@@ -164,10 +164,14 @@ const resetPassword = async () => {
   message.value = 'Reseteando contraseña...'
 
   try {
-    const response = await fetch(`${API_URL}/reset-password`, {
+    const response = await fetch(`${API_URL}/auth/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })
+      body: JSON.stringify({
+        Correo: forgotEmail.value.trim(),
+        codigo: resetToken.value.trim(),
+        nuevaContrasena: newPassword.value
+      })
     })
     const data = await response.json()
 
@@ -337,9 +341,8 @@ const onStageLeave = () => {
 
         <p class="create-account">¿No tienes cuenta? <a href="javascript:void(0)" @click="irARegistro">Crear cuenta</a></p>
 
-        <p class="admin-access" style="margin-top: 1rem; text-align: center; font-size: 0.9rem;">
-          <a href="javascript:void(0)" @click="irALoginAdmin" style="color: #764ba2; font-weight: 600; text-decoration: none;">👨‍💼 Acceso de Administrador</a>
-        </p>
+        
+        
       </div>
     </div>
   </div>

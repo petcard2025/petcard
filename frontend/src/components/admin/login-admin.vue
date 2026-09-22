@@ -104,14 +104,14 @@ const requestReset = async () => {
   if (!forgotEmail.value.trim()) { message.value = 'Ingresa tu correo electrónico'; return }
   message.value = 'Enviando solicitud...'
   try {
-    const response = await fetch(`${API_URL}/forgot-password`, {
+    const response = await fetch(`${API_URL}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Correo: forgotEmail.value.trim() })
     })
     const data = await response.json()
     if (response.ok) {
-      message.value = `Token generado: ${data.token}\n\nCopia este token para resetear tu contraseña.`
+      message.value = 'Te enviamos un código a tu correo. Revisa tu bandeja (y SPAM) e ingrésalo abajo.'
       modalStep.value = 'reset'
     } else {
       message.value = data.error || 'Error al solicitar reset'
@@ -131,10 +131,14 @@ const resetPassword = async () => {
   }
   message.value = 'Reseteando contraseña...'
   try {
-    const response = await fetch(`${API_URL}/reset-password`, {
+    const response = await fetch(`${API_URL}/auth/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: resetToken.value.trim(), nuevaContrasena: newPassword.value })
+      body: JSON.stringify({
+        Correo: forgotEmail.value.trim(),
+        codigo: resetToken.value.trim(),
+        nuevaContrasena: newPassword.value
+      })
     })
     const data = await response.json()
     if (response.ok) {
