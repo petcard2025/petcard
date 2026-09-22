@@ -7,6 +7,7 @@ const router = useRouter()
 
 const formData = reactive({
   nombre: '',
+  apellido: '',
   correo: '',
   telefono: '',
   contrasena: '',
@@ -16,6 +17,7 @@ const formData = reactive({
 
 const errors = reactive({
   nombre: '',
+  apellido: '',
   correo: '',
   telefono: '',
   contrasena: '',
@@ -50,6 +52,10 @@ const handleRegistro = async () => {
     errors.nombre = 'El nombre es obligatorio.'
     valid = false
   }
+  if (!formData.apellido.trim()) {
+    errors.apellido = 'El apellido es obligatorio.'
+    valid = false
+  }
   if (!formData.correo.trim() || !validateEmail(formData.correo)) {
     errors.correo = 'Ingresa un correo válido.'
     valid = false
@@ -82,7 +88,7 @@ const handleRegistro = async () => {
   try {
     console.log('🔗 Creando usuario via API')
     const data = await usuariosAPI.crear({
-      Nombre: formData.nombre.trim(),
+      Nombre: `${formData.nombre.trim()} ${formData.apellido.trim()}`.trim(),
       Correo: formData.correo.trim(),
       Telefono: formData.telefono.trim(),
       Contrasena: formData.contrasena,
@@ -147,13 +153,24 @@ const irALoginAdmin = () => {
 
       <div class="success-banner" v-if="successMessage">{{ successMessage }}</div>
 
-      <div class="form-group">
-        <label>Nombre Completo</label>
-        <div class="input-group">
-          <i class="fas fa-user"></i>
-          <input type="text" class="form-control" v-model="formData.nombre" placeholder="Tu nombre completo">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nombre</label>
+          <div class="input-group">
+            <i class="fas fa-user"></i>
+            <input type="text" class="form-control" v-model="formData.nombre" placeholder="Tu nombre">
+          </div>
+          <div class="error" v-if="errors.nombre">{{ errors.nombre }}</div>
         </div>
-        <div class="error" v-if="errors.nombre">{{ errors.nombre }}</div>
+
+        <div class="form-group">
+          <label>Apellido</label>
+          <div class="input-group">
+            <i class="fas fa-user"></i>
+            <input type="text" class="form-control" v-model="formData.apellido" placeholder="Tu apellido">
+          </div>
+          <div class="error" v-if="errors.apellido">{{ errors.apellido }}</div>
+        </div>
       </div>
 
       <div class="form-group">
@@ -325,6 +342,23 @@ html, body {
 /* ── Grupos de formulario ── */
 .form-group {
   margin-bottom: 1.5rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.form-row .form-group {
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 480px) {
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
 }
 
 .form-group label {

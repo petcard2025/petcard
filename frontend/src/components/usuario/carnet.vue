@@ -291,7 +291,7 @@ function descargarCarnetPDF() {
     v.Lote || '—'
   ]))
 
-    doc.autoTable(doc, {
+  doc.autoTable({
     startY: y,
     margin: { left: margin, right: margin },
     head: [['', 'Vacuna', 'Aplicada', 'Próxima', 'Lote']],
@@ -541,7 +541,6 @@ onMounted(async () => {
               </svg>
               Descargar PDF
             </button>
-            <button class="btn btn-primary btn-sm" style="flex:1;" @click="imprimir">Imprimir Carnet</button>
           </div>
         </div>
       </div>

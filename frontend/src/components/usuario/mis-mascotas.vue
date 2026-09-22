@@ -4,14 +4,14 @@
      <router-link to="/inicio" class="nav-logo">PETCARD</router-link>
 
   <ul class="nav-links">
-    <li><router-link to="/inicio" class="active">Inicio</router-link></li>
+    <li><router-link to="/inicio">Inicio</router-link></li>
     <li><router-link to="/servicios">Servicios</router-link></li>
     <li><router-link to="/citas">Citas</router-link></li>
     <li><router-link to="/alimentacion">Alimentación</router-link></li>
     <li><router-link to="/carnet">Carnet</router-link></li>
     <li><router-link to="/perfil">Mi Perfil</router-link></li>
     <li><router-link to="/notificaciones">Notificaciones</router-link></li>
-    <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
+    <li><router-link to="/mis-mascotas" class="active">Mis Mascotas</router-link></li>
   </ul>
   <div id="auth-section" class="auth-section">
     <template v-if="isAuthenticated">

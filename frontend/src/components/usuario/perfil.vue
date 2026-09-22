@@ -208,10 +208,6 @@ watch(authUsuario, () => {
           </div>
         </div>
 
-        <div class="form-group">
-          <label>Dirección</label>
-          <input class="form-control" type="text" v-model="formData.direccion" :disabled="!enEdicion"/>
-        </div>
 
         <div class="form-group">
           <label>Contacto de Emergencia</label>
