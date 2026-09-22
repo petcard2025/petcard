@@ -46,6 +46,10 @@ body {
   line-height: 1.5;
 }
 
+h1, h2, h3 {
+  color:  #ffffff;; /* o el color que quieras, ej: #FF6B6B */
+}
+
 /* ════════════════════════════════════════
    NAVBAR
 ════════════════════════════════════════ */

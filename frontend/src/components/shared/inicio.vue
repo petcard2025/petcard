@@ -318,7 +318,7 @@ onMounted(async () => {
 }
 
 .hero-content { max-width: 560px; }
-.hero-content h1 { font-family:'Nunito',sans-serif; font-weight:900; font-size:1.9rem; margin-bottom:.65rem; }
+.hero-content h1 { font-family:'Nunito',sans-serif; font-weight:900; font-size:1.9rem; margin-bottom:.65rem; color: #f8f7f7f6;  }
 .hero-content p { font-size:.95rem; opacity:.9; margin-bottom:1.4rem; line-height:1.6; }
 .hero-btns { display:flex; gap:.75rem; flex-wrap:wrap; }
 

@@ -545,7 +545,7 @@ body {
   max-width: 420px;
 }
 
-h1 {
+.login-box h1 {
   font-size: 2.4rem;
   font-weight: 700;
   color: #1a1a1a;

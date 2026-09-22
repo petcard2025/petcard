@@ -3,6 +3,11 @@ import { ref, computed, watch, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { mascotasAPI, clientesAPI, vacunasAPI } from '../../api.js'
+import jsPDF from 'jspdf'
+import * as AutoTableLib from 'jspdf-autotable'
+if (typeof AutoTableLib.applyPlugin === 'function') {
+  AutoTableLib.applyPlugin(jsPDF)
+}
 
 const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -184,6 +189,173 @@ function imprimir() {
   window.print()
 }
 
+// ===== Descarga del carnet como PDF con diseño propio (tipo pasaporte) =====
+function dibujarHuella(doc, x, y, s, color) {
+  doc.setFillColor(...color)
+  doc.ellipse(x, y + s * 0.55, s * 0.55, s * 0.42, 'F')
+  doc.circle(x - s * 0.55, y, s * 0.22, 'F')
+  doc.circle(x - s * 0.18, y - s * 0.28, s * 0.22, 'F')
+  doc.circle(x + s * 0.18, y - s * 0.28, s * 0.22, 'F')
+  doc.circle(x + s * 0.55, y, s * 0.22, 'F')
+}
+
+function descargarCarnetPDF() {
+  if (!selectedPet.value) {
+    alert('Selecciona una mascota primero')
+    return
+  }
+
+  const pet = selectedPet.value
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' })
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+  const margin = 8
+
+  const purple = [37, 99, 235]
+  const purpleDark = [29, 78, 216]
+  const green = [22, 163, 74]
+  const red = [220, 38, 38]
+  const yellow = [202, 138, 4]
+  const text = [17, 24, 39]
+  const muted = [107, 114, 128]
+  const lightBg = [239, 246, 255]
+
+  // ===== Marco decorativo tipo pasaporte =====
+  doc.setDrawColor(...purple)
+  doc.setLineWidth(0.6)
+  doc.roundedRect(3, 3, pageW - 6, pageH - 6, 3, 3, 'S')
+
+  // ===== Encabezado =====
+  doc.setFillColor(...purple)
+  doc.roundedRect(3, 3, pageW - 6, 34, 3, 3, 'F')
+  doc.rect(3, 23, pageW - 6, 14, 'F')
+  dibujarHuella(doc, margin + 5, 12, 6, [255, 255, 255])
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.text('PETCARD', margin + 12, 13.5)
+  doc.setFontSize(16)
+  doc.text('CARNET DE VACUNACIÓN', pageW / 2, 24, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.text('Documento oficial de seguimiento sanitario', pageW / 2, 30, { align: 'center' })
+
+  let y = 44
+
+  // ===== Datos de la mascota =====
+  doc.setFillColor(...lightBg)
+  doc.roundedRect(margin, y, pageW - margin * 2, 34, 2, 2, 'F')
+  doc.setDrawColor(...purple)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(margin, y, pageW - margin * 2, 34, 2, 2, 'S')
+
+  doc.setTextColor(...text)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.text(pet.Nombre || 'Mascota', margin + 4, y + 8)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...muted)
+  const colB = pageW / 2 + 2
+  let ly = y + 15
+  doc.text(`Especie: ${pet.Especie || '—'}`, margin + 4, ly)
+  doc.text(`ID: ${pet.ID_mascota || '—'}`, colB, ly)
+  ly += 6
+  doc.text(`Raza: ${pet.Raza || '—'}`, margin + 4, ly)
+  doc.text(`Dueño: ${usuarioLogueado.value?.Nombre || '—'}`, colB, ly)
+  ly += 6
+  doc.text(`Nacimiento: ${obtenerFechaNacimiento(pet.Fecha_nacimiento)}`, margin + 4, ly)
+
+  y += 40
+
+  // ===== Estado de vacunación =====
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(...text)
+  doc.text(`Estado de vacunación: ${pct.value}%`, margin, y)
+  doc.setFillColor(229, 231, 235)
+  doc.roundedRect(margin, y + 2, pageW - margin * 2, 3, 1.5, 1.5, 'F')
+  doc.setFillColor(...green)
+  doc.roundedRect(margin, y + 2, (pageW - margin * 2) * (pct.value / 100), 3, 1.5, 1.5, 'F')
+
+  y += 12
+
+  // ===== Tabla de vacunas =====
+  const filas = vacunas.value.map(v => ([
+    '',
+    v.Nombre_vacuna || '—',
+    obtenerFechaTexto(v.Fecha_aplicacion),
+    obtenerFechaTexto(v.Proxima_dosis),
+    v.Lote || '—'
+  ]))
+
+    doc.autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [['', 'Vacuna', 'Aplicada', 'Próxima', 'Lote']],
+    body: filas,
+    theme: 'striped',
+    styles: { fontSize: 7.5, cellPadding: 1.8, textColor: text },
+    headStyles: { fillColor: purpleDark, textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+    columnStyles: { 0: { cellWidth: 8 } },
+    didDrawCell: (data) => {
+      if (data.column.index === 0 && data.cell.section === 'body') {
+        const estado = vacunas.value[data.row.index]?.Estado
+        const color = (estado === 'Completo' || estado === 'aplicada') ? green
+          : (estado === 'Atrasada' || estado === 'atrasada') ? red : yellow
+        doc.setFillColor(...color)
+        doc.circle(data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2, 1.3, 'F')
+      }
+    }
+  })
+
+  let finalY = doc.lastAutoTable.finalY + 6
+
+  // ===== Observaciones médicas =====
+  const conObs = vacunas.value.filter(v => v.Observaciones)
+  if (conObs.length) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...text)
+    doc.text('Observaciones médicas', margin, finalY)
+    finalY += 4
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...muted)
+    conObs.forEach(v => {
+      const partido = doc.splitTextToSize(`• ${v.Nombre_vacuna}: ${v.Observaciones}`, pageW - margin * 2 - 2)
+      doc.text(partido, margin + 2, finalY)
+      finalY += partido.length * 3.6
+    })
+  }
+
+  // ===== Pie: veterinario y firma =====
+  const footY = pageH - 22
+  doc.setDrawColor(...muted)
+  doc.setLineWidth(0.2)
+  doc.line(margin, footY, margin + 45, footY)
+  doc.setFontSize(7)
+  doc.setTextColor(...muted)
+  doc.text('Firma y sello del veterinario', margin, footY + 4)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...text)
+  doc.text('Dr. José García', pageW - margin, footY - 6, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...muted)
+  doc.text('Matrícula: 47789', pageW - margin, footY - 2, { align: 'right' })
+
+  doc.setFontSize(6.5)
+  doc.text(
+    `Generado el ${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })} · PetCard`,
+    pageW / 2, pageH - 6, { align: 'center' }
+  )
+
+  doc.save(`Carnet_Vacunacion_${(pet.Nombre || 'mascota').replace(/\s+/g, '_')}.pdf`)
+}
+
 function abrirVacunas(pet) {
   selectedId.value = pet.ID_mascota
   router.push({ path: '/citas', query: { mascota: pet.ID_mascota } })
@@ -363,7 +535,7 @@ onMounted(async () => {
           <div class="info-row"><span>Fecha de nacimiento:</span><strong>{{ obtenerFechaNacimiento(selectedPet?.Fecha_nacimiento) }}</strong></div>
           <div class="info-row"><span>Próxima cita:</span><strong>{{ proximas.length ? obtenerFechaTexto(proximas[0].Proxima_dosis) : '—' }}</strong></div>
           <div style="display:flex; gap:.5rem; margin-top:1rem;">
-            <button class="btn btn-secondary btn-sm" style="flex:1;" @click="imprimir">
+            <button class="btn btn-secondary btn-sm" style="flex:1;" @click="descargarCarnetPDF">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
