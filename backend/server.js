@@ -62,18 +62,18 @@ function cargarVeterinario(req, res, next) {
   )
 }
 
-// ── Middleware: verifica que el veterinario haya atendido esa mascota con ese servicio ──
-function verificarVetAtendioMascotaServicio(req, res, next) {
+// ── Middleware: verifica que el veterinario haya atendido esa mascota ──
+function verificarVetAtendioMascota(req, res, next) {
   if (req.usuario.Rol !== 'veterinario') return next()
 
-  const verificar = (idMascota, idServicio) => {
+  const verificar = (idMascota) => {
     db.query(
-      'SELECT 1 FROM cita WHERE ID_veterinario = ? AND ID_mascota = ? AND ID_servicio = ? LIMIT 1',
-      [req.veterinario.ID_veterinario, idMascota, idServicio],
+      'SELECT 1 FROM cita WHERE ID_veterinario = ? AND ID_mascota = ? LIMIT 1',
+      [req.veterinario.ID_veterinario, idMascota],
       (err, rows) => {
         if (err) return res.status(500).json({ error: err.message })
         if (rows.length === 0) {
-          return res.status(403).json({ error: 'Solo puedes modificar planes de alimentacion de mascotas y servicios que has atendido.' })
+          return res.status(403).json({ error: 'Solo puedes modificar planes de alimentacion de mascotas que has atendido.' })
         }
         next()
       }
@@ -82,18 +82,18 @@ function verificarVetAtendioMascotaServicio(req, res, next) {
 
   if (req.params.id) {
     db.query(
-      'SELECT ID_mascota, ID_servicio FROM planalimentacion WHERE ID_planAlimentacion = ?',
+      'SELECT ID_mascota FROM planalimentacion WHERE ID_planAlimentacion = ?',
       [req.params.id],
       (err, rows) => {
         if (err) return res.status(500).json({ error: err.message })
         if (rows.length === 0) return res.status(404).json({ error: 'Plan no encontrado' })
-        verificar(rows[0].ID_mascota, rows[0].ID_servicio)
+        verificar(rows[0].ID_mascota)
       }
     )
     return
   }
 
-  verificar(req.body.ID_mascota, req.body.ID_servicio)
+  verificar(req.body.ID_mascota)
 }
 
 const { google } = require('googleapis')
@@ -890,15 +890,14 @@ app.delete('/api/vacunas/:id', verifyToken, (req, res) => {
 // PLAN DE ALIMENTACION
 // =============================================================
 app.get('/api/alimentacion', verifyToken, cargarVeterinario, (req, res) => {
-  let sql = `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
+  let sql = `SELECT pa.*, m.Nombre AS Nombre_mascota
      FROM planalimentacion pa
-     JOIN mascota m ON pa.ID_mascota = m.ID_mascota
-     JOIN servicio s ON pa.ID_servicio = s.ID_servicio`
+     JOIN mascota m ON pa.ID_mascota = m.ID_mascota`
   const params = []
   if (req.usuario.Rol === 'veterinario') {
     sql += ` WHERE EXISTS (
       SELECT 1 FROM cita ci WHERE ci.ID_mascota = pa.ID_mascota
-      AND ci.ID_servicio = pa.ID_servicio AND ci.ID_veterinario = ?
+      AND ci.ID_veterinario = ?
     )`
     params.push(req.veterinario.ID_veterinario)
   }
@@ -915,11 +914,11 @@ app.get('/api/alimentacion/mascota/:id_mascota', verifyToken, (req, res) => {
   })
 })
 
-app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
-  const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
+app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendioMascota, (req, res) => {
+  const { ID_mascota, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
-    'INSERT INTO planalimentacion (ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional],
+    'INSERT INTO planalimentacion (ID_mascota, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [ID_mascota, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ ID_planAlimentacion: result.insertId, ...req.body })
@@ -927,7 +926,7 @@ app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendi
   )
 })
 
-app.put('/api/alimentacion/:id', verifyToken, cargarVeterinario, verificarVetAtendioMascotaServicio, (req, res) => {
+app.put('/api/alimentacion/:id', verifyToken, cargarVeterinario, verificarVetAtendioMascota, (req, res) => {
   const { Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'UPDATE planalimentacion SET Tipo_dieta=?, Frecuencia=?, Alergias=?, Horario=?, Calorias=?, Suplementos=?, Comidas=?, Fecha_inicio=?, Fecha_fin=?, Observaciones=?, Diagnostico=?, Revision_nutricional=? WHERE ID_planAlimentacion=?',

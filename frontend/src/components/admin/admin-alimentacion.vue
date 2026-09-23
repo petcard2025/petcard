@@ -16,11 +16,10 @@ const cargando = ref(false)
 const error = ref('')
 
 const mascotas = ref([])
-const servicios = ref([])
 const planes = ref([])
 
 const nuevoPlan = ref({
-  ID_mascota: '', ID_servicio: '', Tipo_dieta: '', Frecuencia: '',
+  ID_mascota: '', Tipo_dieta: '', Frecuencia: '',
   Calorias: '', Horario: '', Alergias: '', Suplementos: '', Comidas: '',
   Fecha_inicio: '', Fecha_fin: '', Observaciones: '', Diagnostico: '',
   Revision_nutricional: 'Pendiente'
@@ -29,7 +28,6 @@ const nuevoPlan = ref({
 onMounted(async () => {
   await cargarPlanes()
   await cargarMascotas()
-  await cargarServicios()
 })
 
 async function cargarPlanes() {
@@ -50,13 +48,6 @@ async function cargarMascotas() {
   try {
     const res = await fetch(`${API}/mascotas`, { headers: headersAuth() })
     mascotas.value = await res.json()
-  } catch (e) {}
-}
-
-async function cargarServicios() {
-  try {
-    const res = await fetch(`${API}/servicios`, { headers: headersAuth() })
-    servicios.value = await res.json()
   } catch (e) {}
 }
 
@@ -105,8 +96,8 @@ async function eliminarPlan() {
 }
 
 async function agregarPlan() {
-  if (!nuevoPlan.value.ID_mascota || !nuevoPlan.value.ID_servicio) {
-    alert('Selecciona la mascota y el servicio.')
+  if (!nuevoPlan.value.ID_mascota) {
+    alert('Selecciona la mascota.')
     return
   }
   try {
@@ -118,7 +109,7 @@ async function agregarPlan() {
     if (!res.ok) throw new Error()
     await cargarPlanes()
     nuevoPlan.value = {
-      ID_mascota: '', ID_servicio: '', Tipo_dieta: '', Frecuencia: '',
+      ID_mascota: '', Tipo_dieta: '', Frecuencia: '',
       Calorias: '', Horario: '', Alergias: '', Suplementos: '', Comidas: '',
       Fecha_inicio: '', Fecha_fin: '', Observaciones: '', Diagnostico: '',
       Revision_nutricional: 'Pendiente'
@@ -165,14 +156,13 @@ function badgeClass(estado) {
         <div class="admin-card-header">
           <div>
             <div class="admin-card-title">{{ plan.Nombre_mascota }}</div>
-            <div class="admin-card-tipo">{{ plan.Nombre_servicio }}</div>
+            <div class="admin-card-tipo">{{ plan.Tipo_dieta }}</div>
           </div>
           <span :class="badgeClass(plan.Revision_nutricional)">
             {{ (plan.Revision_nutricional || 'Pendiente').toUpperCase() }}
           </span>
         </div>
         <div class="admin-card-body">
-          <div class="detail">{{ plan.Tipo_dieta }}</div>
           <div class="admin-card-meta" v-if="plan.Calorias">{{ plan.Calorias }} cal • {{ plan.Frecuencia }}</div>
           <div class="admin-card-meta" v-if="plan.Fecha_inicio">Inicio: {{ plan.Fecha_inicio?.slice(0,10) }}</div>
           <div class="admin-card-meta" v-if="plan.Observaciones">{{ plan.Observaciones }}</div>
@@ -241,11 +231,6 @@ function badgeClass(estado) {
           <select v-model="nuevoPlan.ID_mascota">
             <option value="">-- Selecciona mascota --</option>
             <option v-for="m in mascotas" :key="m.ID_mascota" :value="m.ID_mascota">{{ m.Nombre }}</option>
-          </select>
-          <label>Servicio</label>
-          <select v-model="nuevoPlan.ID_servicio">
-            <option value="">-- Selecciona servicio --</option>
-            <option v-for="s in servicios" :key="s.ID_servicio" :value="s.ID_servicio">{{ s.Nombre }}</option>
           </select>
           <label>Tipo de dieta</label>
           <input v-model="nuevoPlan.Tipo_dieta" />
