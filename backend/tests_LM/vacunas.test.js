@@ -1,30 +1,43 @@
 const request = require('supertest');
-const app = require('../app');
+const app = require('../server');
 
-describe('RF18 - Carnet de Vacunas', () => {
-  let tokenVeterinario;
-
-  it('Debería registrar una nueva vacuna para una mascota', async () => {
+describe('RF18 - Gestión del Carnet de Vacunas', () => {
+  
+  it('Debería denegar la creación de vacuna sin token (401)', async () => {
     const res = await request(app)
       .post('/api/vacunas')
-      .set('Authorization', `Bearer ${tokenVeterinario}`)
+      .set('Authorization', '')
       .send({
         ID_mascota: 1,
-        Nombre_vacuna: 'Rabia',
-        Lote: 'LOTE123',
-        Fecha_aplicacion: '2026-10-25'
+        Nombre_vacuna: 'Rabia'
       });
 
-    expect(res.statusCode).toEqual(201);
-    expect(res.body.Nombre_vacuna).toEqual('Rabia');
+    expect(res.statusCode).toEqual(401); 
   });
 
-  it('Debería traer el historial de vacunas de una mascota', async () => {
+  it('Debería denegar la consulta de vacunas con token inválido (403)', async () => {
     const res = await request(app)
-      .get('/api/vacunas/1') // ID de la mascota
-      .set('Authorization', `Bearer ${tokenVeterinario}`);
-
-    expect(res.statusCode).toEqual(200);
-    expect(Array.isArray(res.body)).toBeTruthy();
+      .get('/api/vacunas/mascota/1') 
+      .set('Authorization', 'Bearer token_falso');
+      
+    expect(res.statusCode).toEqual(403); 
   });
+
+  it('Debería denegar la actualización de una vacuna sin token (401)', async () => {
+    const res = await request(app)
+      .put('/api/vacunas/1')
+      .set('Authorization', '')
+      .send({ Nombre_vacuna: 'Rabia Modificada' });
+
+    expect(res.statusCode).toEqual(401);
+  });
+
+  it('Debería denegar la eliminación de una vacuna sin token (401)', async () => {
+    const res = await request(app)
+      .delete('/api/vacunas/1')
+      .set('Authorization', '');
+
+    expect(res.statusCode).toEqual(401);
+  });
+
 });

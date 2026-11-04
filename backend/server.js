@@ -195,6 +195,9 @@ const SALT_ROUNDS = 10
 
 const app = express()
 
+// 👇 ESTA LÍNEA ES LA QUE PERMITE QUE JEST Y SUPERTEST USEN TU APP
+module.exports = app
+
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://localhost:5173'
 app.use(cors({
   origin: FRONTEND_URL,
@@ -1197,34 +1200,36 @@ app.post('/api/sms/recordatorio-vacuna', verifyToken, verifyAdmin, async (req, r
 })
 
 // =============================================================
-// INICIAR SERVIDOR
+// INICIAR SERVIDOR (Omitir si estamos en Jest)
 // =============================================================
 const PORT = process.env.PORT || 3001
 const NODE_ENV = process.env.NODE_ENV || 'development'
 
-if (NODE_ENV === 'production') {
-  app.listen(PORT, () => {
-    console.log(`Servidor backend corriendo en el puerto ${PORT} (HTTP interno)`)
-    console.log('IMPORTANTE: verifica que el proxy/hosting este sirviendo HTTPS hacia afuera.')
-  })
-} else {
-  const keyPath = process.env.SSL_KEY_PATH || './certs/cert.key'
-  const certPath = process.env.SSL_CERT_PATH || './certs/cert.crt'
+if (NODE_ENV !== 'test') {
+  if (NODE_ENV === 'production') {
+    app.listen(PORT, () => {
+      console.log(`Servidor backend corriendo en el puerto ${PORT} (HTTP interno)`)
+      console.log('IMPORTANTE: verifica que el proxy/hosting este sirviendo HTTPS hacia afuera.')
+    })
+  } else {
+    const keyPath = process.env.SSL_KEY_PATH || './certs/cert.key'
+    const certPath = process.env.SSL_CERT_PATH || './certs/cert.crt'
 
-  if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-    console.error('No se encontraron los certificados SSL de desarrollo.')
-    console.error(`Se esperaban en: ${keyPath} y ${certPath}`)
-    console.error('Generalos corriendo: npm run certs')
-    process.exit(1)
+    if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+      console.error('No se encontraron los certificados SSL de desarrollo.')
+      console.error(`Se esperaban en: ${keyPath} y ${certPath}`)
+      console.error('Generalos corriendo: npm run certs')
+      process.exit(1)
+    }
+
+    const sslOptions = {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath)
+    }
+
+    https.createServer(sslOptions, app).listen(PORT, () => {
+      console.log(`🔒 Servidor HTTPS de desarrollo corriendo en https://localhost:${PORT}`)
+      console.log('✓ Listo para recibir peticiones en https://localhost:' + PORT + '/api/usuarios')
+    })
   }
-
-  const sslOptions = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath)
-  }
-
-  https.createServer(sslOptions, app).listen(PORT, () => {
-    console.log(`🔒 Servidor HTTPS de desarrollo corriendo en https://localhost:${PORT}`)
-    console.log('✓ Listo para recibir peticiones en https://localhost:' + PORT + '/api/usuarios')
-  })
 }
