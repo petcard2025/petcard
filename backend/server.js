@@ -13,6 +13,8 @@ require('dotenv').config()
 
 require('./mailer')
 const authController = require('./src/controllers/auth.controller')
+const appointmentController = require('./src/controllers/appointment.controller')
+const { validarNombreMascota } = require('./src/utils/validators')
 
 if (!process.env.JWT_SECRET) {
   console.error('FATAL: La variable de entorno JWT_SECRET no esta definida.')
@@ -564,19 +566,25 @@ app.get('/api/mascotas/cliente/:id_cliente', verifyToken, (req, res) => {
 })
 
 app.post('/api/mascotas', verifyToken, (req, res) => {
-  const { ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
+  const { ID_cliente, Fecha_nacimiento, Especie, Sexo, Foto, Raza, Peso } = req.body
+  const errNombre = validarNombreMascota(req.body.Nombre)
+  if (errNombre) return res.status(400).json({ error: errNombre })
+  const Nombre = req.body.Nombre.trim()
   db.query(
     'INSERT INTO mascota (ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso) VALUES (?,?,?,?,?,?,?,?)',
     [ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
-      res.json({ ID_mascota: result.insertId, ...req.body })
+      res.json({ ID_mascota: result.insertId, ...req.body, Nombre })
     }
   )
 })
 
 app.put('/api/mascotas/:id', verifyToken, (req, res) => {
-  const { Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
+  const { Fecha_nacimiento, Especie, Sexo, Foto, Raza, Peso } = req.body
+  const errNombre = validarNombreMascota(req.body.Nombre)
+  if (errNombre) return res.status(400).json({ error: errNombre })
+  const Nombre = req.body.Nombre.trim()
   db.query(
     'UPDATE mascota SET Fecha_nacimiento=?, Nombre=?, Especie=?, Sexo=?, Foto=?, Raza=?, Peso=? WHERE ID_mascota=?',
     [Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso, req.params.id],
@@ -652,165 +660,15 @@ app.delete('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
 // =============================================================
 // CITAS
 // =============================================================
-app.get('/api/citas', verifyToken, cargarVeterinario, (req, res) => {
-  let sql = `SELECT ci.ID_cita, ci.ID_cliente, ci.ID_mascota, ci.ID_servicio, ci.ID_veterinario,
-            ci.Fecha, ci.Hora, ci.Motivo, ci.Observaciones, ci.Estado,
-            m.Nombre AS Nombre_mascota,
-            u.Nombre AS Nombre_cliente,
-            s.Nombre AS Nombre_servicio,
-            uv.Nombre AS Nombre_veterinario
-     FROM cita ci
-     JOIN mascota m ON ci.ID_mascota = m.ID_mascota
-     JOIN cliente c ON ci.ID_cliente = c.ID_cliente
-     JOIN usuario u ON c.ID_usuario = u.ID_usuario
-     JOIN servicio s ON ci.ID_servicio = s.ID_servicio
-     JOIN veterinario v ON ci.ID_veterinario = v.ID_veterinario
-     JOIN usuario uv ON v.ID_usuario = uv.ID_usuario`
+// La logica de citas (permisos, validacion de fecha/hora, horarios ocupados) vive en
+// src/controllers/appointment.controller.js
+app.get('/api/citas', verifyToken, cargarVeterinario, appointmentController.getAppointments)
+app.get('/api/citas/horas-ocupadas', verifyToken, appointmentController.getHorasOcupadas)
+app.post('/api/citas', verifyToken, appointmentController.createAppointment)
+app.put('/api/citas/:id', verifyToken, cargarVeterinario, appointmentController.updateAppointment)
+app.patch('/api/citas/:id', verifyToken, cargarVeterinario, appointmentController.patchAppointment)
+app.delete('/api/citas/:id', verifyToken, verifyAdmin, appointmentController.deleteAppointment)
 
-  const params = []
-  if (req.usuario.Rol === 'veterinario') {
-    sql += ' WHERE ci.ID_veterinario = ?'
-    params.push(req.veterinario.ID_veterinario)
-  }
-  sql += ' ORDER BY ci.Fecha DESC'
-
-  db.query(sql, params, (err, results) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json(results)
-  })
-})
-
-app.get('/api/citas/horas-ocupadas', verifyToken, (req, res) => {
-  const { ID_veterinario, Fecha } = req.query
-  if (!ID_veterinario || !Fecha) {
-    return res.status(400).json({ error: 'Se requieren ID_veterinario y Fecha' })
-  }
-  db.query(
-    'SELECT Hora FROM cita WHERE ID_veterinario = ? AND Fecha = ?',
-    [ID_veterinario, Fecha],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      const horasOcupadas = results.map(r => r.Hora)
-      res.json({ horasOcupadas })
-    }
-  )
-})
-
-app.post('/api/citas', verifyToken, async (req, res) => {
-  const { ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
-
-  db.query(
-    'SELECT ID_cita FROM cita WHERE ID_veterinario=? AND Fecha=? AND Hora=?',
-    [ID_veterinario, Fecha, Hora],
-    async (errCheck, existing) => {
-      if (errCheck) return res.status(500).json({ error: errCheck.message })
-      if (existing.length > 0) {
-        return res.status(409).json({ error: 'El veterinario ya tiene una cita agendada en esa fecha y hora.' })
-      }
-
-      db.query(
-        'INSERT INTO cita (ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones) VALUES (?,?,?,?,?,?,?,?)',
-        [ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones],
-        async (err, result) => {
-          if (err) return res.status(500).json({ error: err.message })
-          const ID_cita = result.insertId
-
-          try {
-            db.query(
-              `SELECT c.ID_usuario, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
-               FROM cliente c
-               JOIN mascota m ON m.ID_mascota = ?
-               JOIN servicio s ON s.ID_servicio = ?
-               WHERE c.ID_cliente = ?`,
-              [ID_mascota, ID_servicio, ID_cliente],
-              async (errQ, rows) => {
-                if (!errQ && rows.length > 0) {
-                  const { ID_usuario, Nombre_mascota, Nombre_servicio } = rows[0]
-                  const mensaje = `✅ Cita agendada para ${Nombre_mascota || 'tu mascota'} — ${Nombre_servicio || Motivo || 'Consulta'} el ${Fecha} a las ${Hora}.`
-                  await crearNotificacionAutomatica(ID_usuario, mensaje, 'cita', 'Sistema')
-                }
-              }
-            )
-          } catch (notifError) {
-            console.error('Error creando notificación de cita:', notifError.message)
-          }
-
-          try {
-            const googleEventId = await crearEventoCalendar({ Fecha, Hora, Motivo, Observaciones })
-            db.query('UPDATE cita SET Google_Event_ID=? WHERE ID_cita=?', [googleEventId, ID_cita])
-            res.json({ ID_cita, googleEventId, ...req.body })
-          } catch (calError) {
-            console.error('Error Google Calendar:', calError.message)
-            res.json({ ID_cita, ...req.body, calendarError: calError.message })
-          }
-        }
-      )
-    }
-  )
-})
-
-app.put('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
-  const { ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
-
-  const ejecutarUpdate = () => {
-    db.query(
-      'UPDATE cita SET ID_servicio=?, ID_veterinario=?, Fecha=?, Hora=?, Motivo=?, Observaciones=? WHERE ID_cita=?',
-      [ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones, req.params.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ message: 'Cita actualizada' })
-      }
-    )
-  }
-
-  if (req.usuario.Rol === 'veterinario') {
-    db.query('SELECT ID_veterinario FROM cita WHERE ID_cita = ?', [req.params.id], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (rows.length === 0) return res.status(404).json({ error: 'Cita no encontrada' })
-      if (rows[0].ID_veterinario !== req.veterinario.ID_veterinario) {
-        return res.status(403).json({ error: 'No puedes modificar citas de otro veterinario.' })
-      }
-      ejecutarUpdate()
-    })
-  } else {
-    ejecutarUpdate()
-  }
-})
-
-app.patch('/api/citas/:id', verifyToken, cargarVeterinario, (req, res) => {
-  const campos = req.body
-  const keys = Object.keys(campos)
-  if (keys.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' })
-
-  const ejecutarPatch = () => {
-    const set = keys.map(k => `${k}=?`).join(', ')
-    const values = [...Object.values(campos), req.params.id]
-    db.query(`UPDATE cita SET ${set} WHERE ID_cita=?`, values, (err) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ message: 'Cita actualizada parcialmente' })
-    })
-  }
-
-  if (req.usuario.Rol === 'veterinario') {
-    db.query('SELECT ID_veterinario FROM cita WHERE ID_cita = ?', [req.params.id], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (rows.length === 0) return res.status(404).json({ error: 'Cita no encontrada' })
-      if (rows[0].ID_veterinario !== req.veterinario.ID_veterinario) {
-        return res.status(403).json({ error: 'No puedes modificar citas de otro veterinario.' })
-      }
-      ejecutarPatch()
-    })
-  } else {
-    ejecutarPatch()
-  }
-})
-
-app.delete('/api/citas/:id', verifyToken, verifyAdmin, (req, res) => {
-  db.query('DELETE FROM cita WHERE ID_cita=?', [req.params.id], (err) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json({ message: 'Cita eliminada' })
-  })
-})
 
 // =============================================================
 // CARNET DE VACUNAS

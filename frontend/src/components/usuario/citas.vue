@@ -1,9 +1,12 @@
 ﻿<script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { clientesAPI, mascotasAPI, serviciosAPI, veterinariosAPI, citasAPI, API_URL } from '../../api.js'
-import { FECHA_MAX_CITA, validarFechaCita, hoyColombia } from '../../utils/validators'
+import {
+  FECHA_MAX_CITA, HORAS_CITA, validarFechaCita, validarFechaHoraCita,
+  hoyColombia, horaA24, formatHora, citaYaPaso, construirHoras
+} from '../../utils/validators'
 
 const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -22,18 +25,11 @@ const showAllCitas = ref(false)
 const citaCancelarId = ref(null)
 const showConfirmCancel = ref(false)
 
-const TODAS_LAS_HORAS = [
-  '08:00 AM',
-  '09:00 AM',
-  '10:00 AM',
-  '11:00 AM',
-  '02:00 PM',
-  '03:00 PM',
-  '04:00 PM'
-]
+const TODAS_LAS_HORAS = HORAS_CITA
 
 const horasDisponibles = ref(TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true })))
 const cargandoHoras = ref(false)
+const errorHoras = ref(false) // true si no se pudo consultar la disponibilidad
 const resaltarHoras = ref(false) // 🆕 resalta el recuadro de horas cuando es el único campo faltante
 
 const form = reactive({
@@ -49,27 +45,16 @@ const form = reactive({
 const fechaMin = ref(hoyColombia())
 const fechaMax = FECHA_MAX_CITA
 
-// 🆕 Convierte cualquier formato de hora ("08:00 AM", "08:00:00", "20:00") a "HH:MM" 24h,
-// para poder comparar de forma confiable sin importar cómo la haya guardado el admin o el cliente.
-function horaA24(horaStr) {
-  if (!horaStr) return ''
-  const str = String(horaStr).trim()
-  const ampmMatch = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
-  if (ampmMatch) {
-    let h = parseInt(ampmMatch[1], 10)
-    const m = ampmMatch[2]
-    const ap = ampmMatch[3].toUpperCase()
-    if (ap === 'PM' && h !== 12) h += 12
-    if (ap === 'AM' && h === 12) h = 0
-    return `${String(h).padStart(2, '0')}:${m}`
-  }
-  const parts = str.split(':')
-  return `${parts[0].padStart(2, '0')}:${parts[1]}`
-}
-
+// Una hora se ofrece solo si no la tiene otra cita y no ha pasado ya (si la fecha es hoy).
+// Solo se aplica la respuesta mas reciente: si el usuario cambia de fecha rapido, una
+// respuesta lenta de la fecha anterior no debe pisar a la nueva.
+let ultimaConsultaHoras = 0
 async function cargarHorasDisponibles() {
+  const consulta = ++ultimaConsultaHoras
+  errorHoras.value = false
   if (!form.veterinario || !form.fecha) {
-    horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    horasDisponibles.value = construirHoras(form.fecha)
+    cargandoHoras.value = false
     return
   }
   cargandoHoras.value = true
@@ -79,25 +64,37 @@ async function cargarHorasDisponibles() {
       `${API_URL}/citas/horas-ocupadas?ID_veterinario=${form.veterinario}&Fecha=${form.fecha}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
-    const data = await res.json()
-    const ocupadas24 = (data.horasOcupadas || []).map(horaA24)
-    horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({
-      hora: h,
-      disponible: !ocupadas24.includes(horaA24(h))
-    }))
-    if (form.hora && ocupadas24.includes(horaA24(form.hora))) {
+    const data = await res.json().catch(() => ({}))
+    if (consulta !== ultimaConsultaHoras) return
+    if (!res.ok) throw new Error(data.error || 'No se pudo consultar la disponibilidad.')
+    horasDisponibles.value = construirHoras(form.fecha, data.horasOcupadas || [])
+    if (form.hora && !horasDisponibles.value.some(h => h.hora === form.hora && h.disponible)) {
       form.hora = ''
     }
   } catch (e) {
+    if (consulta !== ultimaConsultaHoras) return
     console.error('Error al cargar horas disponibles:', e)
-    horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    // Sin saber la disponibilidad real no se ofrece ninguna hora (antes se mostraban todas libres)
+    errorHoras.value = true
+    horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: false }))
+    form.hora = ''
   } finally {
-    cargandoHoras.value = false
+    if (consulta === ultimaConsultaHoras) cargandoHoras.value = false
   }
 }
 
 watch(() => form.veterinario, cargarHorasDisponibles)
 watch(() => form.fecha, cargarHorasDisponibles)
+
+// Mientras la pagina esta abierta pasa el tiempo: cada 30 s se quitan las horas de hoy que ya pasaron
+let timerHoras = null
+function quitarHorasPasadas() {
+  if (form.fecha !== hoyColombia()) return
+  horasDisponibles.value = horasDisponibles.value.map(i => ({ ...i, disponible: i.disponible && !citaYaPaso(form.fecha, i.hora) }))
+  if (form.hora && citaYaPaso(form.fecha, form.hora)) form.hora = ''
+}
+onMounted(() => { timerHoras = setInterval(quitarHorasPasadas, 30000) })
+onUnmounted(() => { if (timerHoras) clearInterval(timerHoras) })
 
 function estadoBadgeClass(estado) {
   const e = (estado || 'Pendiente').toLowerCase()
@@ -115,11 +112,23 @@ function estadoLabel(estado) {
   return '🕐 Pendiente'
 }
 
-function formatFechaCita(fecha) {
+function formatFechaCita(fecha, largo = false) {
   if (!fecha) return '—'
   const soloFecha = String(fecha).split('T')[0]
   const [y, m, d] = soloFecha.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+  // new Date(y, m-1, d) usa la zona local: no corre el dia (new Date('2026-11-20') lo mostraba como el 19)
+  return new Date(y, m - 1, d).toLocaleDateString(
+    'es-ES',
+    largo
+      ? { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }
+      : { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }
+  )
+}
+
+// Solo se puede cancelar una cita pendiente o confirmada que aun no ha pasado
+function puedeCancelar(cita) {
+  const e = (cita.Estado || 'pendiente').toLowerCase()
+  return ['pendiente', 'confirmada'].includes(e) && !citaYaPaso(cita.Fecha, cita.Hora)
 }
 
 function pedirCancelar(idCita) {
@@ -165,7 +174,8 @@ async function cargarMascotas() {
   if (!clienteActual.value?.ID_cliente) return
   try {
     mascotas.value = await mascotasAPI.obtenerPorCliente(clienteActual.value.ID_cliente)
-    if (mascotas.value.length) form.mascota = mascotas.value[0].ID_mascota
+    // Solo se preselecciona si hay una unica opcion; si hay varias, el usuario elige
+    if (mascotas.value.length === 1) form.mascota = mascotas.value[0].ID_mascota
   } catch (error) {
     console.error('Error al cargar mascotas:', error)
     errorMessage.value = 'Error al cargar tus mascotas.'
@@ -175,7 +185,7 @@ async function cargarMascotas() {
 async function cargarServicios() {
   try {
     servicios.value = await serviciosAPI.obtener()
-    if (servicios.value.length) form.servicio = servicios.value[0].ID_servicio
+    if (servicios.value.length === 1) form.servicio = servicios.value[0].ID_servicio
   } catch (error) {
     console.error('Error al cargar servicios:', error)
     errorMessage.value = 'Error al cargar los servicios.'
@@ -185,7 +195,7 @@ async function cargarServicios() {
 async function cargarVeterinarios() {
   try {
     veterinarios.value = await veterinariosAPI.obtener()
-    if (veterinarios.value.length) form.veterinario = veterinarios.value[0].ID_veterinario
+    if (veterinarios.value.length === 1) form.veterinario = veterinarios.value[0].ID_veterinario
   } catch (error) {
     console.error('Error al cargar veterinarios:', error)
     errorMessage.value = 'Error al cargar los veterinarios.'
@@ -203,12 +213,13 @@ async function cargarCitas() {
 }
 
 function resetForm() {
-  form.mascota = mascotas.value[0]?.ID_mascota || ''
-  form.servicio = servicios.value[0]?.ID_servicio || ''
-  form.veterinario = veterinarios.value[0]?.ID_veterinario || ''
+  form.mascota = mascotas.value.length === 1 ? mascotas.value[0].ID_mascota : ''
+  form.servicio = servicios.value.length === 1 ? servicios.value[0].ID_servicio : ''
+  form.veterinario = veterinarios.value.length === 1 ? veterinarios.value[0].ID_veterinario : ''
   form.fecha = ''
   form.hora = ''
   form.notas = ''
+  errorHoras.value = false
   horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
 }
 
@@ -235,15 +246,24 @@ function validateForm() {
     errorMessage.value = 'Selecciona una fecha.'
     return false
   }
+  // La fecha se valida antes que la hora: con una fecha invalida no tiene sentido pedir la hora
+  const errFecha = validarFechaCita(form.fecha)
+  if (errFecha) {
+    errorMessage.value = errFecha
+    return false
+  }
   if (!form.hora) {
     errorMessage.value = 'Falta seleccionar la hora: haz clic en uno de los horarios disponibles.'
     resaltarHoras.value = true
     setTimeout(() => { resaltarHoras.value = false }, 2000)
     return false
   }
-  const errFecha = validarFechaCita(form.fecha)
-  if (errFecha) {
-    errorMessage.value = errFecha
+  // Si la pagina estuvo abierta un rato, la hora elegida puede haber pasado ya (ej. son las 8:01 y eligio las 8:00)
+  const errHora = validarFechaHoraCita(form.fecha, form.hora)
+  if (errHora) {
+    errorMessage.value = errHora
+    form.hora = ''
+    quitarHorasPasadas()
     return false
   }
   return true
@@ -274,17 +294,16 @@ async function agendarCita() {
     const vetNombre = veterinarios.value.find(v => v.ID_veterinario === Number(form.veterinario))?.Nombre || ''
     citaCreada.value = { mascota: mascotaNombre, servicio: servicioNombre, veterinario: vetNombre, fecha: form.fecha, hora: form.hora }
     showSuccess.value = true
-    successMessage.value = 'Cita registrada con éxito en la base de datos.'
     await cargarCitas()
     resetForm()
   } catch (error) {
     console.error('Error al agendar cita:', error)
-    // 🆕 Si el horario se ocupó justo antes de confirmar (carrera entre usuarios),
-    // no mostramos ninguna alerta: solo limpiamos la hora y refrescamos la grilla
-    // para que esa hora desaparezca de las opciones disponibles.
+    // Si el horario se ocupó justo antes de confirmar (otro usuario lo tomó), se limpia la hora,
+    // se refresca la grilla y se avisa: antes la hora desaparecia sin ninguna explicacion.
     if (error.message && error.message.toLowerCase().includes('ya tiene una cita agendada')) {
       form.hora = ''
       await cargarHorasDisponibles()
+      errorMessage.value = 'Ese horario acaba de ocuparse. Elige otro horario disponible.'
     } else {
       errorMessage.value = error.message || 'Error al registrar la cita.'
     }
@@ -418,9 +437,16 @@ onMounted(async () => {
                 v-if="horasDisponibles.every(h => !h.disponible)"
                 class="horas-llenas"
               >
-                <span style="font-size:1.3rem;">📅</span>
-                No hay horarios disponibles para este día con este veterinario.
-                <br><span style="font-weight:400; color:var(--muted);">Prueba con otra fecha o elige otro veterinario.</span>
+                <template v-if="errorHoras">
+                  <span style="font-size:1.3rem;">⚠️</span>
+                  No se pudo consultar la disponibilidad.
+                  <br><span style="font-weight:400; color:var(--muted);">Revisa tu conexión y vuelve a elegir la fecha para reintentar.</span>
+                </template>
+                <template v-else>
+                  <span style="font-size:1.3rem;">📅</span>
+                  No hay horarios disponibles para este día con este veterinario.
+                  <br><span style="font-weight:400; color:var(--muted);">Prueba con otra fecha o elige otro veterinario.</span>
+                </template>
               </div>
             </div>
           </div>
@@ -465,14 +491,14 @@ onMounted(async () => {
             </div>
             <div class="cita-item-row">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              {{ cita.Hora }}
+              {{ formatHora(cita.Hora) }}
             </div>
             <div class="cita-item-row">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
               <strong>{{ cita.Nombre_mascota }}</strong>
             </div>
             <button
-              v-if="['pendiente','confirmada'].includes((cita.Estado || 'pendiente').toLowerCase())"
+              v-if="puedeCancelar(cita)"
               class="btn-cancelar-cita"
               @click="pedirCancelar(cita.ID_cita)"
             >
@@ -525,11 +551,11 @@ onMounted(async () => {
           <div class="success-detail-row"><span>🐶 Mascota</span><strong>{{ citaCreada.mascota }}</strong></div>
           <div class="success-detail-row"><span>🩺 Servicio</span><strong>{{ citaCreada.servicio }}</strong></div>
           <div class="success-detail-row"><span>👨‍⚕️ Veterinario</span><strong>{{ citaCreada.veterinario }}</strong></div>
-          <div class="success-detail-row"><span>📅 Fecha</span><strong>{{ new Date(citaCreada.fecha).toLocaleDateString('es-ES', { weekday:'long', day:'2-digit', month:'long', year:'numeric' }) }}</strong></div>
+          <div class="success-detail-row"><span>📅 Fecha</span><strong>{{ formatFechaCita(citaCreada.fecha, true) }}</strong></div>
           <div class="success-detail-row"><span>🕐 Hora</span><strong>{{ citaCreada.hora }}</strong></div>
         </div>
         <button class="success-btn" @click="showSuccess = false">¡Perfecto, entendido!</button>
-        <p class="success-note">Puedes ver tu cita en el panel de <strong>Próximas Citas</strong> →</p>
+        <p class="success-note">Puedes ver tu cita en el panel de <strong>Mis Citas</strong> →</p>
       </div>
     </div>
   </Teleport>

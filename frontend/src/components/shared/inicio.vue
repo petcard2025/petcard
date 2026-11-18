@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { clientesAPI, mascotasAPI, citasAPI, vacunasAPI } from '../../api.js'
+import { citaYaPaso, formatHora, horaA24 } from '../../utils/validators'
 
 const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -52,9 +53,14 @@ async function cargarDatos() {
 
     // Próxima cita
     const todasCitas = await citasAPI.obtener()
+    // La "próxima" es la más cercana que siga activa y no haya pasado. Antes se tomaba la más
+    // antigua de todas, aunque ya hubiera pasado o estuviera cancelada.
     const misCitas = todasCitas
       .filter(c => c.ID_cliente === clienteActual.value.ID_cliente)
-      .sort((a, b) => new Date(a.Fecha) - new Date(b.Fecha))
+      .filter(c => ['pendiente', 'confirmada'].includes((c.Estado || 'pendiente').toLowerCase()) && !citaYaPaso(c.Fecha, c.Hora))
+      .sort((a, b) =>
+        `${String(a.Fecha).slice(0, 10)} ${horaA24(a.Hora)}`.localeCompare(`${String(b.Fecha).slice(0, 10)} ${horaA24(b.Hora)}`)
+      )
     proximaCita.value = misCitas[0] || null
 
     // Vacunas pendientes de todas las mascotas
@@ -170,7 +176,7 @@ onMounted(async () => {
             </div>
             <div class="cita-detalle-row">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              {{ proximaCita.Hora }}
+              {{ formatHora(proximaCita.Hora) }}
             </div>
             <div class="cita-detalle-row">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>

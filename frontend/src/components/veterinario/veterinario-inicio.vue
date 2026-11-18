@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../../composables/useAuth'
 import { API_URL } from '../../api.js'
+import { hoyColombia, formatHora } from '../../utils/validators'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
 const API = API_URL
@@ -11,8 +12,20 @@ const citas = ref([])
 const cargando = ref(false)
 const error = ref('')
 
-// Fecha de hoy en formato YYYY-MM-DD para comparar con la BD
-const hoy = new Date().toISOString().slice(0, 10)
+// Fecha de hoy en Colombia (YYYY-MM-DD) para comparar con la BD.
+// toISOString() da la fecha UTC: desde las 7 pm ya marcaba "manana".
+const hoy = hoyColombia()
+
+// Estado segun el campo Estado de la cita (antes se deducia de si tenia Observaciones,
+// asi que una nota del cliente la mostraba como "Confirmada")
+function estadoBase(cita) {
+  const e = String(cita.Estado || 'Pendiente').toLowerCase()
+  if (e === 'confirmada') return 'Confirmada'
+  if (e === 'completada' || e === 'completa') return 'Completada'
+  if (e === 'cancelada') return 'Cancelada'
+  return 'Pendiente'
+}
+const esActiva = (c) => ['Pendiente', 'Confirmada'].includes(estadoBase(c))
 
 // ── Carga de datos ────────────────────────────────────────────
 onMounted(cargarCitas)
@@ -44,20 +57,20 @@ async function cargarCitas() {
 
 // ── Computed stats ────────────────────────────────────────────
 const citasHoy = computed(() =>
-  citas.value.filter(c => c.Fecha?.slice(0, 10) === hoy)
+  citas.value.filter(c => c.Fecha?.slice(0, 10) === hoy && esActiva(c))
 )
 
 const citasPendientes = computed(() =>
-  citas.value.filter(c => !c.Observaciones && c.Fecha?.slice(0, 10) >= hoy)
+  citas.value.filter(c => estadoBase(c) === 'Pendiente' && c.Fecha?.slice(0, 10) >= hoy)
 )
 
 const citasConfirmadas = computed(() =>
-  citas.value.filter(c => !!c.Observaciones)
+  citas.value.filter(c => estadoBase(c) === 'Confirmada' && c.Fecha?.slice(0, 10) >= hoy)
 )
 
 const proximasCitas = computed(() =>
   citas.value
-    .filter(c => c.Fecha?.slice(0, 10) >= hoy)
+    .filter(c => c.Fecha?.slice(0, 10) >= hoy && esActiva(c))
     .sort((a, b) => {
       const da = `${a.Fecha?.slice(0, 10)} ${a.Hora}`
       const db = `${b.Fecha?.slice(0, 10)} ${b.Hora}`
@@ -67,11 +80,11 @@ const proximasCitas = computed(() =>
 )
 
 function badgeClass(cita) {
-  return cita.Observaciones ? 'badge badge-green' : 'badge badge-yellow'
+  return estadoBase(cita) === 'Confirmada' ? 'badge badge-green' : 'badge badge-yellow'
 }
 
 function estadoLabel(cita) {
-  return cita.Observaciones ? 'Confirmada' : 'Pendiente'
+  return estadoBase(cita)
 }
 
 function formatFecha(fechaStr) {
@@ -199,7 +212,7 @@ const iniciales = computed(() => {
               <span class="vet-timeline-mascota">{{ cita.Nombre_mascota }}</span>
               <span :class="badgeClass(cita)">{{ estadoLabel(cita) }}</span>
             </div>
-            <div class="vet-timeline-meta">{{ cita.Nombre_servicio }} · {{ cita.Hora }} · {{ cita.Nombre_cliente }}</div>
+            <div class="vet-timeline-meta">{{ cita.Nombre_servicio }} · {{ formatHora(cita.Hora) }} · {{ cita.Nombre_cliente }}</div>
             <div class="vet-timeline-obs" v-if="cita.Observaciones">"{{ cita.Observaciones }}"</div>
           </div>
         </li>

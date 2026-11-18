@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../../composables/useAuth'
 import { API_URL } from '../../api.js'
+import { hoyColombia, formatHora } from '../../utils/validators'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
 const API = API_URL
@@ -21,7 +22,8 @@ const observaciones = ref('')
 const guardando = ref(false)
 const mensajeExito = ref('')
 
-const hoy = new Date().toISOString().slice(0, 10)
+// Fecha de hoy en Colombia (toISOString() da la fecha UTC: desde las 7 pm ya marcaba "manana")
+const hoy = hoyColombia()
 
 // ── Carga de datos ────────────────────────────────────────────
 onMounted(cargarCitas)
@@ -58,12 +60,8 @@ const citasFiltradas = computed(() => {
       const texto = `${c.Nombre_mascota} ${c.Nombre_cliente} ${c.Nombre_servicio}`.toLowerCase()
       const coincide = texto.includes(busqueda.value.toLowerCase())
 
-      let estadoCalculado = 'Pendiente'
-      if (c.Observaciones) estadoCalculado = 'Confirmada'
-      else if (c.Fecha?.slice(0, 10) < hoy) estadoCalculado = 'Pasada'
-
       const coincideEstado =
-        filtroEstado.value === 'Todos' || estadoCalculado === filtroEstado.value
+        filtroEstado.value === 'Todos' || estadoCita(c) === filtroEstado.value
 
       return coincide && coincideEstado
     })
@@ -77,16 +75,33 @@ const citasFiltradas = computed(() => {
 const totalResultados = computed(() => citasFiltradas.value.length)
 
 // ── Helpers visuales ──────────────────────────────────────────
-function estadoCita(cita) {
-  if (cita.Observaciones) return 'Confirmada'
-  if (cita.Fecha?.slice(0, 10) < hoy) return 'Pasada'
+// Estado normalizado del campo Estado ("pendiente" -> "Pendiente")
+function estadoBase(cita) {
+  const e = String(cita.Estado || 'Pendiente').toLowerCase()
+  if (e === 'confirmada') return 'Confirmada'
+  if (e === 'completada' || e === 'completa') return 'Completada'
+  if (e === 'cancelada') return 'Cancelada'
   return 'Pendiente'
+}
+
+// El estado sale del campo Estado. Antes se deducia de si tenia Observaciones, asi que una nota
+// escrita por el cliente al agendar la hacia aparecer "Confirmada" aunque nadie la hubiera confirmado.
+// "Pasada" = sigue Pendiente/Confirmada pero su fecha ya vencio.
+function estadoCita(cita) {
+  const e = estadoBase(cita)
+  if ((e === 'Pendiente' || e === 'Confirmada') && cita.Fecha?.slice(0, 10) < hoy) return 'Pasada'
+  return e
 }
 
 function badgeClass(estado) {
   if (estado === 'Confirmada') return 'badge badge-green'
   if (estado === 'Pendiente')  return 'badge badge-yellow'
+  if (estado === 'Cancelada')  return 'badge badge-red'
   return 'badge badge-gray'
+}
+
+function puedeConfirmar(cita) {
+  return ['Pendiente', 'Confirmada'].includes(estadoCita(cita))
 }
 
 function formatFecha(fechaStr) {
@@ -122,16 +137,26 @@ async function guardarObservaciones() {
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     }
 
-    // Actualizar la cita con las observaciones para "confirmarla"
-    const res = await fetch(`${API}/citas/${citaSeleccionada.value.ID_cita}`, {
+    // Guarda las observaciones y deja la cita en estado "Confirmada" (ahora el estado se guarda de verdad).
+    // Solo se envian los campos que el servidor acepta, no el objeto completo con nombres de solo lectura.
+    const c = citaSeleccionada.value
+    const res = await fetch(`${API}/citas/${c.ID_cita}`, {
       method: 'PUT',
       headers,
       body: JSON.stringify({
-        ...citaSeleccionada.value,
-        Observaciones: observaciones.value
+        ID_servicio: c.ID_servicio,
+        ID_veterinario: c.ID_veterinario,
+        Fecha: c.Fecha,
+        Hora: c.Hora,
+        Motivo: c.Motivo,
+        Observaciones: observaciones.value,
+        Estado: estadoBase(c) === 'Pendiente' ? 'Confirmada' : estadoBase(c)
       })
     })
-    if (!res.ok) throw new Error()
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || '')
+    }
 
     mensajeExito.value = '✅ Cita confirmada y observaciones guardadas.'
     await cargarCitas()
@@ -140,8 +165,8 @@ async function guardarObservaciones() {
       mostrarModalConfirmar.value = false
       mensajeExito.value = ''
     }, 1500)
-  } catch {
-    alert('Error al guardar las observaciones. Inténtalo de nuevo.')
+  } catch (e) {
+    alert(e.message || 'Error al guardar las observaciones. Inténtalo de nuevo.')
   } finally {
     guardando.value = false
   }
@@ -192,6 +217,8 @@ async function guardarObservaciones() {
         <option>Todos</option>
         <option>Pendiente</option>
         <option>Confirmada</option>
+        <option>Completada</option>
+        <option>Cancelada</option>
         <option>Pasada</option>
       </select>
       <span class="vet-resultados">{{ totalResultados }} resultado{{ totalResultados === 1 ? '' : 's' }}</span>
@@ -231,7 +258,7 @@ async function guardarObservaciones() {
               </td>
               <td>
                 <div class="vet-fecha">{{ formatFecha(cita.Fecha) }}</div>
-                <div class="vet-hora">{{ cita.Hora }}</div>
+                <div class="vet-hora">{{ formatHora(cita.Hora) }}</div>
               </td>
               <td><span :class="badgeClass(estadoCita(cita))">{{ estadoCita(cita) }}</span></td>
               <td>
@@ -244,9 +271,9 @@ async function guardarObservaciones() {
                   <button
                     class="btn btn-success btn-sm"
                     @click="abrirConfirmar(cita)"
-                    :disabled="estadoCita(cita) === 'Pasada'"
+                    :disabled="!puedeConfirmar(cita)"
                   >
-                    {{ cita.Observaciones ? 'Editar' : 'Confirmar' }}
+                    {{ estadoBase(cita) === 'Confirmada' ? 'Editar' : 'Confirmar' }}
                   </button>
                 </div>
               </td>
@@ -282,7 +309,7 @@ async function guardarObservaciones() {
         <div class="vet-detail-row"><span class="vet-detail-label">Dueño</span><span class="vet-detail-value">{{ citaSeleccionada.Nombre_cliente }}</span></div>
         <div class="vet-detail-row"><span class="vet-detail-label">Servicio</span><span class="vet-detail-value">{{ citaSeleccionada.Nombre_servicio }}</span></div>
         <div class="vet-detail-row"><span class="vet-detail-label">Fecha</span><span class="vet-detail-value">{{ formatFecha(citaSeleccionada.Fecha) }}</span></div>
-        <div class="vet-detail-row"><span class="vet-detail-label">Hora</span><span class="vet-detail-value">{{ citaSeleccionada.Hora }}</span></div>
+        <div class="vet-detail-row"><span class="vet-detail-label">Hora</span><span class="vet-detail-value">{{ formatHora(citaSeleccionada.Hora) }}</span></div>
         <div class="vet-detail-row"><span class="vet-detail-label">Motivo</span><span class="vet-detail-value">{{ citaSeleccionada.Motivo || '—' }}</span></div>
         <div class="vet-detail-block">
           <span class="vet-detail-label">Observaciones registradas</span>
