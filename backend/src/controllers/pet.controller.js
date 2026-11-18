@@ -1,5 +1,6 @@
 // CONTROLADOR DE MASCOTAS - CRUD de mascotas
 const db = require('../config/database')
+const { validarNombreMascota } = require('../utils/validators')
 
 // OBTENER TODAS LAS MASCOTAS - Solo admin (activas)
 async function getPets(req, res) {
@@ -26,20 +27,28 @@ async function getPetsByClient(req, res) {
 
 // CREAR MASCOTA - Registra una nueva mascota
 async function createPet(req, res) {
-  const { ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
+  const { ID_cliente, Fecha_nacimiento, Especie, Sexo, Foto, Raza, Peso } = req.body
+  const errNombre = validarNombreMascota(req.body.Nombre)
+  if (errNombre) return res.status(400).json({ error: errNombre })
+  const Nombre = req.body.Nombre.trim()
+
   db.query(
     'INSERT INTO mascota (ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso) VALUES (?,?,?,?,?,?,?,?)',
     [ID_cliente, Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
-      res.json({ ID_mascota: result.insertId, ...req.body })
+      res.json({ ID_mascota: result.insertId, ...req.body, Nombre })
     }
   )
 }
 
 // ACTUALIZAR MASCOTA - Edita datos de una mascota
 async function updatePet(req, res) {
-  const { Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso } = req.body
+  const { Fecha_nacimiento, Especie, Sexo, Foto, Raza, Peso } = req.body
+  const errNombre = validarNombreMascota(req.body.Nombre)
+  if (errNombre) return res.status(400).json({ error: errNombre })
+  const Nombre = req.body.Nombre.trim()
+
   db.query(
     'UPDATE mascota SET Fecha_nacimiento=?, Nombre=?, Especie=?, Sexo=?, Foto=?, Raza=?, Peso=? WHERE ID_mascota=?',
     [Fecha_nacimiento, Nombre, Especie, Sexo, Foto, Raza, Peso, req.params.id],

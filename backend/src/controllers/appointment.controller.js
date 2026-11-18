@@ -2,6 +2,7 @@
 const db = require('../config/database')
 const { crearEventoCalendar } = require('../services/google-calendar.service')
 const { crearNotificacionAutomatica } = require('../services/notification.service')
+const { validarFechaCita } = require('../utils/validators')
 
 // OBTENER CITAS - Admin ve todas, veterinario solo las suyas
 async function getAppointments(req, res) {
@@ -52,6 +53,10 @@ async function getHorasOcupadas(req, res) {
 // CREAR CITA - Cliente agenda, con validacion de horario
 async function createAppointment(req, res) {
   const { ID_cliente, ID_mascota, ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
+
+  // Validar fecha: no pasada y no posterior al 31/12/2026
+  const errFecha = validarFechaCita(Fecha)
+  if (errFecha) return res.status(400).json({ error: errFecha })
 
   // Verificar si el horario ya esta ocupado
   db.query(
@@ -111,6 +116,11 @@ async function createAppointment(req, res) {
 async function updateAppointment(req, res) {
   const { ID_servicio, ID_veterinario, Fecha, Hora, Motivo, Observaciones } = req.body
 
+  // Al editar se permite una fecha ya vencida (p. ej. corregir una cita pasada),
+  // pero nunca una posterior al 31/12/2026
+  const errFecha = validarFechaCita(Fecha, { permitirPasado: true })
+  if (errFecha) return res.status(400).json({ error: errFecha })
+
   const ejecutarUpdate = () => {
     db.query(
       'UPDATE cita SET ID_servicio=?, ID_veterinario=?, Fecha=?, Hora=?, Motivo=?, Observaciones=? WHERE ID_cita=?',
@@ -142,6 +152,12 @@ async function patchAppointment(req, res) {
   const campos = req.body
   const keys = Object.keys(campos)
   if (keys.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' })
+
+  // Si el parche trae una fecha, debe respetar el limite del 31/12/2026
+  if (campos.Fecha !== undefined) {
+    const errFecha = validarFechaCita(campos.Fecha, { permitirPasado: true })
+    if (errFecha) return res.status(400).json({ error: errFecha })
+  }
 
   const ejecutarPatch = () => {
     const set = keys.map(k => k + '=?').join(', ')

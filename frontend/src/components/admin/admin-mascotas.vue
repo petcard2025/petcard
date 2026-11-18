@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { mascotasAPI, clientesAPI } from '../../api'
+import { validarNombreMascota } from '../../utils/validators'
 
 const mascotas = ref([])
 const clientes = ref([])
@@ -97,10 +98,16 @@ function abrirNuevo() {
 }
 
 async function crearMascota() {
-  if (!nuevaMascota.value.ID_cliente || !nuevaMascota.value.Nombre) {
-    alert('Selecciona el dueño e ingresa el nombre de la mascota.')
+  if (!nuevaMascota.value.ID_cliente) {
+    alert('Selecciona el dueño de la mascota.')
     return
   }
+  const errNombre = validarNombreMascota(nuevaMascota.value.Nombre)
+  if (errNombre) {
+    alert(errNombre)
+    return
+  }
+  nuevaMascota.value.Nombre = nuevaMascota.value.Nombre.trim()
   guardando.value = true
   try {
     await mascotasAPI.crear(nuevaMascota.value)
@@ -119,6 +126,12 @@ function abrirEditar(m) {
 }
 
 async function guardarEdicion() {
+  const errNombre = validarNombreMascota(mascotaSeleccionada.value.Nombre)
+  if (errNombre) {
+    alert(errNombre)
+    return
+  }
+  mascotaSeleccionada.value.Nombre = mascotaSeleccionada.value.Nombre.trim()
   guardando.value = true
   try {
     await mascotasAPI.actualizar(mascotaSeleccionada.value.ID_mascota, mascotaSeleccionada.value)
@@ -208,7 +221,7 @@ async function eliminarMascota() {
           </select>
 
           <label>Nombre de la mascota <span class="req">*</span></label>
-          <input v-model="nuevaMascota.Nombre" placeholder="Ej: Max" />
+          <input v-model="nuevaMascota.Nombre" placeholder="Ej: Max" maxlength="30" />
 
           <div class="form-row-modal">
             <div>
@@ -262,7 +275,7 @@ async function eliminarMascota() {
         <h3>Editar Mascota</h3>
         <div class="modal-body" v-if="mascotaSeleccionada">
           <label>Nombre</label>
-          <input v-model="mascotaSeleccionada.Nombre" />
+          <input v-model="mascotaSeleccionada.Nombre" maxlength="30" />
 
           <div class="form-row-modal">
             <div>
