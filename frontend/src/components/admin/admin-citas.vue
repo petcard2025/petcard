@@ -2,6 +2,11 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { API_URL } from '../../api.js'
+import { FECHA_MAX_CITA, validarFechaCita, hoyColombia } from '../../utils/validators'
+
+// Rango permitido para agendar: desde hoy hasta el 31/12/2026
+const fechaMin = hoyColombia()
+const fechaMax = FECHA_MAX_CITA
 const API = API_URL
 
 const citas = ref([])
@@ -177,6 +182,12 @@ function abrirNuevo() {
 }
 
 async function guardarEdicion() {
+  // Al editar se permite una fecha vencida, pero no posterior al 31/12/2026
+  const errFecha = validarFechaCita(citaSeleccionada.value.Fecha, { permitirPasado: true })
+  if (errFecha) {
+    alert(errFecha)
+    return
+  }
   try {
     const res = await fetch(`${API}/citas/${citaSeleccionada.value.ID_cita}`, {
       method: 'PUT',
@@ -208,6 +219,11 @@ async function eliminarCita() {
 }
 
 async function crearCita() {
+  const errFecha = validarFechaCita(nuevaCita.value.Fecha)
+  if (errFecha) {
+    alert(errFecha)
+    return
+  }
   const mascota = mascotas.value.find(m => m.ID_mascota == nuevaCita.value.ID_mascota)
   if (mascota) nuevaCita.value.ID_cliente = mascota.ID_cliente
   try {
@@ -296,7 +312,7 @@ async function crearCita() {
             <option v-for="v in veterinarios" :key="v.ID_veterinario" :value="v.ID_veterinario">{{ v.Nombre }}</option>
           </select>
           <label>Fecha</label>
-          <input type="date" v-model="nuevaCita.Fecha" />
+          <input type="date" v-model="nuevaCita.Fecha" :min="fechaMin" :max="fechaMax" />
 
           <label>
             Hora
@@ -343,7 +359,7 @@ async function crearCita() {
             <option v-for="v in veterinarios" :key="v.ID_veterinario" :value="v.ID_veterinario">{{ v.Nombre }}</option>
           </select>
           <label>Fecha</label>
-          <input type="date" v-model="citaSeleccionada.Fecha" />
+          <input type="date" v-model="citaSeleccionada.Fecha" :max="fechaMax" />
 
           <label>
             Hora

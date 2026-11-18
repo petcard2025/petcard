@@ -116,7 +116,7 @@
         <div style="display:flex;flex-direction:column;gap:.75rem;">
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Nombre</label>
-            <input class="form-control" placeholder="Nombre de la mascota" v-model="formData.Nombre" />
+            <input class="form-control" placeholder="Nombre de la mascota" maxlength="30" v-model="formData.Nombre" />
           </div>
 
           <div>
@@ -306,6 +306,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { mascotasAPI, clientesAPI, vacunasAPI } from '../../api.js'
+import { validarNombreMascota } from '../../utils/validators'
 
 const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -435,10 +436,12 @@ function openEditForm(pet) {
 }
 
 async function savePet() {
-  if (!formData.Nombre.trim()) {
-    alert('Nombre es requerido')
+  const errNombre = validarNombreMascota(formData.Nombre)
+  if (errNombre) {
+    alert(errNombre)
     return
   }
+  formData.Nombre = formData.Nombre.trim()
 
   if (!clienteActual.value) {
     await cargarCliente()

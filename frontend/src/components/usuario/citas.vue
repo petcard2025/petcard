@@ -3,6 +3,7 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { clientesAPI, mascotasAPI, serviciosAPI, veterinariosAPI, citasAPI, API_URL } from '../../api.js'
+import { FECHA_MAX_CITA, validarFechaCita, hoyColombia } from '../../utils/validators'
 
 const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -44,13 +45,9 @@ const form = reactive({
   notas: ''
 })
 
-const fechaMin = ref((() => {
-  const hoy = new Date()
-  const y = hoy.getFullYear()
-  const m = String(hoy.getMonth() + 1).padStart(2, '0')
-  const d = String(hoy.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-})())
+// Rango permitido para agendar: desde hoy hasta el 31/12/2026
+const fechaMin = ref(hoyColombia())
+const fechaMax = FECHA_MAX_CITA
 
 // 🆕 Convierte cualquier formato de hora ("08:00 AM", "08:00:00", "20:00") a "HH:MM" 24h,
 // para poder comparar de forma confiable sin importar cómo la haya guardado el admin o el cliente.
@@ -244,12 +241,9 @@ function validateForm() {
     setTimeout(() => { resaltarHoras.value = false }, 2000)
     return false
   }
-  const [y, m, d] = form.fecha.split('-').map(Number)
-  const fechaSeleccionada = new Date(y, m - 1, d)
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  if (fechaSeleccionada < hoy) {
-    errorMessage.value = 'No puedes agendar una cita en una fecha pasada.'
+  const errFecha = validarFechaCita(form.fecha)
+  if (errFecha) {
+    errorMessage.value = errFecha
     return false
   }
   return true
@@ -391,7 +385,7 @@ onMounted(async () => {
             </div>
             <div class="form-group">
               <label>Fecha <span class="req">*</span></label>
-              <input type="date" class="form-control" v-model="form.fecha" :min="fechaMin" />
+              <input type="date" class="form-control" v-model="form.fecha" :min="fechaMin" :max="fechaMax" />
             </div>
           </div>
 
