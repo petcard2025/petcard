@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { notificacionesAPI } from '../../api'
@@ -85,17 +85,18 @@ const conteoCategorias = computed(() => {
   return totals
 })
 
-const cargarNotificaciones = async () => {
+// silencioso = true -> refresca en segundo plano sin mostrar "Cargando..."
+const cargarNotificaciones = async (silencioso = false) => {
   if (!usuarioLogueado.value) return
-  isLoading.value = true
+  if (!silencioso) isLoading.value = true
   error.value = ''
   try {
     const data = await notificacionesAPI.obtenerPorUsuario(usuarioLogueado.value.ID_usuario)
     notificaciones.value = Array.isArray(data) ? data : []
   } catch (err) {
-    error.value = err.message || 'Error al cargar notificaciones'
+    if (!silencioso) error.value = err.message || 'Error al cargar notificaciones'
   } finally {
-    isLoading.value = false
+    if (!silencioso) isLoading.value = false
   }
 }
 
@@ -140,7 +141,22 @@ onMounted(() => {
   if (usuario?.Rol === 'Admin') router.push('/admin-inicio')
 })
 
-onMounted(() => { cargarNotificaciones() })
+// ===== ACTUALIZACIÓN AUTOMÁTICA =====
+// Si se agenda una cita (u otro registro) mientras esta pantalla está abierta,
+// la notificación aparece sola: se refresca cada 10 s y al volver a la pestaña.
+let temporizador = null
+const refrescarAlVolver = () => { if (!document.hidden) cargarNotificaciones(true) }
+
+onMounted(() => {
+  cargarNotificaciones()
+  temporizador = setInterval(() => { if (!document.hidden) cargarNotificaciones(true) }, 10000)
+  document.addEventListener('visibilitychange', refrescarAlVolver)
+})
+
+onUnmounted(() => {
+  clearInterval(temporizador)
+  document.removeEventListener('visibilitychange', refrescarAlVolver)
+})
 </script>
 
 <template>
@@ -179,7 +195,7 @@ onMounted(() => { cargarNotificaciones() })
         <button class="btn-mark-all" @click="marcarTodasLeidas" :disabled="noLeidas === 0">
           ✓ Marcar todas como leídas
         </button>
-        <button class="btn-refresh" @click="cargarNotificaciones" :disabled="isLoading">🔄</button>
+        <button class="btn-refresh" @click="cargarNotificaciones()" :disabled="isLoading">🔄</button>
       </div>
     </div>
 
@@ -217,7 +233,7 @@ onMounted(() => { cargarNotificaciones() })
         <div v-else-if="error" class="notif-empty" style="color:#ef4444;">
           <span style="font-size:2rem;">⚠️</span>
           <p>{{ error }}</p>
-          <button class="btn-refresh-big" @click="cargarNotificaciones">Reintentar</button>
+          <button class="btn-refresh-big" @click="cargarNotificaciones()">Reintentar</button>
         </div>
         <div v-else-if="!isAuthenticated" class="notif-empty">
           <span style="font-size:2.5rem;">🔐</span>

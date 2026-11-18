@@ -71,25 +71,30 @@ async function createAppointment(req, res) {
           if (err) return res.status(500).json({ error: err.message })
           const ID_cita = result.insertId
 
-          // Crear notificacion automatica
+          // Crear la notificación y ESPERAR a que termine (antes se disparaba sin esperar
+          // y si fallaba la cita quedaba sin notificación sin que nadie lo notara)
           try {
-            db.query(
-              `SELECT c.ID_usuario, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
-               FROM cliente c
-               JOIN mascota m ON m.ID_mascota = ?
-               JOIN servicio s ON s.ID_servicio = ?
-               WHERE c.ID_cliente = ?`,
-              [ID_mascota, ID_servicio, ID_cliente],
-              async (errQ, rows) => {
-                if (!errQ && rows.length > 0) {
-                  const { ID_usuario, Nombre_mascota, Nombre_servicio } = rows[0]
-                  const mensaje = 'Cita agendada para ' + (Nombre_mascota || 'tu mascota') + ' — ' + (Nombre_servicio || Motivo || 'Consulta') + ' el ' + Fecha + ' a las ' + Hora + '.'
-                  await crearNotificacionAutomatica(ID_usuario, mensaje, 'cita', 'Sistema')
-                }
-              }
-            )
+            const rows = await new Promise((resolve, reject) => {
+              db.query(
+                `SELECT c.ID_usuario, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
+                 FROM cliente c
+                 JOIN mascota m ON m.ID_mascota = ?
+                 JOIN servicio s ON s.ID_servicio = ?
+                 WHERE c.ID_cliente = ?`,
+                [ID_mascota, ID_servicio, ID_cliente],
+                (errQ, r) => (errQ ? reject(errQ) : resolve(r))
+              )
+            })
+            if (rows.length > 0) {
+              const { ID_usuario, Nombre_mascota, Nombre_servicio } = rows[0]
+              const mensaje = `Cita agendada para ${Nombre_mascota || 'tu mascota'} — ${Nombre_servicio || Motivo || 'Consulta'} el ${Fecha} a las ${Hora}.`
+              const notif = await crearNotificacionAutomatica(ID_usuario, mensaje, 'cita', 'Sistema')
+              if (!notif.success) console.error('No se pudo crear la notificación de la cita', ID_cita)
+            } else {
+              console.error('Cita', ID_cita, 'sin notificación: no se encontró cliente/mascota/servicio')
+            }
           } catch (notifError) {
-            console.error('Error creando notificacion de cita:', notifError.message)
+            console.error('Error creando notificación de cita:', notifError.message)
           }
 
           // Crear evento en Google Calendar

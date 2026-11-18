@@ -2,9 +2,10 @@
 import { useRouter } from 'vue-router'
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useAuth } from '../../composables/useAuth'
+import { perfilAPI } from '../../api'
 
 const router = useRouter()
-const { usuarioLogueado: authUsuario, token, cerrarSesion, irALogin, irARegistro } = useAuth()
+const { usuarioLogueado: authUsuario, token, setSession, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 const usuarioActual = ref(null)
 const enEdicion = ref(false)
@@ -26,68 +27,96 @@ const goToRegistro = () => {
   router.push('/registro-usuario')
 }
 
-const cargarUsuario = () => {
+// Separa "Nombre Apellido" usando el Apellido guardado. Si todavía no existe
+// (usuarios antiguos), toma la última palabra como apellido.
+const separarNombre = (nombreCompleto, apellido) => {
+  const completo = (nombreCompleto || '').trim()
+  const ap = (apellido || '').trim()
+  if (ap) {
+    const nom = completo.toLowerCase().endsWith(ap.toLowerCase())
+      ? completo.slice(0, completo.length - ap.length).trim()
+      : completo
+    return { nombre: nom || completo, apellido: ap }
+  }
+  const partes = completo.split(/\s+/)
+  if (partes.length < 2) return { nombre: completo, apellido: '' }
+  return { nombre: partes.slice(0, -1).join(' '), apellido: partes[partes.length - 1] }
+}
+
+const aplicarUsuario = (usuario) => {
+  const { nombre, apellido } = separarNombre(usuario.Nombre || usuario.nombre, usuario.Apellido || usuario.apellido)
+  usuarioActual.value = usuario
+  formData.nombre = nombre
+  formData.apellido = apellido
+  formData.email = usuario.Correo || usuario.email || ''
+  formData.telefono = usuario.Telefono || usuario.telefono || ''
+  formData.direccion = usuario.Direccion || usuario.direccion || ''
+  formData.emergencia = usuario.Emergencia || usuario.emergencia || ''
+}
+
+const cargarUsuario = async () => {
   try {
     const usuario = authUsuario?.value || JSON.parse(localStorage.getItem('petcard_usuario_actual') || 'null')
-    if (usuario) {
-      usuarioActual.value = usuario
-      formData.nombre = usuario.Nombre || usuario.nombre || ''
-      formData.apellido = usuario.Apellido || usuario.apellido || ''
-      formData.email = usuario.Correo || usuario.email || ''
-      formData.telefono = usuario.Telefono || usuario.telefono || ''
-      formData.direccion = usuario.Direccion || usuario.direccion || ''
-      formData.emergencia = usuario.Emergencia || usuario.emergencia || ''
-    } else {
-      usuarioActual.value = null
+    if (!usuario) { usuarioActual.value = null; return }
+    aplicarUsuario(usuario)
+
+    // Traer los datos reales de la base de datos (fuente de verdad)
+    if (localStorage.getItem('petcard_token')) {
+      try {
+        const bd = await perfilAPI.obtener()
+        aplicarUsuario({ ...usuario, ...bd })
+      } catch (e) {
+        console.error('No se pudo leer el perfil del servidor:', e)
+      }
     }
   } catch (error) {
     console.error('Error cargando usuario:', error)
   }
 }
 
-const toggleEdicion = () => {
+const toggleEdicion = async () => {
   if (enEdicion.value) {
-    guardarCambios()
+    const ok = await guardarCambios()
+    if (ok) enEdicion.value = false
+    return
   }
-  enEdicion.value = !enEdicion.value
+  enEdicion.value = true
 }
 
-const guardarCambios = () => {
-  if (!usuarioActual.value) return
+const guardarCambios = async () => {
+  if (!usuarioActual.value) return false
 
   if (!formData.nombre.trim() || !formData.email.trim()) {
     alert('⚠️ Nombre y email son obligatorios')
-    return
+    return false
   }
 
   if (!isValidEmail(formData.email)) {
     alert('⚠️ Email no válido')
-    return
+    return false
   }
 
-  usuarioActual.value = {
-    ...usuarioActual.value,
-    nombre: formData.nombre,
-    apellido: formData.apellido,
-    email: formData.email,
-    telefono: formData.telefono,
-    direccion: formData.direccion,
-    emergencia: formData.emergencia
+  try {
+    // Guardar en la base de datos (antes solo se guardaba en el navegador)
+    const actualizado = await perfilAPI.guardar({
+      nombre: formData.nombre,
+      apellido: formData.apellido,
+      correo: formData.email,
+      telefono: formData.telefono
+    })
+
+    const nuevoUsuario = { ...usuarioActual.value, ...actualizado }
+    localStorage.setItem('petcard_usuario_actual', JSON.stringify(nuevoUsuario))
+    // Refresca la sesión (navbar, otras pantallas) conservando el token actual
+    setSession(nuevoUsuario, localStorage.getItem('petcard_token'))
+    aplicarUsuario(nuevoUsuario)
+
+    alert('✅ Perfil actualizado correctamente')
+    return true
+  } catch (error) {
+    alert('⚠️ No se pudo guardar el perfil: ' + error.message)
+    return false
   }
-
-  // Actualizar usuario en lista
-  const usuarios = JSON.parse(localStorage.getItem('petcard_usuarios') || '[]')
-  const index = usuarios.findIndex(u => u.documento === usuarioActual.value.documento && u.tipoDocumento === usuarioActual.value.tipoDocumento)
-  if (index !== -1) {
-    usuarios[index] = usuarioActual.value
-    localStorage.setItem('petcard_usuarios', JSON.stringify(usuarios))
-  }
-
-  // Guardar sesión
-  localStorage.setItem('petcard_usuario_actual', JSON.stringify(usuarioActual.value))
-
-  enEdicion.value = false
-  alert('✅ Perfil actualizado correctamente')
 }
 
 const isValidEmail = (email) => {
@@ -208,10 +237,6 @@ watch(authUsuario, () => {
           </div>
         </div>
 
-        <div class="form-group">
-          <label>Dirección</label>
-          <input class="form-control" type="text" v-model="formData.direccion" :disabled="!enEdicion"/>
-        </div>
 
         <div class="form-group">
           <label>Contacto de Emergencia</label>
@@ -247,6 +272,7 @@ watch(authUsuario, () => {
             </button>
           </div>
         </div>
+
 
         <div class="card">
           <div class="card-title" style="font-size:.95rem;">Estadísticas</div>

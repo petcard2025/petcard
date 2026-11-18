@@ -33,6 +33,7 @@ const COLUMN_CASE_MAP = {
   id_sistemacorreo: 'ID_sistemaCorreo',
   id_notificacion: 'ID_notificacion',
   nombre: 'Nombre',
+  apellido: 'Apellido',
   correo: 'Correo',
   telefono: 'Telefono',
   contrasena: 'Contrasena',

@@ -50,6 +50,15 @@ const fetchAPI = async (endpoint, options = {}) => {
   }
 }
 
+// ========== PERFIL (usuario logueado) ==========
+export const perfilAPI = {
+  obtener: () => fetchAPI('/perfil'),
+  guardar: (datos) => fetchAPI('/perfil', {
+    method: 'PUT',
+    body: JSON.stringify(datos)
+  })
+}
+
 // ========== USUARIOS ==========
 export const usuariosAPI = {
   obtener: () => fetchAPI('/usuarios'),

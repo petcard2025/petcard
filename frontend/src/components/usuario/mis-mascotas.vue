@@ -1,30 +1,29 @@
 <template>
+  <nav class="navbar">
+    <router-link to="/inicio" class="nav-logo">PETCARD</router-link>
+    <ul class="nav-links">
+      <li><router-link to="/inicio">Inicio</router-link></li>
+      <li><router-link to="/servicios">Servicios</router-link></li>
+      <li><router-link to="/citas">Citas</router-link></li>
+      <li><router-link to="/alimentacion">Alimentación</router-link></li>
+      <li><router-link to="/carnet">Carnet de Vacunas</router-link></li>
+      <li><router-link to="/perfil">Mi Perfil</router-link></li>
+      <li><router-link to="/notificaciones">Notificaciones</router-link></li>
+      <li><router-link to="/mis-mascotas" class="active">Mis Mascotas</router-link></li>
+    </ul>
+    <div id="auth-section" class="auth-section">
+      <template v-if="isAuthenticated">
+        <span class="usuario-nombre">{{ usuarioLogueado?.Nombre }}</span>
+        <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
+      </template>
+      <template v-else>
+        <button class="btn-auth" @click="irALogin">Iniciar sesión</button>
+        <button class="btn-auth" @click="irARegistro">Registrarse</button>
+      </template>
+    </div>
+  </nav>
+
   <div class="page-container">
-    <nav class="navbar">
-     <router-link to="/inicio" class="nav-logo">PETCARD</router-link>
-
-  <ul class="nav-links">
-    <li><router-link to="/inicio" class="active">Inicio</router-link></li>
-    <li><router-link to="/servicios">Servicios</router-link></li>
-    <li><router-link to="/citas">Citas</router-link></li>
-    <li><router-link to="/alimentacion">Alimentación</router-link></li>
-    <li><router-link to="/carnet">Carnet</router-link></li>
-    <li><router-link to="/perfil">Mi Perfil</router-link></li>
-    <li><router-link to="/notificaciones">Notificaciones</router-link></li>
-    <li><router-link to="/mis-mascotas">Mis Mascotas</router-link></li>
-  </ul>
-  <div id="auth-section" class="auth-section">
-    <template v-if="isAuthenticated">
-      <span class="usuario-nombre">{{ usuarioLogueado?.Nombre }}</span>
-      <button class="btn-auth btn-logout" @click="cerrarSesion">Cerrar sesión</button>
-    </template>
-    <template v-else>
-      <button class="btn-auth" @click="irALogin">Iniciar sesión</button>
-      <button class="btn-auth" @click="irARegistro">Registrarse</button>
-    </template>
-  </div>
-</nav>
-
     <!-- Grid de mascotas -->
     <div v-if="isLoading" class="loading">Cargando mascotas...</div>
     <div v-if="errorMessage" class="error">{{ errorMessage }}</div>
@@ -116,33 +115,49 @@
         <div style="display:flex;flex-direction:column;gap:.75rem;">
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Nombre</label>
-            <input class="form-control" placeholder="Nombre de la mascota" v-model="formData.Nombre" />
+            <input
+              class="form-control"
+              :class="{ 'campo-error': errores.Nombre }"
+              placeholder="Nombre de la mascota"
+              maxlength="30"
+              autocomplete="off"
+              :value="formData.Nombre"
+              @input="soloLetras"
+            />
+            <p v-if="errores.Nombre" class="msg-error">{{ errores.Nombre }}</p>
+            <p v-else class="msg-ayuda">Solo letras (sin números ni símbolos)</p>
           </div>
 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Especie</label>
-            <select class="form-control" v-model="formData.Especie">
-              <option value="">Selecciona especie</option>
-              <option>Perro</option>
-              <option>Gato</option>
-              <option>Ave</option>
-              <option>Conejo</option>
-              <option>Hamster</option>
-              <option>Pez</option>
-            </select>
+            <ComboSelect
+              v-model="formData.Especie"
+              :options="ESPECIES"
+              placeholder="Busca o selecciona la especie"
+            />
+            <p v-if="errores.Especie" class="msg-error">{{ errores.Especie }}</p>
           </div>
 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Raza</label>
-            <input class="form-control" placeholder="Raza de la mascota" v-model="formData.Raza" />
+            <ComboSelect
+              v-model="formData.Raza"
+              :options="razasDisponibles"
+              :disabled="!formData.Especie"
+              :placeholder="formData.Especie ? 'Busca o selecciona la raza' : 'Primero selecciona la especie'"
+            />
+            <p v-if="errores.Raza" class="msg-error">{{ errores.Raza }}</p>
           </div>
 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Sexo</label>
-            <select class="form-control" v-model="formData.Sexo">
-              <option>Macho</option>
-              <option>Hembra</option>
-            </select>
+            <ComboSelect
+              v-model="formData.Sexo"
+              :options="SEXOS"
+              :buscar="false"
+              placeholder="Selecciona el sexo"
+            />
+            <p v-if="errores.Sexo" class="msg-error">{{ errores.Sexo }}</p>
           </div>
 
           <div>
@@ -152,7 +167,21 @@
 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Peso (kg)</label>
-            <input class="form-control" type="number" step="0.1" placeholder="Peso en kg" v-model="formData.Peso" />
+            <input
+              class="form-control"
+              :class="{ 'campo-error': errores.Peso }"
+              type="number"
+              inputmode="decimal"
+              min="0.1"
+              :max="PESO_MAX"
+              step="0.1"
+              placeholder="Peso en kg (máx. 90)"
+              :value="formData.Peso"
+              @keydown="bloquearTeclasPeso"
+              @input="limitarPeso"
+            />
+            <p v-if="errores.Peso" class="msg-error">{{ errores.Peso }}</p>
+            <p v-else class="msg-ayuda">Máximo {{ PESO_MAX }} kg</p>
           </div>
 
           <div>
@@ -302,9 +331,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
+import ComboSelect from '../shared/combo-select.vue'
 import { mascotasAPI, clientesAPI, vacunasAPI } from '../../api.js'
 
 const router = useRouter()
@@ -334,6 +364,85 @@ const formData = reactive({
 })
 
 const fotoPreview = ref('')
+
+// ── Listas y reglas del formulario ───────────────────────────
+const SEXOS = ['Macho', 'Hembra']
+const PESO_MAX = 90
+
+const RAZAS = {
+  Perro: ['Labrador Retriever', 'Golden Retriever', 'Pastor Alemán', 'Bulldog Inglés', 'Bulldog Francés', 'Bulldog Americano', 'Beagle', 'Poodle (Caniche)', 'Chihuahua', 'Rottweiler', 'Yorkshire Terrier', 'Boxer', 'Dachshund (Salchicha)', 'Shih Tzu', 'Husky Siberiano', 'Doberman', 'Pug', 'Schnauzer', 'Cocker Spaniel', 'Border Collie', 'Pitbull', 'Maltés', 'Pomerania', 'Gran Danés', 'San Bernardo', 'Akita', 'Samoyedo', 'Dálmata', 'Mastín', 'Basset Hound', 'Criollo', 'Mestizo', 'Otra'],
+  Gato: ['Siamés', 'Persa', 'Maine Coon', 'Bengalí', 'Ragdoll', 'Sphynx', 'British Shorthair', 'Angora', 'Abisinio', 'Azul Ruso', 'Birmano', 'Scottish Fold', 'Himalayo', 'Criollo', 'Mestizo', 'Otra'],
+  Ave: ['Canario', 'Periquito', 'Agaporni', 'Cacatúa', 'Loro', 'Guacamayo', 'Ninfa (Cockatiel)', 'Cotorra', 'Gallo de pelea', 'Gallina', 'Paloma', 'Pato', 'Criollo', 'Otra'],
+  Conejo: ['Cabeza de León', 'Holandés', 'Enano', 'Mini Lop', 'Rex', 'Angora', 'Gigante de Flandes', 'Californiano', 'Criollo', 'Otra'],
+  Hamster: ['Sirio', 'Enano Ruso', 'Roborovski', 'Chino', 'Otra'],
+  Pez: ['Pez dorado (Goldfish)', 'Betta', 'Guppy', 'Neón', 'Escalar', 'Disco', 'Molly', 'Platy', 'Koi', 'Otra'],
+  Reptil: ['Iguana', 'Tortuga', 'Gecko leopardo', 'Dragón barbudo', 'Pitón bola', 'Camaleón', 'Otra'],
+  Cobayo: ['Americano', 'Peruano', 'Abisinio', 'Teddy', 'Otra'],
+  Otro: ['Otra']
+}
+const ESPECIES = Object.keys(RAZAS)
+
+// Raza que ya traía la mascota al editar (por si no está en la lista, para no bloquearla)
+const razaOriginal = ref('')
+
+const razasDisponibles = computed(() => {
+  const base = RAZAS[formData.Especie] || []
+  const extra = razaOriginal.value && !base.includes(razaOriginal.value) ? [razaOriginal.value] : []
+  return [...base, ...extra]
+})
+
+// Al cambiar de especie, si la raza elegida no pertenece a esa especie se borra
+watch(() => formData.Especie, () => {
+  if (formData.Raza && !razasDisponibles.value.includes(formData.Raza)) formData.Raza = ''
+})
+
+const errores = reactive({ Nombre: '', Especie: '', Raza: '', Sexo: '', Peso: '' })
+const limpiarErrores = () => Object.keys(errores).forEach(k => { errores[k] = '' })
+
+// Nombre: solo letras (con tildes, ñ) y espacios
+const NO_LETRAS = /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g
+function soloLetras(e) {
+  const limpio = e.target.value.replace(NO_LETRAS, '').replace(/ {2,}/g, ' ').replace(/^ /, '')
+  e.target.value = limpio
+  formData.Nombre = limpio
+  errores.Nombre = ''
+}
+
+// Peso: máximo 90 kg, sin negativos ni letras, máximo 2 decimales
+function bloquearTeclasPeso(e) {
+  if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault()
+}
+function limitarPeso(e) {
+  let v = e.target.value
+  if (v === '') { formData.Peso = ''; return }
+  if (/\.\d{3,}/.test(v)) v = String(Math.floor(parseFloat(v) * 100) / 100)
+  if (parseFloat(v) > PESO_MAX) v = String(PESO_MAX)
+  if (parseFloat(v) < 0) v = ''
+  e.target.value = v
+  formData.Peso = v
+  errores.Peso = ''
+}
+
+function validarFormulario() {
+  limpiarErrores()
+  let ok = true
+  const nombre = (formData.Nombre || '').trim()
+  if (!nombre) { errores.Nombre = 'El nombre es obligatorio.'; ok = false }
+  else if (nombre.length < 2) { errores.Nombre = 'El nombre debe tener al menos 2 letras.'; ok = false }
+  else if (/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/.test(nombre)) { errores.Nombre = 'Solo se permiten letras.'; ok = false }
+
+  if (!ESPECIES.includes(formData.Especie)) { errores.Especie = 'Selecciona una especie de la lista.'; ok = false }
+  else if (!razasDisponibles.value.includes(formData.Raza)) { errores.Raza = 'Selecciona una raza de la lista.'; ok = false }
+
+  if (!SEXOS.includes(formData.Sexo)) { errores.Sexo = 'Selecciona macho o hembra.'; ok = false }
+
+  if (formData.Peso !== '' && formData.Peso !== null && formData.Peso !== undefined) {
+    const peso = parseFloat(formData.Peso)
+    if (isNaN(peso) || peso <= 0) { errores.Peso = 'Ingresa un peso válido.'; ok = false }
+    else if (peso > PESO_MAX) { errores.Peso = `El peso máximo es ${PESO_MAX} kg.`; ok = false }
+  }
+  return ok
+}
 
 function handleFotoUpload(event) {
   const file = event.target.files[0]
@@ -414,6 +523,8 @@ function openAddForm() {
   isEditing.value = false
   editingId.value = null
   fotoPreview.value = ''
+  limpiarErrores()
+  razaOriginal.value = ''
   Object.assign(formData, {
     Nombre: '',
     Especie: '',
@@ -430,15 +541,15 @@ function openEditForm(pet) {
   isEditing.value = true
   editingId.value = pet.ID_mascota
   fotoPreview.value = pet.Foto || ''
-  Object.assign(formData, { ...pet })
+  limpiarErrores()
+  razaOriginal.value = pet.Raza || ''
+  Object.assign(formData, { ...pet, Peso: pet.Peso != null ? String(pet.Peso) : '' })
   showForm.value = true
 }
 
 async function savePet() {
-  if (!formData.Nombre.trim()) {
-    alert('Nombre es requerido')
-    return
-  }
+  if (!validarFormulario()) return
+  formData.Nombre = formData.Nombre.trim()
 
   if (!clienteActual.value) {
     await cargarCliente()
@@ -747,56 +858,7 @@ table th, table td {
   border: 1px solid #fcc;
 }
 
-.navbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 0.85rem 1rem;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
-  margin-bottom: 1.25rem;
-  flex-wrap: wrap;
-}
-
-.nav-logo {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #0f172a;
-  text-decoration: none;
-}
-
-.nav-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .45rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.nav-links li a {
-  text-decoration: none;
-  color: #334155;
-  font-weight: 600;
-  padding: .4rem .6rem;
-  border-radius: 8px;
-}
-
-.nav-links li a.active,
-.nav-links li a:hover {
-  color: #1d4ed8;
-  background: #eff6ff;
-}
-
-.auth-section {
-  display: flex;
-  gap: .5rem;
-}
-
-.btn-auth, .btn {
+.btn {
   cursor: pointer;
   border: 1px solid #3b82f6;
   background: #3b82f6;
@@ -807,7 +869,7 @@ table th, table td {
   transition: all .2s ease;
 }
 
-.btn-auth:hover, .btn:hover {
+.btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(59,130,246,0.2);
 }
@@ -1025,6 +1087,11 @@ table th, table td {
   outline: none;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
 }
+
+/* Validación del formulario de mascotas */
+.campo-error { border-color: #dc2626 !important; }
+.msg-error { margin: .3rem 0 0; font-size: .78rem; color: #dc2626; font-weight: 600; }
+.msg-ayuda { margin: .3rem 0 0; font-size: .75rem; color: #94a3b8; }
 
 /* Usuario logueado */
 .usuario-nombre {
