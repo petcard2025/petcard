@@ -1,4 +1,4 @@
-const { normalizarTelefono, validarMascota } = require('../../src/utils/validators')
+const { normalizarTelefono, validarMascota, camposInvalidosCita } = require('../../src/utils/validators')
 
 describe('normalizarTelefono', () => {
   test.each([
@@ -6,7 +6,9 @@ describe('normalizarTelefono', () => {
     ['300 123 4567', '+573001234567'],
     ['573001234567', '+573001234567'],
     ['03001234567', '+573001234567'],
-    ['+573001234567', '+573001234567']
+    ['+573001234567', '+573001234567'],
+    ['+14155550123', '+14155550123'],
+    ['12345', '+5712345']
   ])('%s -> %s', (entrada, esperado) => {
     expect(normalizarTelefono(entrada)).toBe(esperado)
   })
@@ -29,5 +31,18 @@ describe('validarMascota', () => {
   })
   test('acepta peso vacío', () => {
     expect(validarMascota({ ...valida, Peso: '' })).toBeNull()
+  })
+})
+
+describe('camposInvalidosCita', () => {
+  test('acepta solo campos permitidos', () => {
+    expect(camposInvalidosCita({ Estado: 'Cancelada', Hora: '10:00' })).toEqual([])
+  })
+  test('devuelve los campos no permitidos', () => {
+    expect(camposInvalidosCita({ Estado: 'x', ID_veterinario: 1, Google_Event_ID: 'y' }))
+      .toEqual(['ID_veterinario', 'Google_Event_ID'])
+  })
+  test('rechaza nombres de columna con SQL', () => {
+    expect(camposInvalidosCita({ "Estado='x' --": 1 })).toHaveLength(1)
   })
 })
