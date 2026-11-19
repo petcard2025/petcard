@@ -1,8 +1,8 @@
 <script setup>
 import { useRouter } from 'vue-router'
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAuth } from '../../composables/useAuth'
-import { perfilAPI } from '../../api'
+import { perfilAPI, clientesAPI, mascotasAPI, citasAPI, vacunasAPI, notificacionesAPI } from '../../api'
 
 const router = useRouter()
 const { usuarioLogueado: authUsuario, token, setSession, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -129,6 +129,111 @@ const irCitas = () => router.push('/citas')
 const irCarnet = () => router.push('/carnet')
 const irNotificaciones = () => router.push('/notificaciones')
 
+// ===== ESTADÍSTICAS (datos reales de la base de datos) =====
+const stats = reactive({
+  mascotas: 0,
+  citas: 0,
+  vacunasAlDia: 0,
+  vacunasTotal: 0,
+  recordatorios: 0
+})
+const statsCargadas = ref(false)
+
+// Una cita cuenta como "programada" mientras siga asignada: Pendiente o Confirmada.
+// Las Canceladas y Completadas ya no cuentan.
+const ESTADOS_CITA_CERRADA = ['cancelada', 'completada', 'completa']
+const citaEstaProgramada = (cita) =>
+  !ESTADOS_CITA_CERRADA.includes(String(cita.Estado || 'Pendiente').trim().toLowerCase())
+
+// Misma idea que el carnet: la vacuna está "al día" si su estado es de aplicada/completa.
+const ESTADOS_VACUNA_OK = ['completo', 'completa', 'completada', 'aplicada']
+const vacunaAlDia = (v) => ESTADOS_VACUNA_OK.includes(String(v.Estado || '').trim().toLowerCase())
+
+// Porcentaje de vacunas al día (null si todavía no hay vacunas registradas)
+const vacunasPct = computed(() =>
+  stats.vacunasTotal ? Math.round((stats.vacunasAlDia / stats.vacunasTotal) * 100) : null
+)
+const vacunasColor = computed(() => {
+  const p = vacunasPct.value
+  if (p === null) return 'var(--muted)'
+  if (p >= 80) return 'var(--green)'
+  if (p >= 50) return 'var(--orange)'
+  return 'var(--red)'
+})
+
+let cargandoStats = false
+const cargarEstadisticas = async () => {
+  if (cargandoStats) return
+  const usuario = authUsuario?.value || JSON.parse(localStorage.getItem('petcard_usuario_actual') || 'null')
+  if (!usuario?.ID_usuario || !localStorage.getItem('petcard_token')) return
+
+  cargandoStats = true
+  try {
+    // 1) Cliente asociado al usuario logueado
+    let cliente = null
+    try {
+      const clientes = await clientesAPI.obtenerPorUsuario(usuario.ID_usuario)
+      cliente = clientes?.[0] || null
+    } catch (e) {
+      console.error('Estadísticas: no se pudo leer el cliente', e)
+    }
+
+    // 2) Mascotas, citas y recordatorios en paralelo (si uno falla, los demás siguen)
+    const [rMascotas, rCitas, rNotifs] = await Promise.allSettled([
+      cliente ? mascotasAPI.obtenerPorCliente(cliente.ID_cliente) : Promise.resolve([]),
+      cliente ? citasAPI.obtener() : Promise.resolve([]),
+      notificacionesAPI.obtenerPorUsuario(usuario.ID_usuario)
+    ])
+
+    const mascotas = rMascotas.status === 'fulfilled' && Array.isArray(rMascotas.value) ? rMascotas.value : []
+    if (rMascotas.status === 'fulfilled') stats.mascotas = mascotas.length
+
+    if (rCitas.status === 'fulfilled' && Array.isArray(rCitas.value) && cliente) {
+      stats.citas = rCitas.value.filter(c =>
+        c.ID_cliente === cliente.ID_cliente && citaEstaProgramada(c)
+      ).length
+    }
+
+    if (rNotifs.status === 'fulfilled' && Array.isArray(rNotifs.value)) {
+      stats.recordatorios = rNotifs.value.filter(n =>
+        n.ID_usuario === usuario.ID_usuario && !n.Leida
+      ).length
+    }
+
+    // 3) Vacunas de todas las mascotas del usuario
+    if (rMascotas.status === 'fulfilled') {
+      const listas = await Promise.all(
+        mascotas.map(m => vacunasAPI.obtenerPorMascota(m.ID_mascota).catch(() => []))
+      )
+      const vacunas = listas.flat()
+      stats.vacunasTotal = vacunas.length
+      stats.vacunasAlDia = vacunas.filter(vacunaAlDia).length
+    }
+
+    statsCargadas.value = true
+  } finally {
+    cargandoStats = false
+  }
+}
+
+// Actualización automática: si se agenda/cancela una cita (o cambia algo) mientras
+// esta pantalla está abierta, los números se refrescan solos cada 10 s y al volver a la pestaña.
+let temporizadorStats = null
+const refrescarStatsAlVolver = () => { if (!document.hidden) cargarEstadisticas() }
+
+onMounted(() => {
+  cargarEstadisticas()
+  temporizadorStats = setInterval(cargarEstadisticas, 10000)
+  document.addEventListener('visibilitychange', refrescarStatsAlVolver)
+  window.addEventListener('focus', cargarEstadisticas)
+})
+
+onUnmounted(() => {
+  clearInterval(temporizadorStats)
+  document.removeEventListener('visibilitychange', refrescarStatsAlVolver)
+  window.removeEventListener('focus', cargarEstadisticas)
+})
+
 // ===== GUARD DE SEGURIDAD =====
 onMounted(() => {
   const token = localStorage.getItem('petcard_token')
@@ -151,6 +256,7 @@ onMounted(() => {
 
 watch(authUsuario, () => {
   cargarUsuario()
+  cargarEstadisticas()
 })
 </script>
 
@@ -276,10 +382,10 @@ watch(authUsuario, () => {
 
         <div class="card">
           <div class="card-title" style="font-size:.95rem;">Estadísticas</div>
-          <div class="estadistica-row"><span>Mascotas registradas</span><strong>3</strong></div>
-          <div class="estadistica-row"><span>Citas programadas</span><strong>2</strong></div>
-          <div class="estadistica-row"><span>Vacunas al día</span><strong style="color:var(--green);">100%</strong></div>
-          <div class="estadistica-row"><span>Recordatorios activos</span><strong style="color:var(--purple);">5</strong></div>
+          <div class="estadistica-row"><span>Mascotas registradas</span><strong>{{ statsCargadas ? stats.mascotas : '—' }}</strong></div>
+          <div class="estadistica-row"><span>Citas programadas</span><strong>{{ statsCargadas ? stats.citas : '—' }}</strong></div>
+          <div class="estadistica-row"><span>Vacunas al día</span><strong :style="{ color: vacunasColor }">{{ statsCargadas && vacunasPct !== null ? vacunasPct + '%' : '—' }}</strong></div>
+          <div class="estadistica-row"><span>Recordatorios activos</span><strong style="color:var(--purple);">{{ statsCargadas ? stats.recordatorios : '—' }}</strong></div>
         </div>
 
       </div>

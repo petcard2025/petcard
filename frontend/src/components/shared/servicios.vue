@@ -133,7 +133,6 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Limpieza dental, extracciones y tratamientos especializados para la salud bucal.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$100 – $300</span>
             </div>
             <router-link to="/citas" class="btn btn-primary btn-full" style="background:#db2777;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Odontología" id="btn-agendar-7">Agendar Cita</router-link>
           </div>

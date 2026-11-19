@@ -1,8 +1,8 @@
 <script setup>
-import { ref, computed, watch, onMounted, reactive } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
-import { mascotasAPI, clientesAPI, vacunasAPI } from '../../api.js'
+import { mascotasAPI, clientesAPI, vacunasAPI, citasAPI } from '../../api.js'
 
 const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -189,6 +189,75 @@ function abrirVacunas(pet) {
   router.push({ path: '/citas', query: { mascota: pet.ID_mascota } })
 }
 
+// ===== PRÓXIMA CITA DE LA MASCOTA =====
+// Muestra la cita más cercana que la mascota seleccionada tiene pendiente
+// (Pendiente o Confirmada, de hoy en adelante). Las canceladas/completadas no cuentan.
+const citasMascota = ref([])
+
+const horaA24 = (horaStr) => {
+  if (!horaStr) return '00:00'
+  const str = String(horaStr).trim()
+  const ampm = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+  if (ampm) {
+    let h = parseInt(ampm[1], 10)
+    const ap = ampm[3].toUpperCase()
+    if (ap === 'PM' && h !== 12) h += 12
+    if (ap === 'AM' && h === 12) h = 0
+    return `${String(h).padStart(2, '0')}:${ampm[2]}`
+  }
+  const [h, m] = str.split(':')
+  return `${String(h).padStart(2, '0')}:${m || '00'}`
+}
+
+const horaTexto = (horaStr) => {
+  const [h, m] = horaA24(horaStr).split(':').map(Number)
+  const ap = h >= 12 ? 'PM' : 'AM'
+  return `${String(h % 12 || 12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ap}`
+}
+
+const proximaCita = computed(() => {
+  const ahora = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  const ahoraKey = `${ahora.getFullYear()}-${p(ahora.getMonth() + 1)}-${p(ahora.getDate())} ${p(ahora.getHours())}:${p(ahora.getMinutes())}`
+  return citasMascota.value
+    .filter(c => !['cancelada', 'completada', 'completa'].includes(String(c.Estado || 'Pendiente').trim().toLowerCase()))
+    .map(c => ({ ...c, _key: `${String(c.Fecha).split('T')[0]} ${horaA24(c.Hora)}` }))
+    .filter(c => c._key >= ahoraKey)
+    .sort((a, b) => a._key.localeCompare(b._key))[0] || null
+})
+
+const proximaCitaTexto = computed(() => {
+  const c = proximaCita.value
+  if (!c) return '—'
+  return `${obtenerFechaTexto(c.Fecha)} · ${horaTexto(c.Hora)}`
+})
+
+async function cargarCitasMascota() {
+  if (!selectedId.value || !clienteActual.value?.ID_cliente) { citasMascota.value = []; return }
+  try {
+    const todas = await citasAPI.obtener()
+    citasMascota.value = todas.filter(c =>
+      c.ID_mascota === selectedId.value && c.ID_cliente === clienteActual.value.ID_cliente
+    )
+  } catch (error) {
+    console.error('Error al cargar citas de la mascota:', error)
+  }
+}
+
+watch(selectedId, cargarCitasMascota)
+
+// Se actualiza sola si agendas/cancelas una cita (cada 10 s y al volver a la pestaña)
+let temporizadorCitas = null
+const refrescarCitasAlVolver = () => { if (!document.hidden) cargarCitasMascota() }
+onMounted(() => {
+  temporizadorCitas = setInterval(cargarCitasMascota, 10000)
+  document.addEventListener('visibilitychange', refrescarCitasAlVolver)
+})
+onUnmounted(() => {
+  clearInterval(temporizadorCitas)
+  document.removeEventListener('visibilitychange', refrescarCitasAlVolver)
+})
+
 // ===== GUARD DE SEGURIDAD =====
 onMounted(() => {
   const token = localStorage.getItem('petcard_token')
@@ -361,7 +430,7 @@ onMounted(async () => {
           <div class="info-row"><span>Raza:</span><strong>{{ selectedPet ? selectedPet.Raza : '—' }}</strong></div>
           <div class="info-row"><span>ID:</span><strong>{{ selectedPet ? selectedPet.ID_mascota : '—' }}</strong></div>
           <div class="info-row"><span>Fecha de nacimiento:</span><strong>{{ obtenerFechaNacimiento(selectedPet?.Fecha_nacimiento) }}</strong></div>
-          <div class="info-row"><span>Próxima cita:</span><strong>{{ proximas.length ? obtenerFechaTexto(proximas[0].Proxima_dosis) : '—' }}</strong></div>
+          <div class="info-row"><span>Próxima cita:</span><strong>{{ proximaCitaTexto }}</strong></div>
           <div style="display:flex; gap:.5rem; margin-top:1rem;">
             <button class="btn btn-secondary btn-sm" style="flex:1;" @click="imprimir">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
