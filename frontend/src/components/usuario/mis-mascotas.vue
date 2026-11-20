@@ -162,7 +162,17 @@
 
           <div>
             <label style="display:block;font-weight:700;margin-bottom:.5rem;">Fecha de nacimiento</label>
-            <input class="form-control" type="date" v-model="formData.Fecha_nacimiento" />
+            <input
+              class="form-control"
+              :class="{ 'campo-error': errores.Fecha_nacimiento }"
+              type="date"
+              v-model="formData.Fecha_nacimiento"
+              :min="FECHA_NAC_MIN"
+              :max="fechaNacMax()"
+              @keydown="soloTeclasFecha"
+              @input="limitarAnioFecha($event); errores.Fecha_nacimiento = ''"
+            />
+            <p v-if="errores.Fecha_nacimiento" class="msg-error">{{ errores.Fecha_nacimiento }}</p>
           </div>
 
           <div>
@@ -336,6 +346,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import ComboSelect from '../shared/combo-select.vue'
 import { mascotasAPI, clientesAPI, vacunasAPI } from '../../api.js'
+import { FECHA_NAC_MIN, fechaNacMax, limitarAnioFecha, soloTeclasFecha, validarFechaNacimiento } from '../../utils/validators.js'
 
 const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -396,7 +407,7 @@ watch(() => formData.Especie, () => {
   if (formData.Raza && !razasDisponibles.value.includes(formData.Raza)) formData.Raza = ''
 })
 
-const errores = reactive({ Nombre: '', Especie: '', Raza: '', Sexo: '', Peso: '' })
+const errores = reactive({ Nombre: '', Especie: '', Raza: '', Sexo: '', Peso: '', Fecha_nacimiento: '' })
 const limpiarErrores = () => Object.keys(errores).forEach(k => { errores[k] = '' })
 
 // Nombre: solo letras (con tildes, ñ) y espacios
@@ -435,6 +446,9 @@ function validarFormulario() {
   else if (!razasDisponibles.value.includes(formData.Raza)) { errores.Raza = 'Selecciona una raza de la lista.'; ok = false }
 
   if (!SEXOS.includes(formData.Sexo)) { errores.Sexo = 'Selecciona macho o hembra.'; ok = false }
+
+  const errFecha = validarFechaNacimiento(formData.Fecha_nacimiento)
+  if (errFecha) { errores.Fecha_nacimiento = errFecha; ok = false }
 
   if (formData.Peso !== '' && formData.Peso !== null && formData.Peso !== undefined) {
     const peso = parseFloat(formData.Peso)

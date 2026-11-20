@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { mascotasAPI, clientesAPI } from '../../api'
+import { FECHA_NAC_MIN, fechaNacMax, limitarAnioFecha, soloTeclasFecha } from '../../utils/validators'
 
 const mascotas = ref([])
 const clientes = ref([])
@@ -240,7 +241,7 @@ async function eliminarMascota() {
             </div>
             <div>
               <label>Fecha de nacimiento</label>
-              <input type="date" v-model="nuevaMascota.Fecha_nacimiento" />
+              <input type="date" v-model="nuevaMascota.Fecha_nacimiento" :min="FECHA_NAC_MIN" :max="fechaNacMax()" @keydown="soloTeclasFecha" @input="limitarAnioFecha" />
             </div>
           </div>
 
@@ -294,7 +295,7 @@ async function eliminarMascota() {
             </div>
             <div>
               <label>Fecha de nacimiento</label>
-              <input type="date" v-model="mascotaSeleccionada.Fecha_nacimiento" />
+              <input type="date" v-model="mascotaSeleccionada.Fecha_nacimiento" :min="FECHA_NAC_MIN" :max="fechaNacMax()" @keydown="soloTeclasFecha" @input="limitarAnioFecha" />
             </div>
           </div>
 

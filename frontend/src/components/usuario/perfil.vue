@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAuth } from '../../composables/useAuth'
 import { perfilAPI, clientesAPI, mascotasAPI, citasAPI, vacunasAPI, notificacionesAPI } from '../../api'
+import { soloLetras, soloTelefono, validarNombrePersona, validarTelefono, filtrarTelefono, limpiarTelefonoInput } from '../../utils/validators'
 
 const router = useRouter()
 const { usuarioLogueado: authUsuario, token, setSession, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -49,7 +50,7 @@ const aplicarUsuario = (usuario) => {
   formData.nombre = nombre
   formData.apellido = apellido
   formData.email = usuario.Correo || usuario.email || ''
-  formData.telefono = usuario.Telefono || usuario.telefono || ''
+  formData.telefono = soloTelefono(usuario.Telefono || usuario.telefono || '')
   formData.direccion = usuario.Direccion || usuario.direccion || ''
   formData.emergencia = usuario.Emergencia || usuario.emergencia || ''
 }
@@ -91,6 +92,17 @@ const guardarCambios = async () => {
     return false
   }
 
+  const errNombre = validarNombrePersona(formData.nombre, 'nombre')
+  if (errNombre) { alert('⚠️ ' + errNombre); return false }
+
+  if (formData.apellido.trim()) {
+    const errApellido = validarNombrePersona(formData.apellido, 'apellido')
+    if (errApellido) { alert('⚠️ ' + errApellido); return false }
+  }
+
+  const errTelefono = validarTelefono(formData.telefono)
+  if (errTelefono) { alert('⚠️ ' + errTelefono); return false }
+
   if (!isValidEmail(formData.email)) {
     alert('⚠️ Email no válido')
     return false
@@ -127,7 +139,6 @@ const isValidEmail = (email) => {
 const irMascotas = () => router.push('/mis-mascotas')
 const irCitas = () => router.push('/citas')
 const irCarnet = () => router.push('/carnet')
-const irNotificaciones = () => router.push('/notificaciones')
 
 // ===== ESTADÍSTICAS (datos reales de la base de datos) =====
 const stats = reactive({
@@ -324,11 +335,11 @@ watch(authUsuario, () => {
         <div class="form-row">
           <div class="form-group">
             <label>Nombre</label>
-            <input class="form-control" type="text" v-model="formData.nombre" :disabled="!enEdicion"/>
+            <input class="form-control" type="text" v-model="formData.nombre" :disabled="!enEdicion" maxlength="50" autocomplete="off" @input="formData.nombre = soloLetras($event.target.value); $event.target.value = formData.nombre"/>
           </div>
           <div class="form-group">
             <label>Apellido</label>
-            <input class="form-control" type="text" v-model="formData.apellido" :disabled="!enEdicion"/>
+            <input class="form-control" type="text" v-model="formData.apellido" :disabled="!enEdicion" maxlength="50" autocomplete="off" @input="formData.apellido = soloLetras($event.target.value); $event.target.value = formData.apellido"/>
           </div>
         </div>
 
@@ -339,7 +350,8 @@ watch(authUsuario, () => {
           </div>
           <div class="form-group">
             <label>Teléfono</label>
-            <input class="form-control" type="tel" v-model="formData.telefono" :disabled="!enEdicion"/>
+            <input class="form-control" type="tel" inputmode="numeric" maxlength="10" :value="formData.telefono" :disabled="!enEdicion" autocomplete="off" @beforeinput="filtrarTelefono" @input="limpiarTelefonoInput($event, formData, 'telefono')"/>
+            <small v-if="enEdicion" style="display:block;margin-top:.25rem;font-size:.75rem;color:var(--muted);">Exactamente 10 números. Para cambiarlo, reemplaza los dígitos.</small>
           </div>
         </div>
 
@@ -371,10 +383,6 @@ watch(authUsuario, () => {
             <button class="accion-btn" @click="irCarnet">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               Ver Carnet de Vacunas
-            </button>
-            <button class="accion-btn" @click="irNotificaciones">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-              Configurar Recordatorios
             </button>
           </div>
         </div>

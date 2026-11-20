@@ -155,3 +155,65 @@ export function validarDireccion(direccion) {
   if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 #\-.,°/]+$/.test(v)) return 'La dirección contiene caracteres no permitidos.'
   return ''
 }
+
+// ============ FECHA DE NACIMIENTO DE MASCOTA ============
+// El <input type="date"> deja escribir años de 5 o 6 cifras (ej. 8264).
+// Estas reglas fuerzan un año de exactamente 4 cifras y un rango razonable.
+export const FECHA_NAC_MIN = '1990-01-01'
+
+// Atributo :max para el input (hoy, hora de Colombia)
+export const fechaNacMax = () => hoyColombia()
+
+// Úsalo en @input de un <input type="date">: si el año pasa de 4 cifras, lo recorta.
+export function limitarAnioFecha(e) {
+  const el = e.target
+  const m = String(el.value || '').match(/^(\d{5,})-(\d{2})-(\d{2})$/)
+  if (m) el.value = `${m[1].slice(0, 4)}-${m[2]}-${m[3]}`
+}
+
+// Úsalo en @keydown del input date: bloquea letras y signos (solo números y teclas de navegación)
+export function soloTeclasFecha(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return
+  if (e.key.length === 1 && !/\d/.test(e.key)) e.preventDefault()
+}
+
+// Devuelve un mensaje de error, o '' si la fecha de nacimiento es válida. Es opcional.
+export function validarFechaNacimiento(valor) {
+  const f = String(valor ?? '').slice(0, 10)
+  if (!f) return ''
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || Number.isNaN(Date.parse(f))) {
+    return 'La fecha no es válida (el año debe tener 4 números).'
+  }
+  if (f < FECHA_NAC_MIN) return 'El año debe ser 1990 o posterior.'
+  if (f > hoyColombia()) return 'La fecha de nacimiento no puede ser futura.'
+  return ''
+}
+
+// ============ TELÉFONO DE EXACTAMENTE 10 NÚMEROS (EDICIÓN DE PERFIL) ============
+// Úsalo en @beforeinput. Solo deja números, nunca más de 10 y, si ya hay 10,
+// no deja borrar ni quitar un número: únicamente se puede reemplazar por otro número.
+export function filtrarTelefono(e) {
+  const el = e.target
+  const tipo = e.inputType || ''
+  const actual = el.value.length
+  const sel = (el.selectionEnd ?? 0) - (el.selectionStart ?? 0)
+
+  if (tipo.startsWith('delete')) {
+    if (actual >= 10) e.preventDefault()
+    return
+  }
+  if (tipo.startsWith('insert')) {
+    const datos = String(e.data ?? '')
+    if (datos && /\D/.test(datos)) { e.preventDefault(); return }
+    const nuevo = actual - sel + datos.length
+    if (nuevo > 10) e.preventDefault()
+    if (actual >= 10 && nuevo < 10) e.preventDefault()
+  }
+}
+
+// Respaldo en @input (autocompletar, arrastrar texto, etc.)
+export function limpiarTelefonoInput(e, destino, clave) {
+  const limpio = soloTelefono(e.target.value)
+  if (limpio !== e.target.value) e.target.value = limpio
+  destino[clave] = limpio
+}

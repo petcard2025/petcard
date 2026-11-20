@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, reactive } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { mascotasAPI, clientesAPI, vacunasAPI, citasAPI } from '../../api.js'
@@ -9,54 +9,39 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
 
 const pets = ref([])
 const selectedId = ref(null)
-const showModal = ref(false)
 const clienteActual = ref(null)
 const vacunas = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
-
-// Formulario para agregar vacuna
-const vacForm = reactive({
-  Nombre_vacuna: '',
-  Fecha_aplicacion: '',
-  Proxima_dosis: '',
-  Lote: '',
-  Observaciones: '',
-  Estado: 'Completo'
-})
-
-function resetVacForm() {
-  Object.assign(vacForm, {
-    Nombre_vacuna: '',
-    Fecha_aplicacion: '',
-    Proxima_dosis: '',
-    Lote: '',
-    Observaciones: '',
-    Estado: 'Completo'
-  })
-}
 
 const selectedPet = computed(() => {
   const pet = pets.value.find(p => p.ID_mascota === selectedId.value)
   return pet ? { ...pet, vacunas: vacunas.value } : null
 })
 
-const aplicadas = computed(() => vacunas.value.filter(v => v.Estado === 'Completo' || v.Estado === 'aplicada').length)
+const normEstado = (e) => String(e || '').trim().toLowerCase()
+const esAplicada = (e) => ['aplicada', 'completo', 'completa', 'completada'].includes(normEstado(e))
+const esAtrasada = (e) => normEstado(e) === 'atrasada'
+
+const aplicadas = computed(() => vacunas.value.filter(v => esAplicada(v.Estado)).length)
 const pendientes = computed(() => vacunas.value.length - aplicadas.value)
-const pct = computed(() => Math.round((aplicadas.value / (vacunas.value.length || 1)) * 100))
-const proximas = computed(() => vacunas.value.filter(v => v.Estado !== 'Completo' && v.Estado !== 'aplicada').slice(0, 2))
+const pct = computed(() => vacunas.value.length ? Math.round((aplicadas.value / vacunas.value.length) * 100) : 0)
+const proximas = computed(() => vacunas.value.filter(v => !esAplicada(v.Estado)).slice(0, 2))
 
 function estadoColor(estado) {
-  return estado === 'Completo' || estado === 'aplicada' ? 'var(--green)' : estado === 'Atrasada' || estado === 'atrasada' ? 'var(--red)' : 'var(--yellow)'
+  return esAplicada(estado) ? 'var(--green)' : esAtrasada(estado) ? 'var(--red)' : '#ca8a04'
 }
 function estadoIcono(estado) {
-  return estado === 'Completo' || estado === 'aplicada' ? '✓' : estado === 'Atrasada' || estado === 'atrasada' ? '✖' : '⚠'
+  return esAplicada(estado) ? '✓' : esAtrasada(estado) ? '✖' : '⚠'
+}
+function estadoTexto(estado) {
+  return esAplicada(estado) ? 'Aplicada' : esAtrasada(estado) ? 'Atrasada' : 'Pendiente'
 }
 function badgeClass(estado) {
-  return estado === 'Atrasada' || estado === 'atrasada' ? 'badge badge-red' : 'badge badge-yellow'
+  return esAtrasada(estado) ? 'badge badge-red' : 'badge badge-yellow'
 }
 function badgeLabel(estado) {
-  return estado === 'Atrasada' || estado === 'atrasada' ? 'Atrasada' : estado === 'Proxima' || estado === 'proxima' ? 'Próxima Dosis' : 'Pendiente'
+  return esAtrasada(estado) ? 'Atrasada' : normEstado(estado) === 'proxima' ? 'Próxima Dosis' : 'Pendiente'
 }
 
 function obtenerFechaTexto(fecha) {
@@ -75,6 +60,26 @@ function obtenerFechaNacimiento(fecha) {
   const d = new Date(anio, mes - 1, dia)
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })
 }
+
+function calcularEdad(fecha) {
+  if (!fecha) return '—'
+  const [anio, mes, dia] = String(fecha).split('T')[0].split('-').map(Number)
+  if (!anio) return '—'
+  const hoy = new Date()
+  let anios = hoy.getFullYear() - anio
+  if (hoy.getMonth() + 1 < mes || (hoy.getMonth() + 1 === mes && hoy.getDate() < dia)) anios--
+  if (anios < 0) return '—'
+  if (anios === 0) return 'Menos de 1 año'
+  return anios === 1 ? '1 año' : `${anios} años`
+}
+
+const idCarnet = computed(() => selectedPet.value ? 'PET-' + String(selectedPet.value.ID_mascota).padStart(6, '0') : '—')
+const propietario = computed(() => {
+  const u = usuarioLogueado.value || {}
+  const nombre = `${u.Nombre || ''} ${u.Apellido || ''}`.trim()
+  return { nombre: nombre || 'Sin nombre', telefono: u.Telefono || '—', correo: u.Correo || '—' }
+})
+const observacionesVacunas = computed(() => vacunas.value.filter(v => v.Observaciones && String(v.Observaciones).trim()))
 
 function especieRaza(tipo = '') {
   const parts = tipo.split('•')
@@ -143,44 +148,14 @@ watch(selectedId, async (nuevoId) => {
   }
 })
 
-function abrirModal() {
-  resetVacForm()
-  showModal.value = true
-}
-
-function cerrarModal() {
-  showModal.value = false
-}
-
-async function guardarVacuna() {
-  if (!vacForm.Nombre_vacuna.trim()) {
-    alert('El nombre de la vacuna es requerido')
-    return
-  }
-  if (!selectedId.value) {
-    alert('Selecciona una mascota primero')
-    return
-  }
-  try {
-    await vacunasAPI.crear({
-      ID_mascota: selectedId.value,
-      ID_servicio: 2,
-      Nombre_vacuna: vacForm.Nombre_vacuna.trim(),
-      Fecha_aplicacion: vacForm.Fecha_aplicacion || null,
-      Proxima_dosis: vacForm.Proxima_dosis || null,
-      Lote: vacForm.Lote,
-      Observaciones: vacForm.Observaciones,
-      Estado: vacForm.Estado
-    })
-    showModal.value = false
-    await cargarVacunas(selectedId.value)
-  } catch (error) {
-    console.error('Error guardando vacuna:', error)
-    alert('Error al guardar vacuna: ' + error.message)
-  }
-}
-
+// Descargar PDF / Imprimir: usa la hoja del carnet (diseño del PDF de la app) y
+// el navegador la imprime o la guarda como PDF.
 function imprimir() {
+  if (!selectedPet.value) return
+  const tituloOriginal = document.title
+  document.title = `Carnet-${selectedPet.value.Nombre || 'mascota'}`
+  const restaurar = () => { document.title = tituloOriginal; window.removeEventListener('afterprint', restaurar) }
+  window.addEventListener('afterprint', restaurar)
   window.print()
 }
 
@@ -316,246 +291,184 @@ onMounted(async () => {
     </div>
   </nav>
 
-  <div class="page-wrapper">
-    <div class="two-col">
-      <div>
-        <div class="card" style="margin-bottom:1.25rem;">
-          <div class="card-title" style="color:var(--purple);">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-            </svg>
-            Seleccionar Mascota
-            <button class="btn btn-success btn-sm" style="margin-left:auto;" @click="abrirModal">
-              💉 Agregar Vacuna
-            </button>
-          </div>
-          <p style="font-size:.85rem; color:var(--muted); margin-bottom:.75rem;">
-            Elige tu mascota para ver el carnet de vacunas
-          </p>
-          <select class="form-control" v-model="selectedId" style="max-width:220px;">
-            <option disabled value="">{{ pets.length ? 'Elige una mascota' : 'No hay mascotas registradas' }}</option>
-            <option v-for="pet in pets" :key="pet.ID_mascota" :value="pet.ID_mascota">
-              {{ pet.Nombre }} – {{ pet.Especie }}
-            </option>
-          </select>
-        </div>
+  <div class="page-wrapper carnet-web">
+    <div class="carnet-col">
 
-        <div class="card">
-          <div class="vacuna-header">
-            <div class="card-title" style="margin-bottom:0; color:#fff;">Carnet de Vacunación</div>
-            <div class="vet-info">
-              <div>Veterinario: <strong>Dr. José García</strong></div>
-              <div>Matrícula: <strong>47789</strong></div>
-            </div>
-          </div>
-          <div class="table-wrapper" style="margin-top:1rem;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Estado</th><th>Vacuna</th><th>Fecha Programada</th>
-                  <th>Fecha Aplicada</th><th>Lote</th><th>Observaciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="v in vacunas" :key="v.ID_carnetVacunas">
-                  <td><span class="status-icon" :style="{ color: estadoColor(v.Estado) }">{{ estadoIcono(v.Estado) }}</span></td>
-                  <td class="vacuna-nombre" style="color:var(--purple);">{{ v.Nombre_vacuna }}</td>
-                  <td>{{ obtenerFechaTexto(v.Proxima_dosis) }}</td>
-                  <td>{{ obtenerFechaTexto(v.Fecha_aplicacion) }}</td>
-                  <td>{{ v.Lote }}</td>
-                  <td>{{ v.Observaciones }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="obs-medicas">
-            <h4>Observaciones Médicas:</h4>
-            <ul>
-              <li v-for="v in vacunas" :key="v.ID_carnetVacunas">{{ v.Nombre_vacuna }}: {{ v.Observaciones }}</li>
-            </ul>
-          </div>
+      <!-- Selector de mascota -->
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-title" style="color:var(--purple);">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+          </svg>
+          Seleccionar Mascota
+        </div>
+        <p style="font-size:.85rem; color:var(--muted); margin-bottom:.75rem;">Elige tu mascota para ver el carnet de vacunas</p>
+        <select class="form-control" v-model="selectedId" style="max-width:260px;">
+          <option disabled value="">{{ pets.length ? 'Elige una mascota' : 'No hay mascotas registradas' }}</option>
+          <option v-for="pet in pets" :key="pet.ID_mascota" :value="pet.ID_mascota">{{ pet.Nombre }} – {{ pet.Especie }}</option>
+        </select>
+      </div>
+
+      <p v-if="errorMessage" class="carnet-error">⚠️ {{ errorMessage }}</p>
+
+      <!-- Header verde -->
+      <div class="carnet-header">
+        <div class="carnet-header-icon">
+          <svg width="22" height="22" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M18 2l4 4"/><path d="M17 7l3-3"/><path d="M19 9l-8.7 8.7a2.12 2.12 0 01-3 0l-.99-.99a2.12 2.12 0 010-3L15 5"/><path d="M9 11l4 4"/><path d="M5 19l-3 3"/></svg>
+        </div>
+        <div>
+          <div class="carnet-header-title">Carnet de Vacunación</div>
+          <div class="carnet-header-sub">{{ selectedPet ? `${selectedPet.Nombre} · ${selectedPet.Especie}` : 'Selecciona una mascota' }}</div>
         </div>
       </div>
 
-      <div class="sidebar">
-        <div class="card">
-          <div class="card-title">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <rect x="3" y="4" width="18" height="18" rx="2"/>
-              <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-            Estado de Vacunación
-          </div>
-          <div class="pct-display">
+      <!-- Tabla (Estado · Vacuna · Aplicada · Próxima) -->
+      <div class="carnet-box">
+        <p v-if="!vacunas.length" class="carnet-vacio">Sin vacunas registradas todavía.</p>
+        <div v-else class="table-wrapper">
+          <table class="carnet-table">
+            <thead>
+              <tr><th>Estado</th><th>Vacuna</th><th>Aplicada</th><th>Próxima</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="v in vacunas" :key="v.ID_carnetVacunas">
+                <td><span class="status-icon" :style="{ color: estadoColor(v.Estado) }">{{ estadoIcono(v.Estado) }}</span></td>
+                <td class="vacuna-nombre">{{ v.Nombre_vacuna || '—' }}</td>
+                <td>{{ obtenerFechaTexto(v.Fecha_aplicacion) }}</td>
+                <td>{{ obtenerFechaTexto(v.Proxima_dosis) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Observaciones médicas -->
+      <div class="obs-medicas">
+        <h4>Observaciones Médicas:</h4>
+        <p v-if="!observacionesVacunas.length" class="obs-vacio">Sin observaciones registradas.</p>
+        <ul v-else>
+          <li v-for="v in observacionesVacunas" :key="v.ID_carnetVacunas">{{ v.Nombre_vacuna }}: {{ v.Observaciones }}</li>
+        </ul>
+      </div>
+
+      <!-- Estado de vacunación -->
+      <div class="carnet-box">
+        <div class="carnet-box-title">Estado de Vacunación</div>
+        <div class="estado-row">
+          <div>
             <div class="pct-number">{{ pct }}%</div>
-            <div class="pct-label">Carnet de Vacunación</div>
+            <div class="pct-label">Completado</div>
           </div>
-          <div class="progress-bar" style="margin-bottom:1rem;">
+          <div class="progress-bar" style="flex:1;">
             <div class="progress-fill yellow" :style="{ width: pct + '%' }"></div>
           </div>
-          <div class="vac-stats">
-            <div class="vac-stat-row"><span>Aplicadas:</span><strong>{{ aplicadas }}</strong></div>
-            <div class="vac-stat-row"><span>Pendientes o demorar:</span><strong>{{ pendientes }}</strong></div>
-            <div class="vac-stat-row"><span>Próximas:</span><strong>{{ proximas.length }}</strong></div>
-          </div>
         </div>
+        <div class="mini-stats">
+          <div><strong style="color:#16a34a;">{{ aplicadas }}</strong><span>Aplicadas</span></div>
+          <div><strong style="color:#ca8a04;">{{ pendientes }}</strong><span>Pendientes</span></div>
+          <div><strong style="color:#2563eb;">{{ proximas.length }}</strong><span>Próximas</span></div>
+        </div>
+      </div>
 
-        <div class="card">
-          <div class="card-title" style="color:var(--orange);">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </svg>
-            Próximas Vacunas
-          </div>
-          <div class="proxima-vac" v-for="v in proximas" :key="v.ID_carnetVacunas">
-            <div class="proxima-vac-header">
-              <span class="vacuna-nombre2">{{ v.Nombre_vacuna }}</span>
-              <span :class="badgeClass(v.Estado)">{{ badgeLabel(v.Estado) }}</span>
-            </div>
-            <div style="font-size:.78rem; color:var(--muted);">Próxima: {{ obtenerFechaTexto(v.Proxima_dosis) }}</div>
-          </div>
-          <p v-if="proximas.length === 0" style="font-size:.85rem; color:var(--muted); margin-top:.5rem;">Sin vacunas pendientes.</p>
-          <button class="btn btn-success btn-full" style="margin-top:.75rem;" @click="router.push('/citas')">Agendar Vacunación</button>
+      <!-- Próximas vacunas -->
+      <div class="carnet-box">
+        <div class="carnet-box-title" style="color:var(--orange);">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Próximas Vacunas
         </div>
+        <div class="proxima-vac" v-for="v in proximas" :key="v.ID_carnetVacunas">
+          <div class="proxima-vac-header">
+            <span class="vacuna-nombre2">{{ v.Nombre_vacuna }}</span>
+            <span :class="badgeClass(v.Estado)">{{ badgeLabel(v.Estado) }}</span>
+          </div>
+          <div style="font-size:.78rem; color:var(--muted);">Próxima: {{ obtenerFechaTexto(v.Proxima_dosis) }}</div>
+        </div>
+        <p v-if="!proximas.length" class="obs-vacio">Sin vacunas pendientes.</p>
+        <button class="btn btn-success btn-full" style="margin-top:.75rem;" @click="router.push('/citas')">Agendar Vacunación</button>
+      </div>
 
-        <div class="card">
-          <div class="card-title" style="color:var(--green);">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            </svg>
-            Información del Carnet
-          </div>
-          <div class="info-row"><span>Mascota:</span><strong>{{ selectedPet ? selectedPet.Nombre : '—' }}</strong></div>
-          <div class="info-row"><span>Especie:</span><strong>{{ selectedPet ? selectedPet.Especie : '—' }}</strong></div>
-          <div class="info-row"><span>Raza:</span><strong>{{ selectedPet ? selectedPet.Raza : '—' }}</strong></div>
-          <div class="info-row"><span>ID:</span><strong>{{ selectedPet ? selectedPet.ID_mascota : '—' }}</strong></div>
-          <div class="info-row"><span>Fecha de nacimiento:</span><strong>{{ obtenerFechaNacimiento(selectedPet?.Fecha_nacimiento) }}</strong></div>
-          <div class="info-row"><span>Próxima cita:</span><strong>{{ proximaCitaTexto }}</strong></div>
-          <div style="display:flex; gap:.5rem; margin-top:1rem;">
-            <button class="btn btn-secondary btn-sm" style="flex:1;" @click="imprimir">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              Descargar PDF
-            </button>
-            <button class="btn btn-primary btn-sm" style="flex:1;" @click="imprimir">Imprimir Carnet</button>
-          </div>
+      <!-- Información del carnet -->
+      <div class="carnet-box">
+        <div class="carnet-box-title" style="color:var(--green);">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Información del Carnet
         </div>
+        <div class="info-row"><span>Mascota:</span><strong>{{ selectedPet ? selectedPet.Nombre : '—' }}</strong></div>
+        <div class="info-row"><span>Especie:</span><strong>{{ selectedPet ? selectedPet.Especie : '—' }}</strong></div>
+        <div class="info-row"><span>Raza:</span><strong>{{ selectedPet ? selectedPet.Raza : '—' }}</strong></div>
+        <div class="info-row"><span>ID:</span><strong>{{ selectedPet ? selectedPet.ID_mascota : '—' }}</strong></div>
+        <div class="info-row"><span>Fecha de nacimiento:</span><strong>{{ obtenerFechaNacimiento(selectedPet?.Fecha_nacimiento) }}</strong></div>
+        <div class="info-row"><span>Próxima cita:</span><strong>{{ proximaCitaTexto }}</strong></div>
+      </div>
+
+      <!-- Botones PDF / Imprimir -->
+      <div class="carnet-actions">
+        <button class="btn btn-primary" :disabled="!selectedPet" @click="imprimir">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Descargar PDF
+        </button>
+        <button class="btn btn-secondary" :disabled="!selectedPet" @click="imprimir">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Imprimir
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL AGREGAR VACUNA -->
-  <Teleport to="body">
-    <div v-if="showModal" class="modal-overlay" @click.self="cerrarModal">
-      <div class="vac-modal">
+  <!-- HOJA DEL PDF (solo se ve al imprimir / guardar como PDF) -->
+  <div v-if="selectedPet" class="pdf-sheet">
+    <div class="pdf-head">
+      <div class="pdf-logo">PC</div>
+      <div>
+        <div class="pdf-brand">PETCARD</div>
+        <div class="pdf-brand-sub">Carnet Digital de Mascota</div>
+      </div>
+      <div class="pdf-valid">VÁLIDO</div>
+    </div>
 
-        <!-- Header -->
-        <div class="vac-modal-header">
-          <div class="vac-modal-icon">💉</div>
-          <div>
-            <div class="vac-modal-title">Agregar Vacuna</div>
-            <div class="vac-modal-sub">Registra una nueva vacuna para <strong>{{ selectedPet?.Nombre || 'tu mascota' }}</strong></div>
-          </div>
-          <button class="vac-modal-close" @click="cerrarModal">✕</button>
+    <div class="pdf-pet">
+      <div class="pdf-photo">
+        <img v-if="selectedPet.Foto" :src="selectedPet.Foto" alt="" />
+        <span v-else>PET</span>
+      </div>
+      <div style="flex:1;">
+        <div class="pdf-pet-name">{{ selectedPet.Nombre }}</div>
+        <div class="pdf-pet-sub">{{ selectedPet.Especie }} · {{ selectedPet.Raza }}</div>
+        <div class="pdf-datos">
+          <div><small>EDAD</small><b>{{ calcularEdad(selectedPet.Fecha_nacimiento) }}</b></div>
+          <div><small>PESO</small><b>{{ selectedPet.Peso != null && selectedPet.Peso !== '' ? selectedPet.Peso + ' kg' : '—' }}</b></div>
+          <div><small>SEXO</small><b>{{ selectedPet.Sexo || '—' }}</b></div>
+          <div><small>ID CARNET</small><b>{{ idCarnet }}</b></div>
         </div>
-
-        <!-- Body -->
-        <div class="vac-modal-body">
-
-          <!-- Nombre vacuna -->
-          <div class="vac-field">
-            <label class="vac-label">Nombre de la vacuna <span class="vac-required">*</span></label>
-            <div class="vac-input-wrap">
-              <input
-                class="vac-input"
-                list="vacunas-list-modal"
-                v-model="vacForm.Nombre_vacuna"
-                placeholder="Ej: Antirrábica, Parvovirus..."
-                autocomplete="off"
-              />
-              <datalist id="vacunas-list-modal">
-                <option value="Antirrábica" />
-                <option value="Triple Felina" />
-                <option value="Parvovirus" />
-                <option value="Moquillo" />
-                <option value="Leptospirosis" />
-                <option value="Bordetella" />
-                <option value="Rabia" />
-                <option value="Leucemia Felina" />
-                <option value="Panleucopenia" />
-                <option value="Calicivirus" />
-                <option value="Rinotraqueitis" />
-                <option value="Hepatitis Infecciosa" />
-                <option value="Parainfluenza" />
-                <option value="Coronavirus" />
-              </datalist>
-            </div>
-          </div>
-
-          <!-- Fechas -->
-          <div class="vac-row-2">
-            <div class="vac-field">
-              <label class="vac-label">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                Fecha de aplicación
-              </label>
-              <input class="vac-input" type="date" v-model="vacForm.Fecha_aplicacion" />
-            </div>
-            <div class="vac-field">
-              <label class="vac-label">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Próxima dosis
-              </label>
-              <input class="vac-input" type="date" v-model="vacForm.Proxima_dosis" />
-            </div>
-          </div>
-
-          <!-- Lote y Estado -->
-          <div class="vac-row-2">
-            <div class="vac-field">
-              <label class="vac-label">Lote / Serie</label>
-              <input class="vac-input" v-model="vacForm.Lote" placeholder="Ej: A-1234" />
-            </div>
-            <div class="vac-field">
-              <label class="vac-label">Estado</label>
-              <select class="vac-input" v-model="vacForm.Estado">
-                <option value="Aplicada">✅ Aplicada</option>
-                <option value="Proxima">🔔 Próxima</option>
-                <option value="Atrasada">⚠️ Atrasada</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Observaciones -->
-          <div class="vac-field">
-            <label class="vac-label">Observaciones / Reacciones</label>
-            <textarea
-              class="vac-input vac-textarea"
-              v-model="vacForm.Observaciones"
-              placeholder="Ej: Sin reacciones adversas. Aplicada en clínica veterinaria..."
-            ></textarea>
-          </div>
-
-        </div>
-
-        <!-- Footer -->
-        <div class="vac-modal-footer">
-          <button class="vac-btn-cancel" @click="cerrarModal">Cancelar</button>
-          <button
-            class="vac-btn-save"
-            @click="guardarVacuna"
-            :disabled="!vacForm.Nombre_vacuna.trim()"
-            :class="{ 'vac-btn-disabled': !vacForm.Nombre_vacuna.trim() }"
-          >
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-            Guardar Vacuna
-          </button>
-        </div>
-
       </div>
     </div>
-  </Teleport>
+
+    <div class="pdf-owner">
+      <small>PROPIETARIO</small>
+      <div class="pdf-owner-name">{{ propietario.nombre }}</div>
+      <div class="pdf-owner-contact"><span>{{ propietario.telefono }}</span><span>{{ propietario.correo }}</span></div>
+    </div>
+
+    <div class="pdf-section">VACUNAS REGISTRADAS</div>
+    <div v-if="!vacunas.length" class="pdf-empty">No hay vacunas registradas para esta mascota.</div>
+    <table v-else class="pdf-table">
+      <thead><tr><th>VACUNA</th><th>LOTE</th><th>APLICADA</th><th>PRÓXIMA</th><th>ESTADO</th></tr></thead>
+      <tbody>
+        <tr v-for="v in vacunas" :key="'pdf' + v.ID_carnetVacunas">
+          <td>{{ v.Nombre_vacuna || 'Sin nombre' }}</td>
+          <td>{{ v.Lote || '—' }}</td>
+          <td>{{ obtenerFechaTexto(v.Fecha_aplicacion) }}</td>
+          <td>{{ obtenerFechaTexto(v.Proxima_dosis) }}</td>
+          <td>{{ estadoTexto(v.Estado) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="pdf-footer">
+      <span>© {{ new Date().getFullYear() }} PetCard</span>
+      <span>Documento oficial generado por PetCard</span>
+    </div>
+  </div>
 
   <footer class="footer" style="margin-top:2rem;">
     <div class="footer-grid">
@@ -576,227 +489,92 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.vacuna-header { background:var(--green); color:#fff; padding:.85rem 1rem; border-radius:var(--radius-sm); display:flex; justify-content:space-between; align-items:center; }
-.vet-info { text-align:right; font-size:.78rem; opacity:.9; }
-.vet-info strong { display:block; font-size:.85rem; }
-.vacuna-nombre { font-weight:700; }
-.obs-medicas { background:#f9fafb; border-radius:var(--radius-sm); padding:1rem; margin-top:1rem; font-size:.83rem; }
+/* ===== Carnet (diseño de la app Android adaptado a web) ===== */
+.carnet-web .carnet-col { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; }
+.carnet-web .carnet-col > .card { margin-bottom: 0 !important; }
+.carnet-error { background:#fee2e2; color:#b91c1c; border-radius:12px; padding:.75rem 1rem; font-size:.85rem; }
+
+.carnet-header { background:#10b981; border-radius:14px; padding:.9rem 1.1rem; display:flex; align-items:center; gap:.85rem; color:#fff; }
+.carnet-header-icon { width:44px; height:44px; border-radius:12px; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.carnet-header-title { font-family:'Nunito',sans-serif; font-weight:800; font-size:1.05rem; }
+.carnet-header-sub { font-size:.85rem; opacity:.92; margin-top:.1rem; }
+
+.carnet-box { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1rem; }
+.carnet-box-title { font-family:'Nunito',sans-serif; font-weight:800; font-size:.95rem; margin-bottom:.75rem; display:flex; align-items:center; gap:.4rem; }
+.carnet-vacio { text-align:center; color:var(--muted); font-size:.85rem; padding:.9rem 0; }
+
+.carnet-table { width:100%; border-collapse:collapse; }
+.carnet-table thead th { background:#1d4ed8; color:#fff; font-size:.78rem; font-weight:700; text-align:left; padding:.6rem .75rem; }
+.carnet-table tbody td { padding:.6rem .75rem; font-size:.88rem; border-bottom:1px solid #f1f5f9; color:#111827; }
+.carnet-table tbody tr:last-child td { border-bottom:none; }
+.status-icon { font-weight:800; font-size:1rem; }
+.vacuna-nombre { font-weight:700; color:#3b82f6; }
+
+.obs-medicas { background:#f9fafb; border-radius:12px; padding:1rem; font-size:.85rem; }
 .obs-medicas h4 { font-family:'Nunito',sans-serif; font-weight:800; margin-bottom:.5rem; font-size:.9rem; }
 .obs-medicas ul { list-style:disc; padding-left:1.25rem; display:flex; flex-direction:column; gap:.25rem; color:var(--text-secondary); }
-.pct-display { text-align:center; margin-bottom:.5rem; }
-.pct-number { font-family:'Nunito',sans-serif; font-weight:900; font-size:2.5rem; color:var(--text); }
-.pct-label { font-size:.82rem; color:var(--muted); margin-bottom:.5rem; }
-.vac-stats { margin-top:.5rem; }
-.vac-stat-row { display:flex; justify-content:space-between; font-size:.875rem; padding:.35rem 0; border-bottom:1px solid var(--border); }
-.vac-stat-row:last-child { border-bottom:none; }
-.vac-stat-row span { color:var(--muted); }
-.proxima-vac { padding:.65rem 0; border-bottom:1px solid var(--border); }
+.obs-vacio { font-size:.85rem; color:var(--muted); }
+
+.estado-row { display:flex; align-items:center; gap:1.25rem; }
+.pct-number { font-family:'Nunito',sans-serif; font-weight:900; font-size:1.9rem; color:#0f172a; line-height:1.1; }
+.pct-label { font-size:.78rem; color:var(--muted); }
+.mini-stats { display:grid; grid-template-columns:repeat(3,1fr); text-align:center; margin-top:1rem; }
+.mini-stats strong { display:block; font-size:1.15rem; font-weight:800; }
+.mini-stats span { font-size:.75rem; color:var(--muted); }
+
+.proxima-vac { padding:.6rem 0; border-bottom:1px solid var(--border); }
 .proxima-vac:last-of-type { border-bottom:none; }
 .proxima-vac-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:.2rem; }
-.vacuna-nombre2 { font-weight:700; font-size:.875rem; }
-.info-row { display:flex; justify-content:space-between; font-size:.875rem; padding:.4rem 0; border-bottom:1px solid var(--border); }
+.vacuna-nombre2 { font-weight:700; font-size:.9rem; }
+.info-row { display:flex; justify-content:space-between; font-size:.88rem; padding:.45rem 0; border-bottom:1px solid var(--border); }
 .info-row:last-of-type { border-bottom:none; }
 .info-row span { color:var(--muted); }
 
-/* Modal */
-.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
-.modal-box { background:#fff; border-radius:12px; width:100%; max-width:380px; padding:1.5rem; box-shadow:0 8px 32px rgba(0,0,0,.18); }
-.modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; }
-.modal-close { background:none; border:none; cursor:pointer; font-size:1rem; color:var(--muted); line-height:1; }
-.modal-body { display:flex; flex-direction:column; }
-.modal-label { font-size:.82rem; font-weight:600; color:var(--text-secondary,#555); margin-bottom:.3rem; }
-.modal-footer { display:flex; justify-content:flex-end; gap:.5rem; margin-top:1.25rem; }
+.carnet-actions { display:flex; gap:.75rem; }
+.carnet-actions .btn { flex:1; display:flex; align-items:center; justify-content:center; gap:.45rem; padding:.7rem 1rem; }
+.carnet-actions .btn:disabled { opacity:.5; cursor:not-allowed; }
 
 /* Usuario logueado */
-.usuario-nombre {
-  color: #0f172a;
-  font-weight: 600;
-  margin-right: 1rem;
-  font-size: 0.95rem;
+.usuario-nombre { color:#0f172a; font-weight:600; margin-right:1rem; font-size:.95rem; }
+.btn-logout { background-color:#dc3545; border:1px solid #dc3545; }
+.btn-logout:hover { background-color:#c82333; border-color:#c82333; }
+
+/* ===== Hoja del PDF (oculta en pantalla) ===== */
+.pdf-sheet { display:none; }
+</style>
+
+<!-- Impresión / PDF: oculta la página y muestra solo la hoja del carnet -->
+<style>
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body * { visibility: hidden !important; }
+  .navbar, .footer, .page-wrapper { display: none !important; }
+  .pdf-sheet, .pdf-sheet * { visibility: visible !important; }
+  .pdf-sheet { display:flex !important; flex-direction:column; gap:16px; position:absolute; left:0; top:0; width:100%; min-height:270mm; font-family:'Nunito','Segoe UI',Arial,sans-serif; color:#1a1a2e; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .pdf-head { display:flex; align-items:center; gap:14px; padding:18px 20px; border-radius:12px; background:linear-gradient(135deg,#2563eb,#1e3a5f); color:#fff; }
+  .pdf-logo { width:50px; height:50px; border-radius:12px; background:#fff; color:#2563eb; font-weight:800; font-size:18px; display:flex; align-items:center; justify-content:center; }
+  .pdf-brand { font-size:22px; font-weight:800; letter-spacing:1.5px; }
+  .pdf-brand-sub { font-size:11px; margin-top:2px; }
+  .pdf-valid { margin-left:auto; background:#16a34a; color:#fff; font-size:9px; font-weight:800; letter-spacing:.5px; padding:5px 12px; border-radius:20px; }
+  .pdf-pet { display:flex; gap:16px; padding:16px; border-radius:10px; background:#f1f5f9; }
+  .pdf-photo { width:90px; height:90px; border-radius:10px; background:#fff; overflow:hidden; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px; color:#64748b; flex-shrink:0; }
+  .pdf-photo img { width:100%; height:100%; object-fit:cover; }
+  .pdf-pet-name { font-size:22px; font-weight:800; color:#1e3a5f; }
+  .pdf-pet-sub { font-size:12px; color:#64748b; margin-top:3px; }
+  .pdf-datos { display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:12px; }
+  .pdf-datos small { display:block; font-size:8px; font-weight:800; color:#64748b; }
+  .pdf-datos b { font-size:11px; color:#1e3a5f; }
+  .pdf-owner { border:2px solid #f1f5f9; border-radius:10px; padding:13px 14px; }
+  .pdf-owner small { font-size:10px; font-weight:800; color:#64748b; letter-spacing:.5px; }
+  .pdf-owner-name { font-size:14px; font-weight:800; color:#1e3a5f; margin-top:6px; }
+  .pdf-owner-contact { display:flex; gap:16px; font-size:11px; color:#64748b; margin-top:4px; }
+  .pdf-section { font-size:13px; font-weight:800; color:#1e3a5f; margin-bottom:-6px; }
+  .pdf-empty { background:#f1f5f9; border-radius:8px; padding:13px; font-size:11px; color:#64748b; }
+  .pdf-table { width:100%; border-collapse:collapse; border:1px solid #f1f5f9; }
+  .pdf-table th { background:#1e3a5f; color:#fff; font-size:9px; font-weight:800; letter-spacing:.5px; text-align:left; padding:8px; }
+  .pdf-table td { font-size:10px; padding:8px; border:1px solid #f1f5f9; }
+  .pdf-table tbody tr:nth-child(even) td { background:#f1f5f9; }
+  .pdf-table tr { break-inside: avoid; }
+  .pdf-footer { margin-top:auto; display:flex; justify-content:space-between; background:#1e3a5f; color:#fff; font-size:9px; padding:10px; border-radius:8px; }
 }
-
-.btn-logout {
-  background-color: #dc3545;
-  border: 1px solid #dc3545;
-}
-
-.btn-logout:hover {
-  background-color: #c82333;
-  border-color: #c82333;
-}
-
-/* ══ MODAL VACUNA ══ */
-.vac-modal {
-  background: #fff;
-  border-radius: 18px;
-  width: 92%;
-  max-width: 480px;
-  box-shadow: 0 24px 64px rgba(0,0,0,.22);
-  overflow: hidden;
-  animation: vacSlide .28s ease;
-}
-
-@keyframes vacSlide {
-  from { transform: translateY(24px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
-}
-
-.vac-modal-header {
-  display: flex;
-  align-items: center;
-  gap: .85rem;
-  padding: 1.25rem 1.4rem 1rem;
-  border-bottom: 1px solid #e8edf3;
-  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
-}
-
-.vac-modal-icon {
-  font-size: 2rem;
-  width: 48px;
-  height: 48px;
-  background: #fff;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,.08);
-  flex-shrink: 0;
-}
-
-.vac-modal-title {
-  font-family: 'Nunito', sans-serif;
-  font-weight: 800;
-  font-size: 1.05rem;
-  color: #14532d;
-}
-
-.vac-modal-sub {
-  font-size: .78rem;
-  color: #166534;
-  margin-top: .1rem;
-}
-
-.vac-modal-close {
-  margin-left: auto;
-  background: rgba(0,0,0,.07);
-  border: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  font-size: .85rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: background .15s;
-}
-
-.vac-modal-close:hover { background: rgba(0,0,0,.14); }
-
-.vac-modal-body {
-  padding: 1.25rem 1.4rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.vac-field {
-  display: flex;
-  flex-direction: column;
-  gap: .35rem;
-}
-
-.vac-row-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: .85rem;
-}
-
-.vac-label {
-  font-size: .78rem;
-  font-weight: 700;
-  color: #374151;
-  display: flex;
-  align-items: center;
-  gap: .3rem;
-  letter-spacing: .3px;
-  text-transform: uppercase;
-}
-
-.vac-required { color: #dc2626; }
-
-.vac-input {
-  width: 100%;
-  padding: .6rem .85rem;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 9px;
-  font-size: .9rem;
-  font-family: inherit;
-  color: #1e293b;
-  background: #f8fafc;
-  transition: border-color .2s, box-shadow .2s;
-  box-sizing: border-box;
-  outline: none;
-}
-
-.vac-input:focus {
-  border-color: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34,197,94,.12);
-  background: #fff;
-}
-
-.vac-textarea {
-  min-height: 80px;
-  resize: vertical;
-  line-height: 1.55;
-}
-
-.vac-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: .75rem;
-  padding: 1rem 1.4rem 1.3rem;
-  border-top: 1px solid #e8edf3;
-}
-
-.vac-btn-cancel {
-  background: #f1f5f9;
-  color: #64748b;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 9px;
-  padding: .6rem 1.2rem;
-  font-size: .88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .15s;
-}
-
-.vac-btn-cancel:hover { background: #e2e8f0; }
-
-.vac-btn-save {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  background: linear-gradient(135deg, #16a34a, #15803d);
-  color: #fff;
-  border: none;
-  border-radius: 9px;
-  padding: .6rem 1.35rem;
-  font-size: .88rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity .2s, transform .15s;
-  box-shadow: 0 3px 10px rgba(22,163,74,.25);
-}
-
-.vac-btn-save:hover { opacity: .92; transform: translateY(-1px); }
-
-.vac-btn-disabled {
-  opacity: .45 !important;
-  cursor: not-allowed !important;
-  transform: none !important;
-}
-
 </style>
