@@ -1,6 +1,7 @@
 // CONTROLADOR DE USUARIOS - CRUD de usuarios (solo admin)
 const db = require('../config/database')
 const bcrypt = require('bcrypt')
+const { validarRegistroCliente } = require('../utils/validators')
 
 const SALT_ROUNDS = 10
 
@@ -14,18 +15,27 @@ async function getUsers(req, res) {
 
 // CREAR USUARIO - Registro general (puede ser usado por cualquiera)
 async function createUser(req, res) {
-  const { Nombre, Correo, Telefono, Contrasena, Rol } = req.body
+  const { Nombre, Apellido, Correo, Telefono, Contrasena, Rol } = req.body
   if (!Nombre || !Correo || !Contrasena || !Rol) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' })
   }
+
+  // Registro de clientes: validaciones estrictas (el frontend las repite, pero aquí no se pueden saltar)
+  if (Rol === 'cliente') {
+    const errorValidacion = validarRegistroCliente(req.body)
+    if (errorValidacion) return res.status(400).json({ error: errorValidacion })
+  }
+
+  const apellido = String(Apellido || '').trim()
+  const nombreCompleto = (String(Nombre).trim() + ' ' + apellido).trim()
   try {
     const hashedPassword = await bcrypt.hash(Contrasena, SALT_ROUNDS)
     db.query(
-      'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
-      [Nombre, Correo, Telefono, hashedPassword, Rol],
+      'INSERT INTO usuario (Nombre, Apellido, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?,?)',
+      [nombreCompleto, apellido || null, Correo, Telefono, hashedPassword, Rol],
       (err, result) => {
         if (err) return res.status(500).json({ error: err.message })
-        res.json({ ID_usuario: result.insertId, Nombre, Correo, Telefono, Rol })
+        res.json({ ID_usuario: result.insertId, Nombre: nombreCompleto, Apellido: apellido, Correo, Telefono, Rol })
       }
     )
   } catch (error) {

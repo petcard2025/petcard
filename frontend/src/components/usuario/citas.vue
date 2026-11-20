@@ -1,6 +1,6 @@
 ﻿<script setup>
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { clientesAPI, mascotasAPI, serviciosAPI, veterinariosAPI, citasAPI, API_URL } from '../../api.js'
 import {
@@ -9,6 +9,7 @@ import {
 } from '../../utils/validators'
 
 const router = useRouter()
+const route = useRoute()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 const clienteActual = ref(null)
@@ -182,6 +183,21 @@ async function cargarMascotas() {
   }
 }
 
+// Si el usuario llegó desde la vista de Servicios (/citas?servicio=Desparasitación),
+// deja ese servicio ya seleccionado en el formulario.
+// Compara sin tildes ni mayúsculas y por la raíz de la palabra, para que
+// "Vacunación" encuentre "Vacuna Antirrábica" y "Cirugías" encuentre "Cirugía Esterilización".
+const normalizar = (t) => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+
+function preseleccionarServicio() {
+  const pedido = normalizar(route.query.servicio)
+  if (!pedido) return
+  const raiz = pedido.slice(0, 6)
+  const encontrado = servicios.value.find(s => normalizar(s.Nombre) === pedido)
+    || servicios.value.find(s => normalizar(s.Nombre).includes(raiz))
+  if (encontrado) form.servicio = encontrado.ID_servicio
+}
+
 async function cargarServicios() {
   try {
     servicios.value = await serviciosAPI.obtener()
@@ -329,6 +345,7 @@ onMounted(async () => {
   await cargarVeterinarios()
   await cargarCitas()
   resetForm()
+  preseleccionarServicio()
 })
 </script>
 

@@ -65,7 +65,7 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
             </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" data-servicio="Consulta General" id="btn-agendar-0" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Consulta General' } }" class="btn btn-primary btn-full" data-servicio="Consulta General" id="btn-agendar-0" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -82,7 +82,7 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
             </div>
-            <router-link to="/citas" class="btn btn-success btn-full" data-servicio="Vacunación" id="btn-agendar-1" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Vacunación' } }" class="btn btn-success btn-full" data-servicio="Vacunación" id="btn-agendar-1" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -99,7 +99,7 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
             </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#7c3aed;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Cirugías" id="btn-agendar-2">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Cirugías' } }" class="btn btn-primary btn-full" style="background:#7c3aed;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Cirugías" id="btn-agendar-2">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -117,7 +117,7 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
             </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#92400e;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Desparasitación" id="btn-agendar-6">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Desparasitación' } }" class="btn btn-primary btn-full" style="background:#92400e;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Desparasitación" id="btn-agendar-6">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -134,7 +134,7 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
             </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#db2777;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Odontología" id="btn-agendar-7">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Odontología' } }" class="btn btn-primary btn-full" style="background:#db2777;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Odontología" id="btn-agendar-7">Agendar Cita</router-link>
           </div>
         </div>
 

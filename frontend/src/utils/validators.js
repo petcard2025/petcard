@@ -91,3 +91,67 @@ export function construirHoras(fecha, ocupadas = []) {
     disponible: !ocupadas24.includes(horaA24(hora)) && !citaYaPaso(fecha, hora, ahora)
   }))
 }
+
+// ============ REGISTRO DE USUARIO ============
+// Mismas reglas que backend/src/utils/validators.js (el backend vuelve a validar)
+
+// Dominios sugeridos al escribir el @ del correo
+export const DOMINIOS_CORREO = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com', 'live.com']
+
+// Deja solo letras (con tildes y ñ) y espacios. Sin números ni caracteres especiales.
+export const soloLetras = (texto) =>
+  String(texto ?? '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g, '').replace(/ {2,}/g, ' ').replace(/^ /, '')
+
+// Deja solo números, máximo 10
+export const soloTelefono = (texto) => String(texto ?? '').replace(/\D/g, '').slice(0, 10)
+
+export function validarNombrePersona(valor, etiqueta) {
+  const v = String(valor ?? '').trim()
+  if (!v) return `El ${etiqueta} es obligatorio.`
+  if (v.length < 2) return `El ${etiqueta} debe tener al menos 2 letras.`
+  if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(?: [A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)*$/.test(v)) {
+    return `El ${etiqueta} solo puede tener letras (sin números ni caracteres especiales).`
+  }
+  return ''
+}
+
+export function validarCorreo(correo) {
+  const v = String(correo ?? '').trim()
+  if (!v) return 'El correo es obligatorio.'
+  if (!v.includes('@')) return 'El correo debe contener el símbolo @.'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return 'Ingresa un correo válido (ej. nombre@gmail.com).'
+  return ''
+}
+
+export function validarTelefono(telefono) {
+  const v = String(telefono ?? '')
+  if (!v) return 'El teléfono es obligatorio.'
+  if (!/^\d{10}$/.test(v)) return `El teléfono debe tener exactamente 10 números (llevas ${v.length}).`
+  return ''
+}
+
+// Reglas de la contraseña (se usan también para el checklist en pantalla)
+export const reglasContrasena = (pass) => {
+  const p = String(pass ?? '')
+  return [
+    { texto: 'Mínimo 8 caracteres', ok: p.length >= 8 },
+    { texto: 'Letras', ok: /[a-záéíóúüñ]/i.test(p) },
+    { texto: 'Al menos una mayúscula', ok: /[A-ZÁÉÍÓÚÜÑ]/.test(p) },
+    { texto: 'Al menos un número', ok: /\d/.test(p) },
+    { texto: 'Al menos un carácter especial (@ # $ % ! *)', ok: /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9\s]/.test(p) }
+  ]
+}
+
+export function validarContrasena(pass) {
+  if (!pass) return 'La contraseña es obligatoria.'
+  const falla = reglasContrasena(pass).find(r => !r.ok)
+  return falla ? `La contraseña no cumple: ${falla.texto.toLowerCase()}.` : ''
+}
+
+export function validarDireccion(direccion) {
+  const v = String(direccion ?? '').trim()
+  if (!v) return 'La dirección es obligatoria.'
+  if (v.length < 5) return 'La dirección es muy corta (mínimo 5 caracteres).'
+  if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 #\-.,°/]+$/.test(v)) return 'La dirección contiene caracteres no permitidos.'
+  return ''
+}

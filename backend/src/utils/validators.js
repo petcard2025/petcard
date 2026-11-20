@@ -22,6 +22,58 @@ function validarMascota({ Nombre, Sexo, Peso }) {
   return null
 }
 
+// ============ REGISTRO DE USUARIO (cliente) ============
+const SOLO_LETRAS = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(?: [A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)*$/
+const DIRECCION_OK = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 #\-.,°/]+$/
+
+function validarNombrePersona(valor, etiqueta) {
+  const v = String(valor || '').trim()
+  if (!v) return `El ${etiqueta} es obligatorio.`
+  if (v.length < 2 || v.length > 50) return `El ${etiqueta} debe tener entre 2 y 50 letras.`
+  if (!SOLO_LETRAS.test(v)) return `El ${etiqueta} solo puede tener letras (sin números ni caracteres especiales).`
+  return null
+}
+
+function validarCorreo(correo) {
+  const v = String(correo || '').trim()
+  if (!v.includes('@')) return 'El correo debe contener el símbolo @.'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return 'Ingresa un correo válido (ej. nombre@gmail.com).'
+  return null
+}
+
+function validarTelefono(telefono) {
+  if (!/^\d{10}$/.test(String(telefono || '').trim())) return 'El teléfono debe tener exactamente 10 números.'
+  return null
+}
+
+function validarContrasena(pass) {
+  const p = String(pass || '')
+  if (p.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
+  if (!/[a-záéíóúüñ]/i.test(p)) return 'La contraseña debe incluir letras.'
+  if (!/[A-ZÁÉÍÓÚÜÑ]/.test(p)) return 'La contraseña debe incluir al menos una mayúscula.'
+  if (!/\d/.test(p)) return 'La contraseña debe incluir al menos un número.'
+  if (!/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9\s]/.test(p)) return 'La contraseña debe incluir al menos un carácter especial (ej. @ # $ % ! *).'
+  return null
+}
+
+function validarDireccion(direccion) {
+  const v = String(direccion || '').trim()
+  if (!v) return 'La dirección es obligatoria.'
+  if (v.length < 5 || v.length > 255) return 'La dirección debe tener entre 5 y 255 caracteres.'
+  if (!DIRECCION_OK.test(v)) return 'La dirección contiene caracteres no permitidos.'
+  return null
+}
+
+// Devuelve el primer error del registro de un cliente, o null si todo está bien.
+function validarRegistroCliente({ Nombre, Apellido, Correo, Telefono, Contrasena, Direccion }) {
+  return validarNombrePersona(Nombre, 'nombre')
+    || validarNombrePersona(Apellido, 'apellido')
+    || validarCorreo(Correo)
+    || validarTelefono(Telefono)
+    || validarContrasena(Contrasena)
+    || validarDireccion(Direccion)
+}
+
 // ============ CITAS ============
 // Ultimo dia en que se permite agendar citas (inclusive)
 const FECHA_MAX_CITA = '2026-12-31'
@@ -115,6 +167,12 @@ function validarFechaHoraCita(fecha, hora, ahora = ahoraColombia()) {
 
 module.exports = {
   normalizarTelefono,
+  validarNombrePersona,
+  validarCorreo,
+  validarTelefono,
+  validarContrasena,
+  validarDireccion,
+  validarRegistroCliente,
   validarMascota,
   FECHA_MAX_CITA,
   HORAS_CITA,

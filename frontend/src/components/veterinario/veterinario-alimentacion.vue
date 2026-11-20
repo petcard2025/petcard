@@ -2,6 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../../composables/useAuth'
 import { API_URL } from '../../api.js'
+import PlanSugerido from '../shared/PlanSugerido.vue'
+import { generarPlanes, edadEnMeses, textoEdad, planAPayload, ESPECIES_PLAN, ICONO_ESPECIE } from '../../utils/planesAlimentacion'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
 const API = API_URL
@@ -47,9 +49,15 @@ const planVacio = () => ({
 
 const nuevoPlan = ref(planVacio())
 
+// ── Planes por especie ────────────────────────────────────────
+const catalogo = ref([])            // mascotas registradas (con peso y fecha de nacimiento)
+const especieActiva = ref('')
+const mascotaAbierta = ref(null)    // ID_mascota con los planes desplegados
+const errorCatalogo = ref('')
+
 // ── Carga de datos ────────────────────────────────────────────
 onMounted(async () => {
-  const tareas = [cargarPlanes(), cargarServicios()]
+  const tareas = [cargarPlanes(), cargarServicios(), cargarCatalogo()]
   if (esAdmin.value) tareas.push(cargarMascotas())
   else tareas.push(cargarOpcionesAtendidas())
   await Promise.all(tareas)
@@ -77,6 +85,14 @@ async function cargarPlanes() {
     error.value = 'No se pudo conectar con el servidor.'
   } finally {
     cargando.value = false
+  }
+}
+
+async function cargarCatalogo() {
+  try {
+    catalogo.value = await fetchJson('/mascotas/catalogo')
+  } catch (e) {
+    errorCatalogo.value = 'No se pudo cargar la lista de mascotas por especie.'
   }
 }
 
@@ -120,6 +136,59 @@ async function cargarServicios() {
     servicios.value = await fetchJson('/servicios')
   } catch (e) {}
 }
+
+// ── Planes por especie: lógica ────────────────────────────────
+const conteoEspecie = computed(() => {
+  const c = {}
+  for (const e of ESPECIES_PLAN) c[e] = 0
+  for (const m of catalogo.value) if (c[m.Especie] !== undefined) c[m.Especie]++
+  return c
+})
+
+// Mascotas de especies que no manejan planes (Pez, Reptil, Otro...)
+const otrasEspecies = computed(() =>
+  catalogo.value.filter(m => !ESPECIES_PLAN.includes(m.Especie))
+)
+
+const mascotasEspecie = computed(() =>
+  catalogo.value.filter(m => m.Especie === especieActiva.value)
+)
+
+function elegirEspecie(especie) {
+  especieActiva.value = especieActiva.value === especie ? '' : especie
+  mascotaAbierta.value = null
+}
+
+function alternarMascota(m) {
+  mascotaAbierta.value = mascotaAbierta.value === m.ID_mascota ? null : m.ID_mascota
+}
+
+const planesDe = (m) => generarPlanes(m)
+const edadDe = (m) => textoEdad(edadEnMeses(m.Fecha_nacimiento))
+
+// Plan activo que ya tiene la mascota (para avisarlo en la lista)
+function planAsignadoDe(m) {
+  return planes.value.find(p => p.ID_mascota === m.ID_mascota && (p.Revision_nutricional || '') === 'Activo') || null
+}
+
+// El veterinario solo puede asignar planes a mascotas que ha atendido (regla del backend).
+// El administrador puede a cualquiera.
+const opcionAtendida = (m) => opcionesAtendidas.value.find(o => o.ID_mascota === m.ID_mascota) || null
+const puedeAsignar = (m) => esAdmin.value || !!opcionAtendida(m)
+
+function usarPlanSugerido(m, p) {
+  const op = opcionAtendida(m)
+  nuevoPlan.value = { ...planVacio(), ...planAPayload(p, m.ID_mascota, op?.ID_servicio) }
+  mensajeExito.value = ''
+  mostrarModalNuevo.value = true
+}
+
+// Valor que muestra el selector de "mascota atendida" cuando el plan viene prellenado
+const claveOpcionActual = computed(() =>
+  nuevoPlan.value.ID_mascota && nuevoPlan.value.ID_servicio
+    ? `${nuevoPlan.value.ID_mascota}-${nuevoPlan.value.ID_servicio}`
+    : ''
+)
 
 // ── Filtros ───────────────────────────────────────────────────
 const planesFiltrados = computed(() => {
@@ -276,6 +345,65 @@ async function eliminarPlan() {
       <button class="btn btn-success btn-sm" @click="abrirNuevo">+ Nuevo Plan</button>
     </div>
 
+
+    <!-- ── Planes por especie ───────────────────────────────── -->
+    <section class="ve-panel">
+      <div class="ve-panel-head">
+        <div>
+          <h2 class="ve-panel-title">Planes sugeridos por especie</h2>
+          <p class="ve-panel-sub">Elige una especie para ver las mascotas registradas con su peso y edad, y los planes de alimentación sugeridos para cada una.</p>
+        </div>
+      </div>
+
+      <div v-if="errorCatalogo" class="vet-alert">⚠️ {{ errorCatalogo }}</div>
+
+      <div class="ve-chips">
+        <button v-for="e in ESPECIES_PLAN" :key="e" type="button" class="ve-chip"
+                :class="{ activo: especieActiva === e }" @click="elegirEspecie(e)">
+          <span class="ve-chip-ico">{{ ICONO_ESPECIE[e] }}</span>
+          <span>{{ e }}s</span>
+          <span class="ve-chip-n">{{ conteoEspecie[e] }}</span>
+        </button>
+      </div>
+
+      <p v-if="otrasEspecies.length" class="ve-aviso">
+        {{ otrasEspecies.length }} {{ otrasEspecies.length === 1 ? 'mascota registrada es' : 'mascotas registradas son' }} de otras especies
+        ({{ [...new Set(otrasEspecies.map(m => m.Especie || 'sin especie'))].join(', ') }}) y no tienen planes de alimentación sugeridos.
+      </p>
+
+      <div v-if="especieActiva">
+        <div v-if="mascotasEspecie.length === 0" class="vet-empty">No hay {{ especieActiva.toLowerCase() }}s registrados todavía.</div>
+
+        <div v-for="m in mascotasEspecie" :key="m.ID_mascota" class="ve-mascota">
+          <div class="ve-mascota-head" @click="alternarMascota(m)">
+            <span class="vet-avatar-sm">{{ iniciales(m.Nombre) }}</span>
+            <div class="ve-mascota-info">
+              <div class="ve-mascota-nombre">{{ m.Nombre }}
+                <span v-if="planAsignadoDe(m)" class="badge badge-green" style="margin-left:.4rem;">Plan activo</span>
+              </div>
+              <div class="ve-mascota-meta">{{ m.Raza || m.Especie }} · {{ m.Sexo || '—' }} · Dueño: {{ m.Nombre_dueno || '—' }}</div>
+            </div>
+            <div class="ve-dato"><span>Peso</span><strong>{{ m.Peso ? m.Peso + ' kg' : '—' }}</strong></div>
+            <div class="ve-dato"><span>Edad</span><strong>{{ edadDe(m) }}</strong></div>
+            <button type="button" class="btn btn-secondary btn-sm">{{ mascotaAbierta === m.ID_mascota ? 'Ocultar planes' : 'Ver planes' }}</button>
+          </div>
+
+          <div v-if="mascotaAbierta === m.ID_mascota" class="ve-planes">
+            <div v-if="planesDe(m).aviso && !planesDe(m).planes.length" class="vet-empty">{{ planesDe(m).aviso }}</div>
+            <template v-else>
+              <p v-if="planesDe(m).aviso" class="ve-aviso">ℹ️ {{ planesDe(m).aviso }}</p>
+              <PlanSugerido v-for="p in planesDe(m).planes" :key="p.id" :plan="p">
+                <template #acciones>
+                  <span v-if="!puedeAsignar(m)" class="ve-sin-permiso">Solo puedes asignar planes a mascotas que hayas atendido en una cita.</span>
+                  <button type="button" class="btn btn-success btn-sm" :disabled="!puedeAsignar(m)" @click="usarPlanSugerido(m, p)">Usar este plan</button>
+                </template>
+              </PlanSugerido>
+            </template>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div v-if="error" class="vet-alert">⚠️ {{ error }}</div>
 
     <!-- Toolbar -->
@@ -389,7 +517,7 @@ async function eliminarPlan() {
         <template v-else>
           <div class="form-group">
             <label>Mascota / Servicio atendido</label>
-            <select class="form-control" @change="seleccionarOpcionAtendida($event.target.value)">
+            <select class="form-control" :value="claveOpcionActual" @change="seleccionarOpcionAtendida($event.target.value)">
               <option value="">-- Selecciona una mascota que hayas atendido --</option>
               <option v-for="op in opcionesAtendidas" :key="`${op.ID_mascota}-${op.ID_servicio}`" :value="`${op.ID_mascota}-${op.ID_servicio}`">
                 {{ op.Nombre_mascota }} — {{ op.Nombre_servicio }}
@@ -702,4 +830,28 @@ async function eliminarPlan() {
   .vet-table-card { overflow-x: auto; }
   table { min-width: 760px; }
 }
+
+/* ── Planes por especie ── */
+.ve-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; }
+.ve-panel-title { font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 1.15rem; margin: 0 0 .25rem; }
+.ve-panel-sub { font-size: .85rem; color: #6b7280; margin: 0 0 1rem; }
+.ve-chips { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
+.ve-chip { display: inline-flex; align-items: center; gap: .45rem; padding: .5rem .9rem; border: 2px solid #e5e7eb; border-radius: 999px; background: #fff; font-weight: 700; font-size: .9rem; cursor: pointer; font-family: inherit; color: #374151; transition: all .15s; }
+.ve-chip:hover { border-color: #a5b4fc; }
+.ve-chip.activo { border-color: #667eea; background: #eef2ff; color: #4338ca; }
+.ve-chip-ico { font-size: 1.15rem; }
+.ve-chip-n { background: #e5e7eb; color: #374151; border-radius: 999px; font-size: .75rem; padding: .05rem .5rem; }
+.ve-chip.activo .ve-chip-n { background: #667eea; color: #fff; }
+.ve-mascota { border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: .6rem; overflow: hidden; }
+.ve-mascota-head { display: flex; align-items: center; gap: 1rem; padding: .75rem 1rem; cursor: pointer; background: #fafafa; flex-wrap: wrap; }
+.ve-mascota-head:hover { background: #f3f4f6; }
+.ve-mascota-info { flex: 1; min-width: 180px; }
+.ve-mascota-nombre { font-weight: 800; color: #111827; }
+.ve-mascota-meta { font-size: .78rem; color: #6b7280; }
+.ve-dato { text-align: center; min-width: 70px; }
+.ve-dato span { display: block; font-size: .7rem; color: #6b7280; }
+.ve-dato strong { font-size: .9rem; }
+.ve-planes { padding: 1rem; border-top: 1px solid #e5e7eb; }
+.ve-aviso { font-size: .8rem; color: #92400e; margin: 0 0 .75rem; }
+.ve-sin-permiso { font-size: .75rem; color: #b45309; align-self: center; margin-right: auto; }
 </style>

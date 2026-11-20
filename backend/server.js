@@ -13,6 +13,7 @@ require('dotenv').config()
 
 require('./mailer')
 const authController = require('./src/controllers/auth.controller')
+const { validarRegistroCliente } = require('./src/utils/validators')
 
 if (!process.env.JWT_SECRET) {
   console.error('FATAL: La variable de entorno JWT_SECRET no esta definida.')
@@ -389,16 +390,26 @@ app.get('/api/usuarios', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.post('/api/usuarios', async (req, res) => {
-  const { Nombre, Correo, Telefono, Contrasena, Rol } = req.body
+  const { Nombre, Apellido, Correo, Telefono, Contrasena, Rol } = req.body
   if (!Nombre || !Correo || !Contrasena || !Rol) return res.status(400).json({ error: 'Faltan campos obligatorios' })
+
+  // Registro de clientes: validaciones estrictas (el frontend las repite, pero aquí no se pueden saltar)
+  const esCliente = Rol === 'cliente'
+  if (esCliente) {
+    const errorValidacion = validarRegistroCliente({ ...req.body, Direccion: req.body.Direccion })
+    if (errorValidacion) return res.status(400).json({ error: errorValidacion })
+  }
+
+  const apellido = String(Apellido || '').trim()
+  const nombreCompleto = (String(Nombre).trim() + ' ' + apellido).trim()
   try {
     const hashedPassword = await bcrypt.hash(Contrasena, SALT_ROUNDS)
     db.query(
-      'INSERT INTO usuario (Nombre, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?)',
-      [Nombre, Correo, Telefono, hashedPassword, Rol],
+      'INSERT INTO usuario (Nombre, Apellido, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?,?)',
+      [nombreCompleto, apellido || null, Correo, Telefono, hashedPassword, Rol],
       (err, result) => {
         if (err) return res.status(500).json({ error: err.message })
-        res.json({ ID_usuario: result.insertId, Nombre, Correo, Telefono, Rol })
+        res.json({ ID_usuario: result.insertId, Nombre: nombreCompleto, Apellido: apellido, Correo, Telefono, Rol })
       }
     )
   } catch (error) {
@@ -599,6 +610,41 @@ app.get('/api/mascotas', verifyToken, verifyAdmin, (req, res) => {
     (err, results) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json(results)
+    }
+  )
+})
+
+// Catálogo de mascotas para armar planes de alimentación: lo pueden ver veterinarios y administradores.
+// Devuelve TODAS las mascotas activas (el frontend agrupa por especie) con peso, fecha de nacimiento
+// y nombre del dueño; sin contacto del dueño.
+// Unifica cómo está escrita la especie ("perro", "Hámster", "Cuy"...) para agruparla bien.
+const ALIAS_ESPECIE = {
+  perro: 'Perro', perros: 'Perro', canino: 'Perro',
+  gato: 'Gato', gatos: 'Gato', felino: 'Gato',
+  conejo: 'Conejo', conejos: 'Conejo',
+  ave: 'Ave', aves: 'Ave', pajaro: 'Ave', loro: 'Ave',
+  hamster: 'Hamster', hamsters: 'Hamster',
+  cobayo: 'Cobayo', cobayos: 'Cobayo', cobaya: 'Cobayo', cuy: 'Cobayo', cuyo: 'Cobayo', 'conejillo de indias': 'Cobayo'
+}
+function normalizarEspecie(valor) {
+  const clave = String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  return ALIAS_ESPECIE[clave] || String(valor || '').trim()
+}
+app.get('/api/mascotas/catalogo', verifyToken, (req, res) => {
+  if (!['veterinario', 'administrador'].includes(req.usuario.Rol)) {
+    return res.status(403).json({ error: 'Acceso denegado. Solo veterinarios y administradores.' })
+  }
+  db.query(
+    `SELECT m.ID_mascota, m.Nombre, m.Especie, m.Raza, m.Sexo, m.Peso, m.Fecha_nacimiento, u.Nombre AS Nombre_dueno
+     FROM mascota m
+     LEFT JOIN cliente c ON m.ID_cliente = c.ID_cliente
+     LEFT JOIN usuario u ON c.ID_usuario = u.ID_usuario
+     WHERE LOWER(TRIM(COALESCE(m.Estado, 'activo'))) <> 'inactivo'
+     ORDER BY m.Nombre`,
+    [],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json(results.map(m => ({ ...m, Especie: normalizarEspecie(m.Especie) })))
     }
   )
 })

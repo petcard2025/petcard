@@ -7,6 +7,9 @@ const petController = require('../controllers/pet.controller')
 // Obtener todas las mascotas (admin)
 router.get('/', verifyToken, verifyAdmin, petController.getPets)
 
+// Catálogo de mascotas por especie para planes de alimentación (veterinario / admin)
+router.get('/catalogo', verifyToken, petController.getPetsCatalog)
+
 // Obtener mascotas de un cliente
 router.get('/cliente/:id_cliente', verifyToken, petController.getPetsByClient)
 
