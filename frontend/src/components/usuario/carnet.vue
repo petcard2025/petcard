@@ -1,4 +1,6 @@
 <script setup>
+import PageHero from '../shared/PageHero.vue'
+import { HERO_IMAGENES } from '../../utils/imagenesModulos'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
@@ -291,6 +293,8 @@ onMounted(async () => {
     </div>
   </nav>
 
+  <PageHero titulo="Carnet de Vacunas" :imagen="HERO_IMAGENES.carnet">Consulta el historial de vacunación y las próximas dosis de tu mascota</PageHero>
+
   <div class="page-wrapper carnet-web">
     <div class="carnet-col">
 
@@ -482,7 +486,7 @@ onMounted(async () => {
       </div>
       <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consultas Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div>
       <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
-      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
+      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
     </div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>

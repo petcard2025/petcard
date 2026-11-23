@@ -1,4 +1,6 @@
 <script setup>
+import PageHero from '../shared/PageHero.vue'
+import { HERO_IMAGENES } from '../../utils/imagenesModulos'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
@@ -218,6 +220,8 @@ onMounted(async () => {
       </template>
     </div>
   </nav>
+
+  <PageHero titulo="Alimentación" :imagen="HERO_IMAGENES.alimentacion">Planes nutricionales pensados para la especie, la edad y el peso de tu mascota</PageHero>
 
   <div class="page-wrapper">
     <div v-if="!isAuthenticated" class="card" style="margin:1.5rem; padding:1.5rem; text-align:center;">
@@ -442,7 +446,7 @@ onMounted(async () => {
       <div class="footer-brand"><span class="nav-logo" style="color:#fff; margin-bottom:.5rem; display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div>
       <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div>
       <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
-      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
+      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
     </div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>

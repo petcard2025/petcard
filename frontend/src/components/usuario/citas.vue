@@ -1,4 +1,6 @@
 ﻿<script setup>
+import PageHero from '../shared/PageHero.vue'
+import { HERO_IMAGENES } from '../../utils/imagenesModulos'
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
@@ -374,7 +376,7 @@ onMounted(async () => {
     </div>
   </nav>
 
-  <div class="hero"><h1>Agendamiento de Citas</h1><p>Programa tu atención veterinaria que tu mascota necesita</p></div>
+  <PageHero titulo="Agendamiento de Citas" :imagen="HERO_IMAGENES.citas">Programa la atención veterinaria que tu mascota necesita</PageHero>
 
   <div class="page-wrapper" style="margin-top:2rem;">
     <div class="two-col">
@@ -533,9 +535,10 @@ onMounted(async () => {
           <ul style="list-style:none; display:flex; flex-direction:column; gap:.5rem;">
             <li style="font-size:.83rem; color:var(--muted);">+1 234 567 8901</li>
             <li style="font-size:.83rem; color:var(--muted);">info@petcard.com</li>
-            <li style="font-size:.83rem; color:var(--muted);">Lun – Vie: 8:00 AM – 6:00 PM</li>
+            <li style="font-size:.83rem; color:var(--muted);">Lunes - Viernes: 8:00 AM - 7:00 PM</li>
+            <li style="font-size:.83rem; color:var(--muted);">Sábados: 9:00 AM - 6:00 PM</li>
+            <li style="font-size:.83rem; color:var(--muted);">Domingos: 10:00 AM - 4:00 PM</li>
           </ul>
-          <p style="color:var(--red); font-weight:700; font-size:.83rem; margin-top:.5rem;">🔴 Emergencias 24/7</p>
         </div>
       </div>
     </div>
@@ -578,7 +581,7 @@ onMounted(async () => {
   </Teleport>
 
   <footer class="footer" style="margin-top:2rem;">
-    <div class="footer-grid"><div class="footer-brand"><span class="nav-logo" style="color:#fff;display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div><div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div><div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div><div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div></div>
+    <div class="footer-grid"><div class="footer-brand"><span class="nav-logo" style="color:#fff;display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div><div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div><div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div><div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div></div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>
 </template>

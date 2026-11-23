@@ -1,4 +1,6 @@
 <script setup>
+import PageHero from './PageHero.vue'
+import { HERO_IMAGENES } from '../../utils/imagenesModulos'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 
@@ -42,10 +44,9 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
   </nav>
 
   <!-- HERO -->
-  <section class="hero">
-    <h1>Nuestros Servicios</h1>
-    <p>Ofrecemos atención veterinaria integral con los más altos estándares de calidad.<br>Cada servicio está diseñado para brindar el mejor cuidado a tu mascota.</p>
-  </section>
+  <PageHero titulo="Nuestros Servicios" :imagen="HERO_IMAGENES.servicios">
+    Ofrecemos atención veterinaria integral con los más altos estándares de calidad.<br>Cada servicio está diseñado para brindar el mejor cuidado a tu mascota.
+  </PageHero>
 
   <!-- GRID SERVICIOS -->
   <section class="section" style="background:#fff;">
@@ -154,7 +155,7 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
       </div>
       <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li></ul></div>
       <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
-      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
+      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
     </div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>

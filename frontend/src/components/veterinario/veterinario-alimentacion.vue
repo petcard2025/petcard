@@ -484,7 +484,7 @@ async function eliminarPlan() {
         </div>
         <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta General</a></li><li><a href="#">Vacunación</a></li></ul></div>
         <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p></div>
-        <div class="footer-col"><h4>Horarios</h4><p>Lun - Vie: 8:00 AM - 7:00 PM</p></div>
+        <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
       </div>
       <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
     </footer>

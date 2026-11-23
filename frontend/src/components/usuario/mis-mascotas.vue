@@ -23,6 +23,8 @@
     </div>
   </nav>
 
+  <PageHero titulo="Mis Mascotas" :imagen="HERO_IMAGENES.mascotas">Registra y administra la información de cada una de tus mascotas</PageHero>
+
   <div class="page-container">
     <!-- Grid de mascotas -->
     <div v-if="isLoading" class="loading">Cargando mascotas...</div>
@@ -341,6 +343,8 @@
 </template>
 
 <script setup>
+import PageHero from '../shared/PageHero.vue'
+import { HERO_IMAGENES } from '../../utils/imagenesModulos'
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'

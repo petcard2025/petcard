@@ -257,8 +257,9 @@ onMounted(async () => {
           </a>
           <div class="contacto-row">📧 info@petcard.com</div>
           <div class="contacto-row">📍 Calle Principal 123</div>
-          <div class="contacto-row">🕐 Lun–Vie 8am–7pm · Sáb 9am–6pm</div>
-          <div class="contacto-row" style="color:var(--red); font-weight:700;">🔴 Emergencias 24/7</div>
+          <div class="contacto-row">🕐 Lunes - Viernes: 8:00 AM - 7:00 PM</div>
+          <div class="contacto-row">🕐 Sábados: 9:00 AM - 6:00 PM</div>
+          <div class="contacto-row">🕐 Domingos: 10:00 AM - 4:00 PM</div>
         </div>
       </div>
     </div>
