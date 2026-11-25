@@ -31,7 +31,7 @@ onMounted(cargarUsuarios)
 
 const usuariosFiltrados = computed(() => {
   return usuarios.value.filter(u => {
-    const texto = `${u.Nombre} ${u.Correo}`.toLowerCase()
+    const texto = `${u.ID_usuario} ${u.Nombre} ${u.Correo} ${u.Rol}`.toLowerCase()
     const coincideBusqueda = texto.includes(busqueda.value.toLowerCase())
     const coincideRol = filtroRol.value === 'Todos' || u.Rol === filtroRol.value
     return coincideBusqueda && coincideRol
@@ -84,7 +84,7 @@ async function eliminarUsuario() {
     <div class="search-filter">
       <div class="search-wrap">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" placeholder="Buscar por nombre o correo..." v-model="busqueda" />
+        <input type="text" placeholder="Buscar por nombre, correo, rol o ID..." v-model="busqueda" />
       </div>
       <select class="filter-select" v-model="filtroRol">
         <option>Todos</option>

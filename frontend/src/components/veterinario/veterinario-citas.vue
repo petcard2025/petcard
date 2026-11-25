@@ -16,7 +16,6 @@ const error = ref('')
 
 // Modal para agregar observaciones / confirmar cita
 const mostrarModalConfirmar = ref(false)
-const mostrarModalDetalle = ref(false)
 const citaSeleccionada = ref(null)
 const observaciones = ref('')
 const guardando = ref(false)
@@ -54,25 +53,31 @@ async function cargarCitas() {
 }
 
 // ── Filtros ───────────────────────────────────────────────────
+// Una cita es "anterior" si su fecha ya pasó. No sale en la lista principal:
+// solo aparece cuando se busca por texto o se elige un estado en el filtro.
+function esAnterior(cita) {
+  return String(cita.Fecha || '').slice(0, 10) < hoy
+}
+
+const buscando = computed(() => busqueda.value.trim() !== '' || filtroEstado.value !== 'Todos')
+
 const citasFiltradas = computed(() => {
+  const q = busqueda.value.trim().toLowerCase()
   return citas.value
     .filter(c => {
       const texto = `${c.Nombre_mascota} ${c.Nombre_cliente} ${c.Nombre_servicio}`.toLowerCase()
-      const coincide = texto.includes(busqueda.value.toLowerCase())
-
+      const coincide = texto.includes(q)
       const coincideEstado =
         filtroEstado.value === 'Todos' || estadoCita(c) === filtroEstado.value
-
-      return coincide && coincideEstado
+      const visible = buscando.value || !esAnterior(c)
+      return coincide && coincideEstado && visible
     })
-    .sort((a, b) => {
-      const da = `${a.Fecha?.slice(0, 10)} ${a.Hora}`
-      const db = `${b.Fecha?.slice(0, 10)} ${b.Hora}`
-      return da.localeCompare(db)
-    })
+    // Las citas recién creadas primero (ID más alto = creada más recientemente)
+    .sort((a, b) => Number(b.ID_cita) - Number(a.ID_cita))
 })
 
 const totalResultados = computed(() => citasFiltradas.value.length)
+const anterioresOcultas = computed(() => buscando.value ? 0 : citas.value.filter(esAnterior).length)
 
 // ── Helpers visuales ──────────────────────────────────────────
 // Estado normalizado del campo Estado ("pendiente" -> "Pendiente")
@@ -86,10 +91,10 @@ function estadoBase(cita) {
 
 // El estado sale del campo Estado. Antes se deducia de si tenia Observaciones, asi que una nota
 // escrita por el cliente al agendar la hacia aparecer "Confirmada" aunque nadie la hubiera confirmado.
-// "Pasada" = sigue Pendiente/Confirmada pero su fecha ya vencio.
+// "Vencida" = sigue Pendiente/Confirmada pero su fecha ya vencio.
 function estadoCita(cita) {
   const e = estadoBase(cita)
-  if ((e === 'Pendiente' || e === 'Confirmada') && cita.Fecha?.slice(0, 10) < hoy) return 'Pasada'
+  if ((e === 'Pendiente' || e === 'Confirmada') && esAnterior(cita)) return 'Vencida'
   return e
 }
 
@@ -121,11 +126,6 @@ function abrirConfirmar(cita) {
   observaciones.value = cita.Observaciones || ''
   mensajeExito.value = ''
   mostrarModalConfirmar.value = true
-}
-
-function abrirDetalle(cita) {
-  citaSeleccionada.value = { ...cita }
-  mostrarModalDetalle.value = true
 }
 
 async function guardarObservaciones() {
@@ -219,9 +219,13 @@ async function guardarObservaciones() {
         <option>Confirmada</option>
         <option>Completada</option>
         <option>Cancelada</option>
-        <option>Pasada</option>
+        <option>Vencida</option>
       </select>
       <span class="vet-resultados">{{ totalResultados }} resultado{{ totalResultados === 1 ? '' : 's' }}</span>
+    </div>
+
+    <div v-if="anterioresOcultas > 0" style="font-size:.82rem;color:#64748b;margin:0 0 .75rem;">
+      Mostrando las citas de hoy en adelante, las más recientes primero. Hay {{ anterioresOcultas }} cita{{ anterioresOcultas === 1 ? '' : 's' }} anterior{{ anterioresOcultas === 1 ? '' : 'es' }} que se ven al buscar.
     </div>
 
     <!-- Tabla de citas -->
@@ -267,7 +271,6 @@ async function guardarObservaciones() {
               </td>
               <td>
                 <div class="vet-row-actions">
-                  <button class="btn btn-secondary btn-sm" @click="abrirDetalle(cita)">Detalle</button>
                   <button
                     class="btn btn-success btn-sm"
                     @click="abrirConfirmar(cita)"
@@ -295,38 +298,6 @@ async function guardarObservaciones() {
       </div>
       <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
     </footer>
-  </div>
-
-  <!-- ── Modal: Ver detalle ─────────────────────────────────── -->
-  <div v-if="mostrarModalDetalle" class="modal-overlay" @click.self="mostrarModalDetalle = false">
-    <div class="vet-modal">
-      <div class="vet-modal-head">
-        <h3>Detalle de la cita</h3>
-        <button class="vet-modal-close" @click="mostrarModalDetalle = false">&times;</button>
-      </div>
-      <div class="vet-modal-body" v-if="citaSeleccionada">
-        <div class="vet-detail-row"><span class="vet-detail-label">Mascota</span><span class="vet-detail-value">{{ citaSeleccionada.Nombre_mascota }}</span></div>
-        <div class="vet-detail-row"><span class="vet-detail-label">Dueño</span><span class="vet-detail-value">{{ citaSeleccionada.Nombre_cliente }}</span></div>
-        <div class="vet-detail-row"><span class="vet-detail-label">Servicio</span><span class="vet-detail-value">{{ citaSeleccionada.Nombre_servicio }}</span></div>
-        <div class="vet-detail-row"><span class="vet-detail-label">Fecha</span><span class="vet-detail-value">{{ formatFecha(citaSeleccionada.Fecha) }}</span></div>
-        <div class="vet-detail-row"><span class="vet-detail-label">Hora</span><span class="vet-detail-value">{{ formatHora(citaSeleccionada.Hora) }}</span></div>
-        <div class="vet-detail-row"><span class="vet-detail-label">Motivo</span><span class="vet-detail-value">{{ citaSeleccionada.Motivo || '—' }}</span></div>
-        <div class="vet-detail-block">
-          <span class="vet-detail-label">Observaciones registradas</span>
-          <p class="vet-detail-textblock">{{ citaSeleccionada.Observaciones || 'Sin observaciones aún.' }}</p>
-        </div>
-      </div>
-      <div class="vet-modal-foot">
-        <button class="btn btn-secondary btn-sm" @click="mostrarModalDetalle = false">Cerrar</button>
-        <button
-          class="btn btn-success btn-sm"
-          @click="() => { mostrarModalDetalle = false; abrirConfirmar(citaSeleccionada) }"
-          :disabled="estadoCita(citaSeleccionada) === 'Pasada'"
-        >
-          Confirmar / Editar
-        </button>
-      </div>
-    </div>
   </div>
 
   <!-- ── Modal: Confirmar y agregar observaciones ────────────── -->

@@ -1,4 +1,5 @@
 <script setup>
+import AppFooter from '../shared/AppFooter.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../../composables/useAuth'
 import { API_URL } from '../../api.js'
@@ -128,10 +129,9 @@ const iniciales = computed(() => {
     </div>
   </nav>
 
-  <div class="vet-wrapper">
-
-    <!-- ── Banner de bienvenida tipo panel clínico ── -->
-    <section class="vet-banner">
+  <!-- Banner a todo el ancho, igual que el hero del usuario -->
+  <section class="vet-banner">
+    <div class="vet-banner-inner">
       <div class="vet-banner-id">
         <div class="vet-avatar">{{ iniciales }}</div>
         <div>
@@ -144,7 +144,10 @@ const iniciales = computed(() => {
         Ver mis citas
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </router-link>
-    </section>
+        </div>
+  </section>
+
+  <div class="vet-wrapper">
 
     <div v-if="error" class="vet-alert">⚠️ {{ error }}</div>
 
@@ -219,40 +222,30 @@ const iniciales = computed(() => {
       </ul>
     </section>
 
-    <footer class="footer" style="margin-top:2.5rem;">
-      <div class="footer-grid">
-        <div class="footer-brand">
-          <span class="nav-logo" style="color:#fff;display:flex;">PetCard</span>
-          <p>Comprometidos con brindar toda la atención profesional.</p>
-        </div>
-        <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta General</a></li><li><a href="#">Vacunación</a></li></ul></div>
-        <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p></div>
-        <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
-      </div>
-      <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
-    </footer>
   </div>
 </template>
 
 <style scoped>
 .vet-wrapper {
   max-width: 1100px;
-  margin: 2rem auto;
+  margin: 2rem auto 0;
   padding: 0 1.5rem;
 }
 
 /* ── Banner ── */
 .vet-banner {
   background: linear-gradient(120deg, var(--purple-dark), var(--purple) 60%, var(--purple-light));
-  border-radius: var(--radius-lg);
-  padding: 1.75rem 2rem;
+  padding: 2.5rem 2rem;
+  color: var(--white);
+  width: 100%;
+}
+.vet-banner-inner {
+  max-width: 1100px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
-  color: var(--white);
-  box-shadow: 0 8px 24px rgba(37,99,235,.22);
-  margin-bottom: 1.5rem;
   flex-wrap: wrap;
 }
 .vet-banner-id { display: flex; align-items: center; gap: 1rem; }

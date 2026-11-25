@@ -22,9 +22,8 @@ const cargando = ref(false)
 const error = ref('')
 const mostrarModalNuevo = ref(false)
 const mostrarModalEditar = ref(false)
-const mostrarModalEliminar = ref(false)
 const citaSeleccionada = ref(null)
-const citaAEliminar = ref(null)
+const hoy = hoyColombia()
 
 const TODAS_LAS_HORAS = HORAS_CITA
 const ESTADOS = ['Pendiente', 'Confirmada', 'Completada', 'Cancelada']
@@ -174,20 +173,41 @@ watch(() => nuevaCita.value.Fecha, cargarHorasNuevo)
 watch(() => citaSeleccionada.value?.ID_veterinario, cargarHorasEditar)
 watch(() => citaSeleccionada.value?.Fecha, cargarHorasEditar)
 
+// Una cita es "anterior" si su fecha ya pasó. Esas no salen en la lista principal:
+// solo aparecen cuando se busca por texto o se elige un estado en el filtro.
+function esAnterior(cita) {
+  return String(cita.Fecha || '').slice(0, 10) < hoy
+}
+
+const buscando = computed(() => busqueda.value.trim() !== '' || filtroEstado.value !== 'Todos')
+
 const citasFiltradas = computed(() => {
-  return citas.value.filter(c => {
-    const texto = `${c.Nombre_mascota} ${c.Nombre_cliente} ${c.Nombre_servicio}`.toLowerCase()
-    const coincide = texto.includes(busqueda.value.toLowerCase())
-    const coincideEstado = filtroEstado.value === 'Todos' || estadoCita(c) === filtroEstado.value
-    return coincide && coincideEstado
-  })
+  const q = busqueda.value.trim().toLowerCase()
+  return citas.value
+    .filter(c => {
+      const texto = `${c.Nombre_mascota} ${c.Nombre_cliente} ${c.Nombre_servicio}`.toLowerCase()
+      const coincide = texto.includes(q)
+      const coincideEstado = filtroEstado.value === 'Todos' || estadoCita(c) === filtroEstado.value
+      const visible = buscando.value || !esAnterior(c)
+      return coincide && coincideEstado && visible
+    })
+    // Las citas recién creadas primero (ID más alto = creada más recientemente)
+    .sort((a, b) => Number(b.ID_cita) - Number(a.ID_cita))
 })
 
-// El estado sale del campo Estado de la cita. Antes se deducia de si tenia Observaciones, asi que
-// una nota escrita por el cliente al agendar la hacia aparecer "Confirmada", y una cancelada seguia como Pendiente.
-function estadoCita(cita) {
+const anterioresOcultas = computed(() => buscando.value ? 0 : citas.value.filter(esAnterior).length)
+
+// Estado guardado en la cita ("pendiente" -> "Pendiente"). Es el que se edita y se envía al servidor.
+function estadoBase(cita) {
   const e = String(cita.Estado || 'Pendiente').toLowerCase()
   return ESTADOS.find(x => x.toLowerCase() === e) || (e === 'completa' ? 'Completada' : 'Pendiente')
+}
+
+// Estado que se muestra: una cita Pendiente/Confirmada cuya fecha ya pasó se ve como "Vencida".
+function estadoCita(cita) {
+  const e = estadoBase(cita)
+  if ((e === 'Pendiente' || e === 'Confirmada') && esAnterior(cita)) return 'Vencida'
+  return e
 }
 
 function badgeClass(estado) {
@@ -199,7 +219,7 @@ function badgeClass(estado) {
 
 function abrirEditar(cita) {
   const fecha = String(cita.Fecha).slice(0, 10)
-  citaSeleccionada.value = { ...cita, Fecha: fecha, Estado: estadoCita(cita) }
+  citaSeleccionada.value = { ...cita, Fecha: fecha, Estado: estadoBase(cita) }
   citaOriginal.value = { Fecha: fecha, Hora: cita.Hora, ID_veterinario: cita.ID_veterinario }
   mostrarModalEditar.value = true
   cargarHorasEditar()
@@ -252,22 +272,6 @@ async function guardarEdicion() {
     mostrarModalEditar.value = false
   } catch (e) {
     alert(e.message || 'Error al guardar los cambios.')
-  }
-}
-
-function confirmarEliminar(cita) { citaAEliminar.value = cita; mostrarModalEliminar.value = true }
-
-async function eliminarCita() {
-  try {
-    const res = await fetch(`${API}/citas/${citaAEliminar.value.ID_cita}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
-    })
-    if (!res.ok) throw new Error()
-    await cargarCitas()
-    mostrarModalEliminar.value = false
-  } catch {
-    alert('Error al eliminar la cita.')
   }
 }
 
@@ -325,7 +329,12 @@ async function crearCita() {
         <option>Confirmada</option>
         <option>Completada</option>
         <option>Cancelada</option>
+        <option>Vencida</option>
       </select>
+    </div>
+
+    <div v-if="anterioresOcultas > 0" style="font-size:.82rem;color:#64748b;margin:-.25rem 0 .75rem;">
+      Mostrando las citas de hoy en adelante, las más recientes primero. Hay {{ anterioresOcultas }} cita{{ anterioresOcultas === 1 ? '' : 's' }} anterior{{ anterioresOcultas === 1 ? '' : 'es' }} que se ven al buscar.
     </div>
 
     <div v-if="cargando" style="text-align:center;padding:2rem;color:#888;">Cargando citas...</div>
@@ -351,7 +360,6 @@ async function crearCita() {
         </div>
         <div class="admin-card-actions">
           <button class="btn btn-secondary btn-sm" @click="abrirEditar(cita)">Editar</button>
-          <button class="btn btn-danger btn-sm" @click="confirmarEliminar(cita)">Eliminar</button>
         </div>
       </div>
     </div>
@@ -457,18 +465,6 @@ async function crearCita() {
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="mostrarModalEditar = false">Cancelar</button>
           <button class="btn btn-success btn-sm" :disabled="!citaSeleccionada.Hora" @click="guardarEdicion">Guardar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal Eliminar -->
-    <div v-if="mostrarModalEliminar" class="modal-overlay" @click.self="mostrarModalEliminar = false">
-      <div class="modal">
-        <h3>¿Eliminar cita?</h3>
-        <p>¿Eliminar la cita de <strong>{{ citaAEliminar?.Nombre_mascota }}</strong>? Esta acción no se puede deshacer.</p>
-        <div class="modal-footer">
-          <button class="btn btn-secondary btn-sm" @click="mostrarModalEliminar = false">Cancelar</button>
-          <button class="btn btn-danger btn-sm" @click="eliminarCita">Eliminar</button>
         </div>
       </div>
     </div>

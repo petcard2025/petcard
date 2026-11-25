@@ -340,9 +340,12 @@
       </div>
     </div>
   </div>
+
+  <AppFooter />
 </template>
 
 <script setup>
+import AppFooter from '../shared/AppFooter.vue'
 import PageHero from '../shared/PageHero.vue'
 import { HERO_IMAGENES } from '../../utils/imagenesModulos'
 import { ref, reactive, computed, watch, onMounted } from 'vue'

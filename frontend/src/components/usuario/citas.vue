@@ -1,7 +1,7 @@
 ﻿<script setup>
 import PageHero from '../shared/PageHero.vue'
 import { HERO_IMAGENES } from '../../utils/imagenesModulos'
-import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { clientesAPI, mascotasAPI, serviciosAPI, veterinariosAPI, citasAPI, API_URL } from '../../api.js'
@@ -99,8 +99,24 @@ function quitarHorasPasadas() {
 onMounted(() => { timerHoras = setInterval(quitarHorasPasadas, 30000) })
 onUnmounted(() => { if (timerHoras) clearInterval(timerHoras) })
 
+// Una cita Pendiente/Confirmada cuya fecha ya pasó se muestra como "vencida"
+function esAnterior(cita) {
+  return String(cita.Fecha || '').slice(0, 10) < hoyColombia()
+}
+
+function estadoVisible(cita) {
+  const e = (cita.Estado || 'Pendiente').toLowerCase()
+  if ((e === 'pendiente' || e === 'confirmada') && esAnterior(cita)) return 'vencida'
+  return e
+}
+
+// Las recién creadas primero; las vigentes (hoy en adelante) son las que se ven por defecto
+const citasOrdenadas = computed(() => [...citas.value].sort((a, b) => Number(b.ID_cita) - Number(a.ID_cita)))
+const citasVisiblesPorDefecto = computed(() => citasOrdenadas.value.filter(c => !esAnterior(c)).slice(0, 3))
+
 function estadoBadgeClass(estado) {
   const e = (estado || 'Pendiente').toLowerCase()
+  if (e === 'vencida') return 'badge-gray'
   if (e === 'confirmada') return 'badge-green'
   if (e === 'completada' || e === 'completa') return 'badge-gray'
   if (e === 'cancelada') return 'badge-red'
@@ -109,6 +125,7 @@ function estadoBadgeClass(estado) {
 
 function estadoLabel(estado) {
   const e = (estado || 'Pendiente').toLowerCase()
+  if (e === 'vencida') return '⌛ Vencida'
   if (e === 'confirmada') return '✅ Confirmada'
   if (e === 'completada' || e === 'completa') return '☑️ Completada'
   if (e === 'cancelada') return '❌ Cancelada'
@@ -497,12 +514,12 @@ onMounted(async () => {
             <div style="font-size:.88rem;">Aún no tienes citas agendadas.</div>
           </div>
 
-          <div v-for="cita in (showAllCitas ? citas : citas.slice(0, 3))" :key="cita.ID_cita"
+          <div v-for="cita in (showAllCitas ? citasOrdenadas : citasVisiblesPorDefecto)" :key="cita.ID_cita"
                class="cita-item-card"
                :class="{ 'cita-cancelada': (cita.Estado || '').toLowerCase() === 'cancelada' }">
             <div class="cita-item-top">
               <div class="cita-item-servicio">{{ cita.Nombre_servicio || 'Cita veterinaria' }}</div>
-              <span class="badge" :class="estadoBadgeClass(cita.Estado)">{{ estadoLabel(cita.Estado) }}</span>
+              <span class="badge" :class="estadoBadgeClass(estadoVisible(cita))">{{ estadoLabel(estadoVisible(cita)) }}</span>
             </div>
             <div class="cita-item-row">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -525,7 +542,11 @@ onMounted(async () => {
             </button>
           </div>
 
-          <button v-if="citas.length > 3" class="ver-todas-btn" @click="showAllCitas = !showAllCitas">
+          <div v-if="citas.length > 0 && citasVisiblesPorDefecto.length === 0 && !showAllCitas" style="padding:.75rem 0; text-align:center; color:var(--muted); font-size:.85rem;">
+            No tienes citas próximas.
+          </div>
+
+          <button v-if="citasOrdenadas.length > citasVisiblesPorDefecto.length" class="ver-todas-btn" @click="showAllCitas = !showAllCitas">
             {{ showAllCitas ? '▲ Ver menos' : `Ver todas (${citas.length}) →` }}
           </button>
         </div>

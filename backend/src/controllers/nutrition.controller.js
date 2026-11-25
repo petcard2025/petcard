@@ -25,7 +25,7 @@ async function getNutritionPlans(req, res) {
 
 // OBTENER PLANES POR MASCOTA - Historial nutricional de una mascota
 async function getNutritionPlansByPet(req, res) {
-  db.query('SELECT * FROM planalimentacion WHERE ID_mascota=?', [req.params.id_mascota], (err, results) => {
+  db.query("SELECT * FROM planalimentacion WHERE ID_mascota=? ORDER BY CASE WHEN Revision_nutricional = 'Activo' THEN 0 ELSE 1 END, ID_planAlimentacion DESC", [req.params.id_mascota], (err, results) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json(results)
   })

@@ -1,4 +1,5 @@
 <script setup>
+import AppFooter from '../shared/AppFooter.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../../composables/useAuth'
 import { API_URL } from '../../api.js'
@@ -19,6 +20,10 @@ const cargando = ref(false)
 const error = ref('')
 const guardando = ref(false)
 const mensajeExito = ref('')
+const avisoPlanAplicado = ref('')      // banner de éxito tras aplicar un plan sugerido
+const mostrarModalAplicar = ref(false)
+const aplicando = ref(null)           // { m: mascota, p: plan sugerido }
+const errorAplicar = ref('')
 
 const rol = computed(() => (usuarioLogueado.value?.Rol || '').toLowerCase())
 const esAdmin = computed(() => rol.value === 'administrador' || rol.value === 'admin')
@@ -181,6 +186,33 @@ function usarPlanSugerido(m, p) {
   nuevoPlan.value = { ...planVacio(), ...planAPayload(p, m.ID_mascota, op?.ID_servicio) }
   mensajeExito.value = ''
   mostrarModalNuevo.value = true
+}
+
+// Aplicar el plan recomendado directamente (sin llenar el formulario):
+// se actualiza/crea el plan de la mascota en la base de datos y el usuario lo ve de inmediato.
+function pedirAplicarPlan(m, p) {
+  aplicando.value = { m, p }
+  errorAplicar.value = ''
+  mostrarModalAplicar.value = true
+}
+
+async function confirmarAplicarPlan() {
+  const { m, p } = aplicando.value
+  guardando.value = true
+  errorAplicar.value = ''
+  try {
+    const op = opcionAtendida(m)
+    const payload = planAPayload(p, m.ID_mascota, op?.ID_servicio)
+    const r = await fetchJson('/alimentacion/sugerido', { method: 'POST', body: JSON.stringify(payload) })
+    await cargarPlanes()
+    mostrarModalAplicar.value = false
+    avisoPlanAplicado.value = `✅ Plan "${p.titulo}" ${r.accion === 'creado' ? 'asignado' : 'actualizado'} para ${m.Nombre}. Ya lo ve su dueño en Alimentación.`
+    setTimeout(() => { avisoPlanAplicado.value = '' }, 6000)
+  } catch (e) {
+    errorAplicar.value = e.message || 'No se pudo aplicar el plan.'
+  } finally {
+    guardando.value = false
+  }
 }
 
 // Valor que muestra el selector de "mascota atendida" cuando el plan viene prellenado
@@ -355,6 +387,7 @@ async function eliminarPlan() {
         </div>
       </div>
 
+      <div v-if="avisoPlanAplicado" class="ve-exito">{{ avisoPlanAplicado }}</div>
       <div v-if="errorCatalogo" class="vet-alert">⚠️ {{ errorCatalogo }}</div>
 
       <div class="ve-chips">
@@ -394,8 +427,10 @@ async function eliminarPlan() {
               <p v-if="planesDe(m).aviso" class="ve-aviso">ℹ️ {{ planesDe(m).aviso }}</p>
               <PlanSugerido v-for="p in planesDe(m).planes" :key="p.id" :plan="p">
                 <template #acciones>
-                  <span v-if="!puedeAsignar(m)" class="ve-sin-permiso">Solo puedes asignar planes a mascotas que hayas atendido en una cita.</span>
-                  <button type="button" class="btn btn-success btn-sm" :disabled="!puedeAsignar(m)" @click="usarPlanSugerido(m, p)">Usar este plan</button>
+                  <button v-if="puedeAsignar(m)" type="button" class="btn btn-secondary btn-sm" @click="usarPlanSugerido(m, p)">Personalizar</button>
+                  <button type="button" class="btn btn-success btn-sm" @click="pedirAplicarPlan(m, p)">
+                    {{ planAsignadoDe(m) ? 'Usar este plan (reemplaza el actual)' : 'Usar este plan' }}
+                  </button>
                 </template>
               </PlanSugerido>
             </template>
@@ -476,18 +511,39 @@ async function eliminarPlan() {
       </div>
     </div>
 
-    <footer class="footer" style="margin-top:2.5rem;">
-      <div class="footer-grid">
-        <div class="footer-brand">
-          <span class="nav-logo" style="color:#fff;display:flex;">PetCard</span>
-          <p>Comprometidos con brindar toda la atención profesional.</p>
-        </div>
-        <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta General</a></li><li><a href="#">Vacunación</a></li></ul></div>
-        <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p></div>
-        <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
+  </div>
+
+  <AppFooter />
+
+  <!-- ── Modal: Aplicar plan sugerido ───────────────────────── -->
+  <div v-if="mostrarModalAplicar && aplicando" class="modal-overlay" @click.self="mostrarModalAplicar = false">
+    <div class="vet-modal">
+      <div class="vet-modal-head">
+        <h3>Usar plan sugerido</h3>
+        <button class="vet-modal-close" @click="mostrarModalAplicar = false">&times;</button>
       </div>
-      <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
-    </footer>
+      <div class="vet-modal-body">
+        <p style="margin-bottom:.75rem;">
+          Se asignará <strong>{{ aplicando.p.titulo }}</strong> a <strong>{{ aplicando.m.Nombre }}</strong>
+          y el dueño lo verá de inmediato en su pantalla de Alimentación.
+        </p>
+        <div class="vet-info-box">
+          <div>Dieta: <strong>{{ aplicando.p.tipoDieta }}</strong></div>
+          <div>{{ aplicando.p.frecuencia }} · {{ aplicando.p.calorias }} kcal/día · {{ aplicando.p.horario }}</div>
+        </div>
+        <p v-if="planAsignadoDe(aplicando.m)" class="ve-aviso" style="margin-top:.75rem;">
+          ⚠️ {{ aplicando.m.Nombre }} ya tiene un plan activo
+          ({{ planAsignadoDe(aplicando.m).Tipo_dieta || 'sin nombre' }}). Será reemplazado por este.
+        </p>
+        <div v-if="errorAplicar" class="vet-alert" style="margin-top:.75rem;">⚠️ {{ errorAplicar }}</div>
+      </div>
+      <div class="vet-modal-foot">
+        <button class="btn btn-secondary btn-sm" @click="mostrarModalAplicar = false">Cancelar</button>
+        <button class="btn btn-success btn-sm" :disabled="guardando" @click="confirmarAplicarPlan">
+          {{ guardando ? 'Guardando...' : 'Sí, usar este plan' }}
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- ── Modal: Nuevo plan ───────────────────────────────────── -->
@@ -720,7 +776,7 @@ async function eliminarPlan() {
 <style scoped>
 .vet-wrapper {
   max-width: 1100px;
-  margin: 2rem auto;
+  margin: 2rem auto 0;
   padding: 0 1.5rem;
 }
 
@@ -854,4 +910,9 @@ async function eliminarPlan() {
 .ve-planes { padding: 1rem; border-top: 1px solid #e5e7eb; }
 .ve-aviso { font-size: .8rem; color: #92400e; margin: 0 0 .75rem; }
 .ve-sin-permiso { font-size: .75rem; color: #b45309; align-self: center; margin-right: auto; }
+.ve-exito {
+  background: var(--green-bg); color: #166534; border: 1px solid #bbf7d0;
+  padding: .7rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem;
+  font-weight: 700; font-size: .9rem;
+}
 </style>
