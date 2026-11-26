@@ -86,7 +86,7 @@ describe('RF11 · Credenciales incorrectas', () => {
   test('no se puede entrar sin enviar credenciales', async () => {
     mockDb([BUSCAR_USUARIO(fila())])
     const res = await request(app).post('/api/auth/login-admin').send({})
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(400)
     expect(res.body.token).toBeUndefined()
   })
 })

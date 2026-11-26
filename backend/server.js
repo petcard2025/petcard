@@ -408,7 +408,13 @@ app.post('/api/usuarios', async (req, res) => {
       'INSERT INTO usuario (Nombre, Apellido, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?,?)',
       [nombreCompleto, apellido || null, Correo, Telefono, hashedPassword, Rol],
       (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
+        if (err) {
+          // 23505 = correo duplicado en PostgreSQL, ER_DUP_ENTRY = equivalente en MySQL
+          if (err.code === '23505' || err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ error: 'Este correo ya está registrado' })
+          }
+          return res.status(500).json({ error: err.message })
+        }
         res.json({ ID_usuario: result.insertId, Nombre: nombreCompleto, Apellido: apellido, Correo, Telefono, Rol })
       }
     )
@@ -482,7 +488,16 @@ app.delete('/api/usuarios/:id', verifyToken, verifyAdmin, (req, res) => {
 // =============================================================
 // LOGIN (web — sin cambios)
 // =============================================================
+// Valida que el cuerpo traiga correo y contrasena como texto (evita que bcrypt falle sin respuesta)
+function credencialesInvalidas(body) {
+  const { Correo, Contrasena } = body || {}
+  return typeof Correo !== 'string' || typeof Contrasena !== 'string' || !Correo.trim() || !Contrasena
+}
+
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
+  if (credencialesInvalidas(req.body)) {
+    return res.status(400).json({ error: 'Correo y contrasena son obligatorios' })
+  }
   const { Correo, Contrasena } = req.body
   try {
     db.query(
@@ -534,6 +549,9 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 })
 
 app.post('/api/auth/login-admin', loginLimiter, async (req, res) => {
+  if (credencialesInvalidas(req.body)) {
+    return res.status(400).json({ error: 'Correo y contrasena son obligatorios' })
+  }
   const { Correo, Contrasena } = req.body
   try {
     db.query(

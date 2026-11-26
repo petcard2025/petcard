@@ -34,7 +34,13 @@ async function createUser(req, res) {
       'INSERT INTO usuario (Nombre, Apellido, Correo, Telefono, Contrasena, Rol) VALUES (?,?,?,?,?,?)',
       [nombreCompleto, apellido || null, Correo, Telefono, hashedPassword, Rol],
       (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
+        if (err) {
+          // 23505 = violación de unicidad en PostgreSQL, ER_DUP_ENTRY = equivalente en MySQL
+          if (err.code === '23505' || err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ error: 'Este correo ya está registrado' })
+          }
+          return res.status(500).json({ error: err.message })
+        }
         res.json({ ID_usuario: result.insertId, Nombre: nombreCompleto, Apellido: apellido, Correo, Telefono, Rol })
       }
     )

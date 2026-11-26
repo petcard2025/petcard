@@ -94,14 +94,26 @@ describe('RF01 · Registro de usuario (POST /api/usuarios)', () => {
   })
 
   describe('errores', () => {
-    test('500 si la base de datos falla (por ejemplo, correo ya registrado)', async () => {
-      mockDb([[/INSERT INTO usuario/, falla('llave duplicada: Correo')]])
+    test('500 si la base de datos falla por otra causa', async () => {
+      mockDb([[/INSERT INTO usuario/, falla('sin conexión')]])
       const res = await registrar(REGISTRO)
       expect(res.status).toBe(500)
-      expect(res.body.error).toMatch(/llave duplicada/)
+      expect(res.body.error).toMatch(/sin conexión/)
+    })
+
+    test.each([
+      ['PostgreSQL (23505)', '23505'],
+      ['MySQL (ER_DUP_ENTRY)', 'ER_DUP_ENTRY']
+    ])('409 con mensaje claro si el correo ya está registrado - %s', async (_motor, codigo) => {
+      mockDb([[/INSERT INTO usuario/, (p, cb) => cb(Object.assign(new Error('duplicate key value violates unique constraint "usuario_correo_key"'), { code: codigo }))]])
+      const res = await registrar(REGISTRO)
+      expect(res.status).toBe(409)
+      expect(res.body.error).toBe('Este correo ya está registrado')
+      expect(res.body.error).not.toMatch(/constraint|duplicate key/)
     })
   })
 
-  test.todo('un correo ya registrado debería responder 409 con un mensaje claro (hoy responde 500 con el texto del error de la base de datos)')
-  test.todo('el registro debería crear también la fila en la tabla cliente con la dirección (hoy solo se crea el usuario y la dirección no se guarda aquí)')
+  // Nota: la fila de la tabla cliente (con la dirección) la crea el frontend con una segunda llamada a POST /api/clientes (registro-usuario.vue).
+  // Si esa llamada falla, la cuenta queda sin fila cliente; las pantallas la crean después bajo demanda.
+  test.todo('hacer que el registro cree usuario y cliente en una sola operación, para que no queden cuentas sin fila cliente')
 })

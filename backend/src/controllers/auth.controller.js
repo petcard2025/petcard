@@ -26,7 +26,16 @@ const forgotPasswordLimiter = rateLimit({
   message: { error: 'Demasiadas solicitudes de recuperacion. Intenta de nuevo en 1 hora.' }
 })
 
+// Valida que el cuerpo traiga correo y contrasena como texto (evita que bcrypt falle sin respuesta)
+function credencialesInvalidas(body) {
+  const { Correo, Contrasena } = body || {}
+  return typeof Correo !== 'string' || typeof Contrasena !== 'string' || !Correo.trim() || !Contrasena
+}
+
 async function login(req, res) {
+  if (credencialesInvalidas(req.body)) {
+    return res.status(400).json({ error: 'Correo y contrasena son obligatorios' })
+  }
   const { Correo, Contrasena } = req.body
   try {
     db.query(
@@ -80,6 +89,9 @@ async function login(req, res) {
 }
 
 async function loginAdmin(req, res) {
+  if (credencialesInvalidas(req.body)) {
+    return res.status(400).json({ error: 'Correo y contrasena son obligatorios' })
+  }
   const { Correo, Contrasena } = req.body
   try {
     db.query(

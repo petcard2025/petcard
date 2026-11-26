@@ -133,6 +133,23 @@ describe('RF01 · Inicio de sesión (POST /api/auth/login)', () => {
     })
   })
 
-  test.todo('si se envía un correo existente SIN contraseña debería responder 400 (hoy la petición nunca responde: bcrypt lanza un error dentro de un callback sin capturar)')
+  describe('datos incompletos o con formato inválido', () => {
+    test.each([
+      ['sin contraseña', { Correo: 'ana@gmail.com' }],
+      ['contraseña vacía', { Correo: 'ana@gmail.com', Contrasena: '' }],
+      ['sin correo', { Contrasena: CLAVE }],
+      ['correo vacío', { Correo: '   ', Contrasena: CLAVE }],
+      ['cuerpo vacío', {}],
+      ['contraseña que no es texto', { Correo: 'ana@gmail.com', Contrasena: 12345 }],
+      ['correo que no es texto', { Correo: { $ne: null }, Contrasena: CLAVE }]
+    ])('400 %s, sin consultar la BD ni devolver token', async (_caso, cuerpo) => {
+      mockDb([BUSCAR_USUARIO([usuario()])])
+      const res = await request(app).post('/api/auth/login').send(cuerpo)
+      expect(res.status).toBe(400)
+      expect(res.body.error).toMatch(/obligatorios/)
+      expect(res.body).not.toHaveProperty('token')
+      expect(consultasQue(/FROM usuario/)).toHaveLength(0)
+    })
+  })
   test.todo('un cliente que inicia sesión en /login sigue recibiendo token aunque sea veterinario/administrador (decidir si /login debe limitarse a clientes)')
 })
