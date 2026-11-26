@@ -1,12 +1,18 @@
 <script setup>
 import { useRouter } from 'vue-router'
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { usuariosAPI, clientesAPI } from '../../api.js'
+import {
+  DOMINIOS_CORREO, soloLetras, soloTelefono, reglasContrasena,
+  validarNombrePersona, validarCorreo, validarTelefono, validarContrasena, validarDireccion
+} from '../../utils/validators.js'
 
 const router = useRouter()
 
 const formData = reactive({
   nombre: '',
+  apellido: '',
+  direccion: '',
   correo: '',
   telefono: '',
   contrasena: '',
@@ -16,6 +22,8 @@ const formData = reactive({
 
 const errors = reactive({
   nombre: '',
+  apellido: '',
+  direccion: '',
   correo: '',
   telefono: '',
   contrasena: '',
@@ -33,79 +41,113 @@ const clearErrors = () => {
   successMessage.value = ''
 }
 
-const validateEmail = (email) => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+// ── Filtros en vivo: lo que no se permite ni aparece en el campo ──
+const onNombre = (e) => {
+  formData.nombre = e.target.value = soloLetras(e.target.value)
+  errors.nombre = ''
+}
+const onApellido = (e) => {
+  formData.apellido = e.target.value = soloLetras(e.target.value)
+  errors.apellido = ''
+}
+const onTelefono = (e) => {
+  formData.telefono = e.target.value = soloTelefono(e.target.value)
+  errors.telefono = ''
 }
 
-const validatePhone = (phone) => {
-  return /^\d{7,15}$/.test(phone.replace(/\s/g, ''))
+// ── Correo con sugerencias de dominio al escribir @ ──
+const mostrarSugerencias = ref(false)
+const indiceSugerencia = ref(-1)
+
+const sugerencias = computed(() => {
+  const c = formData.correo
+  const pos = c.indexOf('@')
+  if (pos === -1) return []
+  const usuario = c.slice(0, pos)
+  const parcial = c.slice(pos + 1).toLowerCase()
+  if (!usuario || parcial.includes('@')) return []
+  return DOMINIOS_CORREO
+    .filter(d => d.startsWith(parcial) && d !== parcial)
+    .map(d => `${usuario}@${d}`)
+})
+
+const onCorreo = (e) => {
+  formData.correo = e.target.value = e.target.value.replace(/\s/g, '')
+  errors.correo = ''
+  mostrarSugerencias.value = true
+  indiceSugerencia.value = -1
 }
+
+const elegirSugerencia = (valor) => {
+  formData.correo = valor
+  mostrarSugerencias.value = false
+  indiceSugerencia.value = -1
+}
+
+const onCorreoKeydown = (e) => {
+  if (!mostrarSugerencias.value || !sugerencias.value.length) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    indiceSugerencia.value = (indiceSugerencia.value + 1) % sugerencias.value.length
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    indiceSugerencia.value = (indiceSugerencia.value - 1 + sugerencias.value.length) % sugerencias.value.length
+  } else if (e.key === 'Enter' && indiceSugerencia.value >= 0) {
+    e.preventDefault()
+    elegirSugerencia(sugerencias.value[indiceSugerencia.value])
+  } else if (e.key === 'Escape') {
+    mostrarSugerencias.value = false
+  }
+}
+
+// El blur se retrasa un instante para que alcance a registrarse el clic en una sugerencia
+const cerrarSugerencias = () => setTimeout(() => { mostrarSugerencias.value = false }, 150)
+
+// ── Contraseña: checklist en vivo ──
+const reglas = computed(() => reglasContrasena(formData.contrasena))
 
 const handleRegistro = async () => {
-  console.log('📝 handleRegistro llamado')
   clearErrors()
-  let valid = true
 
-  if (!formData.nombre.trim()) {
-    errors.nombre = 'El nombre es obligatorio.'
-    valid = false
-  }
-  if (!formData.correo.trim() || !validateEmail(formData.correo)) {
-    errors.correo = 'Ingresa un correo válido.'
-    valid = false
-  }
-  if (!formData.telefono.trim() || !validatePhone(formData.telefono)) {
-    errors.telefono = 'Ingresa un teléfono válido (solo números).'
-    valid = false
-  }
-  if (!formData.contrasena || formData.contrasena.length < 6) {
-    errors.contrasena = 'La contraseña debe tener al menos 6 caracteres.'
-    valid = false
-  }
-  if (formData.contrasena !== formData.confirm) {
-    errors.confirm = 'Las contraseñas no coinciden.'
-    valid = false
-  }
-  if (!formData.terminos) {
-    errors.terminos = 'Debes aceptar los términos y condiciones.'
-    valid = false
-  }
+  errors.nombre = validarNombrePersona(formData.nombre, 'nombre')
+  errors.apellido = validarNombrePersona(formData.apellido, 'apellido')
+  errors.direccion = validarDireccion(formData.direccion)
+  errors.correo = validarCorreo(formData.correo)
+  errors.telefono = validarTelefono(formData.telefono)
+  errors.contrasena = validarContrasena(formData.contrasena)
+  if (formData.contrasena !== formData.confirm) errors.confirm = 'Las contraseñas no coinciden.'
+  if (!formData.terminos) errors.terminos = 'Debes aceptar los términos y condiciones.'
 
-  if (!valid) {
-    console.log('❌ Validación fallida')
-    return
-  }
+  if (Object.values(errors).some(Boolean)) return
 
   isLoading.value = true
-  console.log('⏳ Iniciando registro...')
 
   try {
-    console.log('🔗 Creando usuario via API')
     const data = await usuariosAPI.crear({
       Nombre: formData.nombre.trim(),
+      Apellido: formData.apellido.trim(),
+      Direccion: formData.direccion.trim(),
       Correo: formData.correo.trim(),
-      Telefono: formData.telefono.trim(),
+      Telefono: formData.telefono,
       Contrasena: formData.contrasena,
       Rol: 'cliente'
     })
 
     if (data.ID_usuario) {
       try {
-        await clientesAPI.crear({ Direccion: '', ID_usuario: data.ID_usuario })
+        await clientesAPI.crear({ Direccion: formData.direccion.trim(), ID_usuario: data.ID_usuario })
       } catch (clienteError) {
         console.warn('No se pudo crear el cliente automáticamente:', clienteError)
       }
 
       successMessage.value = '¡Cuenta creada exitosamente! Redirigiendo...'
       localStorage.setItem('petcard_usuario_actual', JSON.stringify(data))
-      console.log('✅ Registro exitoso')
 
       setTimeout(() => {
         router.push('/inicio')
       }, 1800)
     } else {
       errors.correo = data.error || 'Error al crear la cuenta, intenta de nuevo.'
-      console.log('❌ Error:', data.error)
     }
   } catch (error) {
     errors.correo = error.message || 'Error al conectar con el servidor'
@@ -121,10 +163,6 @@ const irAlLogin = () => {
 
 const irAlInicio = () => {
   router.push('/inicio')
-}
-
-const irALoginAdmin = () => {
-  router.push('/login-admin')
 }
 </script>
 
@@ -147,20 +185,51 @@ const irALoginAdmin = () => {
 
       <div class="success-banner" v-if="successMessage">{{ successMessage }}</div>
 
-      <div class="form-group">
-        <label>Nombre Completo</label>
-        <div class="input-group">
-          <i class="fas fa-user"></i>
-          <input type="text" class="form-control" v-model="formData.nombre" placeholder="Tu nombre completo">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nombre</label>
+          <div class="input-group">
+            <i class="fas fa-user"></i>
+            <input type="text" class="form-control" :value="formData.nombre" @input="onNombre"
+                   maxlength="50" autocomplete="given-name" placeholder="Tu nombre">
+          </div>
+          <div class="error" v-if="errors.nombre">{{ errors.nombre }}</div>
         </div>
-        <div class="error" v-if="errors.nombre">{{ errors.nombre }}</div>
+
+        <div class="form-group">
+          <label>Apellido</label>
+          <div class="input-group">
+            <i class="fas fa-user"></i>
+            <input type="text" class="form-control" :value="formData.apellido" @input="onApellido"
+                   maxlength="50" autocomplete="family-name" placeholder="Tu apellido">
+          </div>
+          <div class="error" v-if="errors.apellido">{{ errors.apellido }}</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Dirección de la casa</label>
+        <div class="input-group">
+          <i class="fas fa-home"></i>
+          <input type="text" class="form-control" v-model="formData.direccion"
+                 maxlength="255" autocomplete="street-address" placeholder="Ej. Calle 10 # 5-20, Soacha"
+                 @input="errors.direccion = ''">
+        </div>
+        <div class="error" v-if="errors.direccion">{{ errors.direccion }}</div>
       </div>
 
       <div class="form-group">
         <label>Correo</label>
-        <div class="input-group">
+        <div class="input-group email-wrap">
           <i class="fas fa-envelope"></i>
-          <input type="email" class="form-control" v-model="formData.correo" placeholder="correo@ejemplo.com">
+          <input type="text" inputmode="email" class="form-control" :value="formData.correo"
+                 @input="onCorreo" @keydown="onCorreoKeydown" @focus="mostrarSugerencias = true" @blur="cerrarSugerencias"
+                 autocomplete="off" placeholder="correo@ejemplo.com">
+          <ul class="sugerencias" v-if="mostrarSugerencias && sugerencias.length">
+            <li v-for="(sug, i) in sugerencias" :key="sug"
+                :class="{ activa: i === indiceSugerencia }"
+                @mousedown.prevent="elegirSugerencia(sug)">{{ sug }}</li>
+          </ul>
         </div>
         <div class="error" v-if="errors.correo">{{ errors.correo }}</div>
       </div>
@@ -169,8 +238,10 @@ const irALoginAdmin = () => {
         <label>Teléfono</label>
         <div class="input-group">
           <i class="fas fa-phone"></i>
-          <input type="tel" class="form-control" v-model="formData.telefono" placeholder="300 000 0000">
+          <input type="tel" inputmode="numeric" class="form-control" :value="formData.telefono" @input="onTelefono"
+                 maxlength="10" autocomplete="tel-national" placeholder="3001234567">
         </div>
+        <div class="hint" v-if="formData.telefono && formData.telefono.length < 10">{{ formData.telefono.length }}/10 números</div>
         <div class="error" v-if="errors.telefono">{{ errors.telefono }}</div>
       </div>
 
@@ -178,8 +249,13 @@ const irALoginAdmin = () => {
         <label>Contraseña</label>
         <div class="input-group">
           <i class="fas fa-lock"></i>
-          <input type="password" class="form-control" v-model="formData.contrasena" placeholder="Mínimo 6 caracteres">
+          <input type="password" class="form-control" v-model="formData.contrasena"
+                 autocomplete="new-password" placeholder="Crea una contraseña segura"
+                 @input="errors.contrasena = ''">
         </div>
+        <ul class="reglas">
+          <li v-for="r in reglas" :key="r.texto" :class="{ ok: r.ok }">{{ r.ok ? '✓' : '○' }} {{ r.texto }}</li>
+        </ul>
         <div class="error" v-if="errors.contrasena">{{ errors.contrasena }}</div>
       </div>
 
@@ -187,7 +263,9 @@ const irALoginAdmin = () => {
         <label>Confirmar contraseña</label>
         <div class="input-group">
           <i class="fas fa-lock"></i>
-          <input type="password" class="form-control" v-model="formData.confirm" placeholder="Repite tu contraseña">
+          <input type="password" class="form-control" v-model="formData.confirm"
+                 autocomplete="new-password" placeholder="Repite tu contraseña"
+                 @input="errors.confirm = ''">
         </div>
         <div class="error" v-if="errors.confirm">{{ errors.confirm }}</div>
       </div>
@@ -206,10 +284,6 @@ const irALoginAdmin = () => {
 
       <p class="auth-footer">
         ¿Ya tienes cuenta? <a href="javascript:void(0)" @click="irAlLogin">Iniciar sesión</a>
-      </p>
-
-      <p style="margin-top: 1rem; text-align: center; font-size: 0.9rem;">
-        <a href="javascript:void(0)" @click="irALoginAdmin" style="color: #764ba2; font-weight: 600; text-decoration: none;">👨‍💼 Acceso de Administrador</a>
       </p>
 
     </div>
@@ -458,6 +532,74 @@ html, body {
   background: white;
   border: none;
   border-radius: 8px;
+}
+
+
+/* ── Nombre y apellido en una fila ── */
+.form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.form-row .form-group {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Sugerencias de correo ── */
+.email-wrap {
+  position: relative;
+}
+
+.sugerencias {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 4px 0 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: white;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+
+.sugerencias li {
+  padding: 0.5rem 0.75rem 0.5rem 2.5rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.sugerencias li:hover,
+.sugerencias li.activa {
+  background: rgba(102, 126, 234, 0.12);
+  color: #4c5bd4;
+}
+
+/* ── Ayudas bajo los campos ── */
+.hint {
+  color: #888;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.reglas {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.reglas li.ok {
+  color: #27ae60;
+}
+
+@media (max-width: 480px) {
+  .form-row { flex-direction: column; gap: 0; }
 }
 
 /* ── Responsive ── */

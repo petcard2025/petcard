@@ -1,4 +1,6 @@
 <script setup>
+import PageHero from './PageHero.vue'
+import { HERO_IMAGENES } from '../../utils/imagenesModulos'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 
@@ -42,10 +44,9 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
   </nav>
 
   <!-- HERO -->
-  <section class="hero">
-    <h1>Nuestros Servicios</h1>
-    <p>Ofrecemos atención veterinaria integral con los más altos estándares de calidad.<br>Cada servicio está diseñado para brindar el mejor cuidado a tu mascota.</p>
-  </section>
+  <PageHero titulo="Nuestros Servicios" :imagen="HERO_IMAGENES.servicios">
+    Ofrecemos atención veterinaria integral con los más altos estándares de calidad.<br>Cada servicio está diseñado para brindar el mejor cuidado a tu mascota.
+  </PageHero>
 
   <!-- GRID SERVICIOS -->
   <section class="section" style="background:#fff;">
@@ -64,9 +65,8 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Exámenes completos de salud, diagnósticos y seguimiento continuo de la salud de tu mascota veterinaria.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$50 – $80</span>
             </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" data-servicio="Consulta General" id="btn-agendar-0" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Consulta General' } }" class="btn btn-primary btn-full" data-servicio="Consulta General" id="btn-agendar-0" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -82,9 +82,8 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Programa completo de vacunación para prevenir enfermedades comunes y mantener las defensas naturales.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$30 – $60</span>
             </div>
-            <router-link to="/citas" class="btn btn-success btn-full" data-servicio="Vacunación" id="btn-agendar-1" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Vacunación' } }" class="btn btn-success btn-full" data-servicio="Vacunación" id="btn-agendar-1" style="display:inline-block;text-align:center;text-decoration:none;">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -100,9 +99,8 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Procedimientos quirúrgicos con tecnología avanzada e instrumentación moderna de procedimientos especiales.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$200 – $800</span>
             </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#7c3aed;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Cirugías" id="btn-agendar-2">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Cirugías' } }" class="btn btn-primary btn-full" style="background:#7c3aed;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Cirugías" id="btn-agendar-2">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -119,9 +117,8 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Tratamientos y medicación para la eliminación de parásitos internos y externos.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$25 – $60</span>
             </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#92400e;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Desparasitación" id="btn-agendar-6">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Desparasitación' } }" class="btn btn-primary btn-full" style="background:#92400e;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Desparasitación" id="btn-agendar-6">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -137,9 +134,8 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
             <p>Limpieza dental, extracciones y tratamientos especializados para la salud bucal.</p>
             <div class="servicio-footer">
               <div class="stars">★★★★★ <span>5.0</span></div>
-              <span class="servicio-precio">$100 – $300</span>
             </div>
-            <router-link to="/citas" class="btn btn-primary btn-full" style="background:#db2777;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Odontología" id="btn-agendar-7">Agendar Cita</router-link>
+            <router-link :to="{ path: '/citas', query: { servicio: 'Odontología' } }" class="btn btn-primary btn-full" style="background:#db2777;display:inline-block;text-align:center;text-decoration:none;" data-servicio="Odontología" id="btn-agendar-7">Agendar Cita</router-link>
           </div>
         </div>
 
@@ -159,7 +155,7 @@ const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } 
       </div>
       <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li></ul></div>
       <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
-      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
+      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
     </div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>

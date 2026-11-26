@@ -1,10 +1,12 @@
 <script setup>
 import { useRouter } from 'vue-router'
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAuth } from '../../composables/useAuth'
+import { perfilAPI, clientesAPI, mascotasAPI, citasAPI, vacunasAPI, notificacionesAPI } from '../../api'
+import { soloLetras, soloTelefono, validarNombrePersona, validarTelefono, filtrarTelefono, limpiarTelefonoInput } from '../../utils/validators'
 
 const router = useRouter()
-const { usuarioLogueado: authUsuario, token, cerrarSesion, irALogin, irARegistro } = useAuth()
+const { usuarioLogueado: authUsuario, token, setSession, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 const usuarioActual = ref(null)
 const enEdicion = ref(false)
@@ -26,68 +28,107 @@ const goToRegistro = () => {
   router.push('/registro-usuario')
 }
 
-const cargarUsuario = () => {
+// Separa "Nombre Apellido" usando el Apellido guardado. Si todavía no existe
+// (usuarios antiguos), toma la última palabra como apellido.
+const separarNombre = (nombreCompleto, apellido) => {
+  const completo = (nombreCompleto || '').trim()
+  const ap = (apellido || '').trim()
+  if (ap) {
+    const nom = completo.toLowerCase().endsWith(ap.toLowerCase())
+      ? completo.slice(0, completo.length - ap.length).trim()
+      : completo
+    return { nombre: nom || completo, apellido: ap }
+  }
+  const partes = completo.split(/\s+/)
+  if (partes.length < 2) return { nombre: completo, apellido: '' }
+  return { nombre: partes.slice(0, -1).join(' '), apellido: partes[partes.length - 1] }
+}
+
+const aplicarUsuario = (usuario) => {
+  const { nombre, apellido } = separarNombre(usuario.Nombre || usuario.nombre, usuario.Apellido || usuario.apellido)
+  usuarioActual.value = usuario
+  formData.nombre = nombre
+  formData.apellido = apellido
+  formData.email = usuario.Correo || usuario.email || ''
+  formData.telefono = soloTelefono(usuario.Telefono || usuario.telefono || '')
+  formData.direccion = usuario.Direccion || usuario.direccion || ''
+  formData.emergencia = usuario.Emergencia || usuario.emergencia || ''
+}
+
+const cargarUsuario = async () => {
   try {
     const usuario = authUsuario?.value || JSON.parse(localStorage.getItem('petcard_usuario_actual') || 'null')
-    if (usuario) {
-      usuarioActual.value = usuario
-      formData.nombre = usuario.Nombre || usuario.nombre || ''
-      formData.apellido = usuario.Apellido || usuario.apellido || ''
-      formData.email = usuario.Correo || usuario.email || ''
-      formData.telefono = usuario.Telefono || usuario.telefono || ''
-      formData.direccion = usuario.Direccion || usuario.direccion || ''
-      formData.emergencia = usuario.Emergencia || usuario.emergencia || ''
-    } else {
-      usuarioActual.value = null
+    if (!usuario) { usuarioActual.value = null; return }
+    aplicarUsuario(usuario)
+
+    // Traer los datos reales de la base de datos (fuente de verdad)
+    if (localStorage.getItem('petcard_token')) {
+      try {
+        const bd = await perfilAPI.obtener()
+        aplicarUsuario({ ...usuario, ...bd })
+      } catch (e) {
+        console.error('No se pudo leer el perfil del servidor:', e)
+      }
     }
   } catch (error) {
     console.error('Error cargando usuario:', error)
   }
 }
 
-const toggleEdicion = () => {
+const toggleEdicion = async () => {
   if (enEdicion.value) {
-    guardarCambios()
+    const ok = await guardarCambios()
+    if (ok) enEdicion.value = false
+    return
   }
-  enEdicion.value = !enEdicion.value
+  enEdicion.value = true
 }
 
-const guardarCambios = () => {
-  if (!usuarioActual.value) return
+const guardarCambios = async () => {
+  if (!usuarioActual.value) return false
 
   if (!formData.nombre.trim() || !formData.email.trim()) {
     alert('⚠️ Nombre y email son obligatorios')
-    return
+    return false
   }
+
+  const errNombre = validarNombrePersona(formData.nombre, 'nombre')
+  if (errNombre) { alert('⚠️ ' + errNombre); return false }
+
+  if (formData.apellido.trim()) {
+    const errApellido = validarNombrePersona(formData.apellido, 'apellido')
+    if (errApellido) { alert('⚠️ ' + errApellido); return false }
+  }
+
+  const errTelefono = validarTelefono(formData.telefono)
+  if (errTelefono) { alert('⚠️ ' + errTelefono); return false }
 
   if (!isValidEmail(formData.email)) {
     alert('⚠️ Email no válido')
-    return
+    return false
   }
 
-  usuarioActual.value = {
-    ...usuarioActual.value,
-    nombre: formData.nombre,
-    apellido: formData.apellido,
-    email: formData.email,
-    telefono: formData.telefono,
-    direccion: formData.direccion,
-    emergencia: formData.emergencia
+  try {
+    // Guardar en la base de datos (antes solo se guardaba en el navegador)
+    const actualizado = await perfilAPI.guardar({
+      nombre: formData.nombre,
+      apellido: formData.apellido,
+      correo: formData.email,
+      telefono: formData.telefono
+    })
+
+    const nuevoUsuario = { ...usuarioActual.value, ...actualizado }
+    localStorage.setItem('petcard_usuario_actual', JSON.stringify(nuevoUsuario))
+    // Refresca la sesión (navbar, otras pantallas) conservando el token actual
+    setSession(nuevoUsuario, localStorage.getItem('petcard_token'))
+    aplicarUsuario(nuevoUsuario)
+
+    alert('✅ Perfil actualizado correctamente')
+    return true
+  } catch (error) {
+    alert('⚠️ No se pudo guardar el perfil: ' + error.message)
+    return false
   }
-
-  // Actualizar usuario en lista
-  const usuarios = JSON.parse(localStorage.getItem('petcard_usuarios') || '[]')
-  const index = usuarios.findIndex(u => u.documento === usuarioActual.value.documento && u.tipoDocumento === usuarioActual.value.tipoDocumento)
-  if (index !== -1) {
-    usuarios[index] = usuarioActual.value
-    localStorage.setItem('petcard_usuarios', JSON.stringify(usuarios))
-  }
-
-  // Guardar sesión
-  localStorage.setItem('petcard_usuario_actual', JSON.stringify(usuarioActual.value))
-
-  enEdicion.value = false
-  alert('✅ Perfil actualizado correctamente')
 }
 
 const isValidEmail = (email) => {
@@ -98,7 +139,111 @@ const isValidEmail = (email) => {
 const irMascotas = () => router.push('/mis-mascotas')
 const irCitas = () => router.push('/citas')
 const irCarnet = () => router.push('/carnet')
-const irNotificaciones = () => router.push('/notificaciones')
+
+// ===== ESTADÍSTICAS (datos reales de la base de datos) =====
+const stats = reactive({
+  mascotas: 0,
+  citas: 0,
+  vacunasAlDia: 0,
+  vacunasTotal: 0,
+  recordatorios: 0
+})
+const statsCargadas = ref(false)
+
+// Una cita cuenta como "programada" mientras siga asignada: Pendiente o Confirmada.
+// Las Canceladas y Completadas ya no cuentan.
+const ESTADOS_CITA_CERRADA = ['cancelada', 'completada', 'completa']
+const citaEstaProgramada = (cita) =>
+  !ESTADOS_CITA_CERRADA.includes(String(cita.Estado || 'Pendiente').trim().toLowerCase())
+
+// Misma idea que el carnet: la vacuna está "al día" si su estado es de aplicada/completa.
+const ESTADOS_VACUNA_OK = ['completo', 'completa', 'completada', 'aplicada']
+const vacunaAlDia = (v) => ESTADOS_VACUNA_OK.includes(String(v.Estado || '').trim().toLowerCase())
+
+// Porcentaje de vacunas al día (null si todavía no hay vacunas registradas)
+const vacunasPct = computed(() =>
+  stats.vacunasTotal ? Math.round((stats.vacunasAlDia / stats.vacunasTotal) * 100) : null
+)
+const vacunasColor = computed(() => {
+  const p = vacunasPct.value
+  if (p === null) return 'var(--muted)'
+  if (p >= 80) return 'var(--green)'
+  if (p >= 50) return 'var(--orange)'
+  return 'var(--red)'
+})
+
+let cargandoStats = false
+const cargarEstadisticas = async () => {
+  if (cargandoStats) return
+  const usuario = authUsuario?.value || JSON.parse(localStorage.getItem('petcard_usuario_actual') || 'null')
+  if (!usuario?.ID_usuario || !localStorage.getItem('petcard_token')) return
+
+  cargandoStats = true
+  try {
+    // 1) Cliente asociado al usuario logueado
+    let cliente = null
+    try {
+      const clientes = await clientesAPI.obtenerPorUsuario(usuario.ID_usuario)
+      cliente = clientes?.[0] || null
+    } catch (e) {
+      console.error('Estadísticas: no se pudo leer el cliente', e)
+    }
+
+    // 2) Mascotas, citas y recordatorios en paralelo (si uno falla, los demás siguen)
+    const [rMascotas, rCitas, rNotifs] = await Promise.allSettled([
+      cliente ? mascotasAPI.obtenerPorCliente(cliente.ID_cliente) : Promise.resolve([]),
+      cliente ? citasAPI.obtener() : Promise.resolve([]),
+      notificacionesAPI.obtenerPorUsuario(usuario.ID_usuario)
+    ])
+
+    const mascotas = rMascotas.status === 'fulfilled' && Array.isArray(rMascotas.value) ? rMascotas.value : []
+    if (rMascotas.status === 'fulfilled') stats.mascotas = mascotas.length
+
+    if (rCitas.status === 'fulfilled' && Array.isArray(rCitas.value) && cliente) {
+      stats.citas = rCitas.value.filter(c =>
+        c.ID_cliente === cliente.ID_cliente && citaEstaProgramada(c)
+      ).length
+    }
+
+    if (rNotifs.status === 'fulfilled' && Array.isArray(rNotifs.value)) {
+      stats.recordatorios = rNotifs.value.filter(n =>
+        n.ID_usuario === usuario.ID_usuario && !n.Leida
+      ).length
+    }
+
+    // 3) Vacunas de todas las mascotas del usuario
+    if (rMascotas.status === 'fulfilled') {
+      const listas = await Promise.all(
+        mascotas.map(m => vacunasAPI.obtenerPorMascota(m.ID_mascota).catch(() => []))
+      )
+      const vacunas = listas.flat()
+      stats.vacunasTotal = vacunas.length
+      stats.vacunasAlDia = vacunas.filter(vacunaAlDia).length
+    }
+
+    statsCargadas.value = true
+  } finally {
+    cargandoStats = false
+  }
+}
+
+// Actualización automática: si se agenda/cancela una cita (o cambia algo) mientras
+// esta pantalla está abierta, los números se refrescan solos cada 10 s y al volver a la pestaña.
+let temporizadorStats = null
+const refrescarStatsAlVolver = () => { if (!document.hidden) cargarEstadisticas() }
+
+onMounted(() => {
+  cargarEstadisticas()
+  temporizadorStats = setInterval(cargarEstadisticas, 10000)
+  document.addEventListener('visibilitychange', refrescarStatsAlVolver)
+  window.addEventListener('focus', cargarEstadisticas)
+})
+
+onUnmounted(() => {
+  clearInterval(temporizadorStats)
+  document.removeEventListener('visibilitychange', refrescarStatsAlVolver)
+  window.removeEventListener('focus', cargarEstadisticas)
+})
 
 // ===== GUARD DE SEGURIDAD =====
 onMounted(() => {
@@ -122,6 +267,7 @@ onMounted(() => {
 
 watch(authUsuario, () => {
   cargarUsuario()
+  cargarEstadisticas()
 })
 </script>
 
@@ -189,11 +335,11 @@ watch(authUsuario, () => {
         <div class="form-row">
           <div class="form-group">
             <label>Nombre</label>
-            <input class="form-control" type="text" v-model="formData.nombre" :disabled="!enEdicion"/>
+            <input class="form-control" type="text" v-model="formData.nombre" :disabled="!enEdicion" maxlength="50" autocomplete="off" @input="formData.nombre = soloLetras($event.target.value); $event.target.value = formData.nombre"/>
           </div>
           <div class="form-group">
             <label>Apellido</label>
-            <input class="form-control" type="text" v-model="formData.apellido" :disabled="!enEdicion"/>
+            <input class="form-control" type="text" v-model="formData.apellido" :disabled="!enEdicion" maxlength="50" autocomplete="off" @input="formData.apellido = soloLetras($event.target.value); $event.target.value = formData.apellido"/>
           </div>
         </div>
 
@@ -204,14 +350,11 @@ watch(authUsuario, () => {
           </div>
           <div class="form-group">
             <label>Teléfono</label>
-            <input class="form-control" type="tel" v-model="formData.telefono" :disabled="!enEdicion"/>
+            <input class="form-control" type="tel" inputmode="numeric" maxlength="10" :value="formData.telefono" :disabled="!enEdicion" autocomplete="off" @beforeinput="filtrarTelefono" @input="limpiarTelefonoInput($event, formData, 'telefono')"/>
+            <small v-if="enEdicion" style="display:block;margin-top:.25rem;font-size:.75rem;color:var(--muted);">Exactamente 10 números. Para cambiarlo, reemplaza los dígitos.</small>
           </div>
         </div>
 
-        <div class="form-group">
-          <label>Dirección</label>
-          <input class="form-control" type="text" v-model="formData.direccion" :disabled="!enEdicion"/>
-        </div>
 
         <div class="form-group">
           <label>Contacto de Emergencia</label>
@@ -241,26 +384,16 @@ watch(authUsuario, () => {
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               Ver Carnet de Vacunas
             </button>
-            <button class="accion-btn" @click="irNotificaciones">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-              Configurar Recordatorios
-            </button>
           </div>
         </div>
 
-        <!-- Estadísticas -->
-        <div class="card">
-          <div class="card-title" style="font-size:.95rem;">Estado de la sesión</div>
-          <div class="estadistica-row"><span>JWT activo</span><strong>{{ token ? 'Sí' : 'No' }}</strong></div>
-          <div class="estadistica-row" v-if="token"><span>Token (inicio)</span><strong>{{ token.slice(0, 18) + '...' }}</strong></div>
-        </div>
 
         <div class="card">
           <div class="card-title" style="font-size:.95rem;">Estadísticas</div>
-          <div class="estadistica-row"><span>Mascotas registradas</span><strong>3</strong></div>
-          <div class="estadistica-row"><span>Citas programadas</span><strong>2</strong></div>
-          <div class="estadistica-row"><span>Vacunas al día</span><strong style="color:var(--green);">100%</strong></div>
-          <div class="estadistica-row"><span>Recordatorios activos</span><strong style="color:var(--purple);">5</strong></div>
+          <div class="estadistica-row"><span>Mascotas registradas</span><strong>{{ statsCargadas ? stats.mascotas : '—' }}</strong></div>
+          <div class="estadistica-row"><span>Citas programadas</span><strong>{{ statsCargadas ? stats.citas : '—' }}</strong></div>
+          <div class="estadistica-row"><span>Vacunas al día</span><strong :style="{ color: vacunasColor }">{{ statsCargadas && vacunasPct !== null ? vacunasPct + '%' : '—' }}</strong></div>
+          <div class="estadistica-row"><span>Recordatorios activos</span><strong style="color:var(--purple);">{{ statsCargadas ? stats.recordatorios : '—' }}</strong></div>
         </div>
 
       </div>
@@ -273,7 +406,7 @@ watch(authUsuario, () => {
       <div class="footer-brand"><span class="nav-logo" style="color:#fff; margin-bottom:.5rem; display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div>
       <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div>
       <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
-      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
+      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
     </div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>

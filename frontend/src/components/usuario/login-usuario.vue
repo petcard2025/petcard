@@ -337,9 +337,8 @@ const onStageLeave = () => {
 
         <p class="create-account">¿No tienes cuenta? <a href="javascript:void(0)" @click="irARegistro">Crear cuenta</a></p>
 
-        <p class="admin-access" style="margin-top: 1rem; text-align: center; font-size: 0.9rem;">
-          <a href="javascript:void(0)" @click="irALoginAdmin" style="color: #764ba2; font-weight: 600; text-decoration: none;">👨‍💼 Acceso de Administrador</a>
-        </p>
+        
+        
       </div>
     </div>
   </div>
@@ -545,9 +544,23 @@ body {
 h1 {
   font-size: 2.4rem;
   font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 8px;
+  line-height: 1.2;
+}
+
+.login-box h1 {
+  font-size: 2.4rem;
+  font-weight: 700;
   color: #1a1a1a;
   margin-bottom: 8px;
   line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 0.95rem;
+  color: #666;
+  margin-bottom: 32px;
 }
 
 .subtitle {

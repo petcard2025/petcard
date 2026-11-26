@@ -34,8 +34,11 @@ const fetchAPI = async (endpoint, options = {}) => {
     const data = await response.json()
 
     if (!response.ok) {
-      // Si el token expiro o es invalido, limpiar sesion y redirigir
-      if (response.status === 401 || response.status === 403) {
+      // Si el token expiro o es invalido, limpiar sesion y redirigir.
+      // Un 403 por falta de permisos (ej. "No puedes modificar citas de otro cliente") NO es un token
+      // vencido: antes cerraba la sesion en cualquier 403.
+      const tokenInvalido = response.status === 401 || (response.status === 403 && /token/i.test(data.error || ''))
+      if (tokenInvalido) {
         localStorage.removeItem('petcard_token')
         localStorage.removeItem('petcard_usuario_actual')
         window.location.href = '/login-usuario'
@@ -48,6 +51,15 @@ const fetchAPI = async (endpoint, options = {}) => {
     console.error('Error en la peticion:', error)
     throw error
   }
+}
+
+// ========== PERFIL (usuario logueado) ==========
+export const perfilAPI = {
+  obtener: () => fetchAPI('/perfil'),
+  guardar: (datos) => fetchAPI('/perfil', {
+    method: 'PUT',
+    body: JSON.stringify(datos)
+  })
 }
 
 // ========== USUARIOS ==========

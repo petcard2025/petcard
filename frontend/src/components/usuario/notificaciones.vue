@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { notificacionesAPI } from '../../api'
@@ -17,12 +17,11 @@ const categorias = [
   { id: 'cita',        label: 'Citas',          emoji: '📅' },
   { id: 'vacuna',      label: 'Vacunas',        emoji: '💉' },
   { id: 'alimentacion',label: 'Alimentación',   emoji: '🍖' },
-  { id: 'medicamentos',label: 'Medicamentos',   emoji: '💊' },
   { id: 'resultados',  label: 'Resultados',     emoji: '📋' }
 ]
 
 const colorCategoria = (cat) => {
-  const map = { cita: 'blue', vacuna: 'green', alimentacion: 'orange', medicamentos: 'purple', resultados: 'yellow' }
+  const map = { cita: 'blue', vacuna: 'green', alimentacion: 'orange', resultados: 'yellow' }
   return map[cat] || 'gray'
 }
 
@@ -31,13 +30,12 @@ const obtenerCategoria = (mensaje, tipo) => {
   if (texto.includes('cita')) return 'cita'
   if (texto.includes('vacuna')) return 'vacuna'
   if (texto.includes('aliment')) return 'alimentacion'
-  if (texto.includes('medic') || texto.includes('dosis')) return 'medicamentos'
   if (texto.includes('resultado') || texto.includes('analisis')) return 'resultados'
   return 'sistema'
 }
 
 const emojiCategoria = (cat) => {
-  const map = { cita: '📅', vacuna: '💉', alimentacion: '🍖', medicamentos: '💊', resultados: '📋', sistema: '🔔' }
+  const map = { cita: '📅', vacuna: '💉', alimentacion: '🍖', resultados: '📋', sistema: '🔔' }
   return map[cat] || '🔔'
 }
 
@@ -77,7 +75,7 @@ const notificacionesFiltradas = computed(() => {
 const noLeidas = computed(() => notificacionesMapeadas.value.filter(n => !n.leida).length)
 
 const conteoCategorias = computed(() => {
-  const totals = { todas: 0, cita: 0, vacuna: 0, alimentacion: 0, medicamentos: 0, resultados: 0 }
+  const totals = { todas: 0, cita: 0, vacuna: 0, alimentacion: 0, resultados: 0 }
   notificacionesMapeadas.value.forEach(n => {
     totals.todas += 1
     if (totals[n.categoria] !== undefined) totals[n.categoria] += 1
@@ -85,17 +83,18 @@ const conteoCategorias = computed(() => {
   return totals
 })
 
-const cargarNotificaciones = async () => {
+// silencioso = true -> refresca en segundo plano sin mostrar "Cargando..."
+const cargarNotificaciones = async (silencioso = false) => {
   if (!usuarioLogueado.value) return
-  isLoading.value = true
+  if (!silencioso) isLoading.value = true
   error.value = ''
   try {
     const data = await notificacionesAPI.obtenerPorUsuario(usuarioLogueado.value.ID_usuario)
     notificaciones.value = Array.isArray(data) ? data : []
   } catch (err) {
-    error.value = err.message || 'Error al cargar notificaciones'
+    if (!silencioso) error.value = err.message || 'Error al cargar notificaciones'
   } finally {
-    isLoading.value = false
+    if (!silencioso) isLoading.value = false
   }
 }
 
@@ -140,7 +139,22 @@ onMounted(() => {
   if (usuario?.Rol === 'Admin') router.push('/admin-inicio')
 })
 
-onMounted(() => { cargarNotificaciones() })
+// ===== ACTUALIZACIÓN AUTOMÁTICA =====
+// Si se agenda una cita (u otro registro) mientras esta pantalla está abierta,
+// la notificación aparece sola: se refresca cada 10 s y al volver a la pestaña.
+let temporizador = null
+const refrescarAlVolver = () => { if (!document.hidden) cargarNotificaciones(true) }
+
+onMounted(() => {
+  cargarNotificaciones()
+  temporizador = setInterval(() => { if (!document.hidden) cargarNotificaciones(true) }, 10000)
+  document.addEventListener('visibilitychange', refrescarAlVolver)
+})
+
+onUnmounted(() => {
+  clearInterval(temporizador)
+  document.removeEventListener('visibilitychange', refrescarAlVolver)
+})
 </script>
 
 <template>
@@ -179,7 +193,7 @@ onMounted(() => { cargarNotificaciones() })
         <button class="btn-mark-all" @click="marcarTodasLeidas" :disabled="noLeidas === 0">
           ✓ Marcar todas como leídas
         </button>
-        <button class="btn-refresh" @click="cargarNotificaciones" :disabled="isLoading">🔄</button>
+        <button class="btn-refresh" @click="cargarNotificaciones()" :disabled="isLoading">🔄</button>
       </div>
     </div>
 
@@ -217,7 +231,7 @@ onMounted(() => { cargarNotificaciones() })
         <div v-else-if="error" class="notif-empty" style="color:#ef4444;">
           <span style="font-size:2rem;">⚠️</span>
           <p>{{ error }}</p>
-          <button class="btn-refresh-big" @click="cargarNotificaciones">Reintentar</button>
+          <button class="btn-refresh-big" @click="cargarNotificaciones()">Reintentar</button>
         </div>
         <div v-else-if="!isAuthenticated" class="notif-empty">
           <span style="font-size:2.5rem;">🔐</span>
@@ -265,7 +279,7 @@ onMounted(() => { cargarNotificaciones() })
       <div class="footer-brand"><span class="nav-logo" style="color:#fff;display:flex;">PetCard</span><p>Comprometidos con la salud de tus mascotas.</p></div>
       <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consultas</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Emergencias</a></li></ul></div>
       <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p></div>
-      <div class="footer-col"><h4>Horarios</h4><p>Lun–Vie: 8 AM–7 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
+      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
     </div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>

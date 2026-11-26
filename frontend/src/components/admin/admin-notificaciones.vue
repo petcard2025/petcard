@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { notificacionesAPI, usuariosAPI } from '../../api'
+import ComboSelect from '../shared/combo-select.vue'
 
 const notificaciones = ref([])
 const usuarios = ref([])
@@ -20,6 +21,20 @@ const enviando = ref(false)
 const nuevaNotificacion = ref({ ID_usuario: '', Mensaje: '', Tipo: 'General', Canal: 'Sistema' })
 
 onMounted(cargarTodo)
+
+// Selector de usuario con búsqueda: se escribe nombre, correo o rol y la lista se filtra
+const etiquetaUsuario = u => `${u.Nombre} (${u.Rol}) — ${u.Correo}`
+const opcionesUsuario = computed(() => usuarios.value.map(etiquetaUsuario))
+const usuarioElegido = computed({
+  get() {
+    const u = usuarios.value.find(x => String(x.ID_usuario) === String(nuevaNotificacion.value.ID_usuario))
+    return u ? etiquetaUsuario(u) : ''
+  },
+  set(texto) {
+    const u = usuarios.value.find(x => etiquetaUsuario(x) === texto)
+    nuevaNotificacion.value.ID_usuario = u ? u.ID_usuario : ''
+  }
+})
 
 async function cargarTodo() {
   cargando.value = true
@@ -165,10 +180,12 @@ async function enviarNotificacion() {
         <h3>Nueva Notificación</h3>
         <div class="modal-body">
           <label>Usuario</label>
-          <select v-model="nuevaNotificacion.ID_usuario">
-            <option value="" disabled>-- Selecciona usuario --</option>
-            <option v-for="u in usuarios" :key="u.ID_usuario" :value="u.ID_usuario">{{ u.Nombre }} ({{ u.Rol }})</option>
-          </select>
+          <ComboSelect
+            v-model="usuarioElegido"
+            :options="opcionesUsuario"
+            placeholder="Busca por nombre o correo..."
+            texto-vacio="No se encontraron usuarios"
+          />
           <label>Tipo</label>
           <select v-model="nuevaNotificacion.Tipo">
             <option>General</option>

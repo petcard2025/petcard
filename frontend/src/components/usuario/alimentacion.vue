@@ -1,7 +1,11 @@
 <script setup>
+import PageHero from '../shared/PageHero.vue'
+import { HERO_IMAGENES } from '../../utils/imagenesModulos'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
+import PlanSugerido from '../shared/PlanSugerido.vue'
+import { generarPlanes, edadEnMeses, textoEdad, ICONO_ESPECIE } from '../../utils/planesAlimentacion'
 
 const router = useRouter()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
@@ -19,8 +23,11 @@ const selectedPet = computed(() => mascotas.value.find(p => p.ID_mascota === sel
 const planLabel = computed(() => plan.value?.Tipo_dieta ? `Plan: ${plan.value.Tipo_dieta}` : 'Plan actual')
 const planItems = computed(() => {
   if (!plan.value || !plan.value.Comidas) return []
-  return String(plan.value.Comidas)
-    .split(',')
+  // Los planes sugeridos guardan las comidas separadas con " | " (llevan comas dentro);
+  // los planes antiguos las separan con comas.
+  const texto = String(plan.value.Comidas)
+  return texto
+    .split(texto.includes('|') ? '|' : ',')
     .map(item => item.trim())
     .filter(Boolean)
 })
@@ -34,11 +41,13 @@ const observaciones = computed(() => plan.value?.Observaciones ?? 'Sin observaci
 const diagnostico = computed(() => plan.value?.Diagnostico ?? 'No disponible')
 const periodo = computed(() => plan.value ? `${plan.value.Fecha_inicio || '—'} — ${plan.value.Fecha_fin || '—'}` : '—')
 const petPeso = computed(() => selectedPet.value ? `${selectedPet.value.Peso || '—'} kg` : '—')
-const petEdad = computed(() => {
-  if (!selectedPet.value?.Fecha_nacimiento) return '—'
-  const year = new Date(selectedPet.value.Fecha_nacimiento).getFullYear()
-  return `${Math.max(0, new Date().getFullYear() - year)} años`
-})
+const petEdad = computed(() => textoEdad(edadEnMeses(selectedPet.value?.Fecha_nacimiento)))
+
+// Planes sugeridos según la especie, la edad y el peso de la mascota seleccionada
+const sugerencias = computed(() => generarPlanes(selectedPet.value))
+const planesSugeridos = computed(() => sugerencias.value.planes)
+const avisoPlanes = computed(() => sugerencias.value.aviso)
+const iconoMascota = computed(() => ICONO_ESPECIE[selectedPet.value?.Especie] || '🐾')
 const petRaza = computed(() => selectedPet.value ? selectedPet.value.Raza || selectedPet.value.Especie || '—' : '—')
 const petActividad = computed(() => plan.value?.Frecuencia || 'Moderada')
 
@@ -212,6 +221,8 @@ onMounted(async () => {
     </div>
   </nav>
 
+  <PageHero titulo="Alimentación" :imagen="HERO_IMAGENES.alimentacion">Planes nutricionales pensados para la especie, la edad y el peso de tu mascota</PageHero>
+
   <div class="page-wrapper">
     <div v-if="!isAuthenticated" class="card" style="margin:1.5rem; padding:1.5rem; text-align:center;">
       <h2 style="margin-bottom:1rem;">Necesitas iniciar sesión</h2>
@@ -250,9 +261,23 @@ onMounted(async () => {
 
           <!-- TAB PLAN NUTRICIONAL -->
           <div id="plan-content" v-show="selectedTab === 'plan'">
-            <div v-if="!plan" class="card" style="margin-bottom:1rem; padding:1.25rem; background:#fff5f0; border:1px solid #fde2e2; text-align:center;">
-              <h4 style="margin:0 0 .5rem; color:#b91c1c;">Aún no tienes un plan de alimentación asignado</h4>
-              <p style="margin:0; color:#7f1d1d;">Tu veterinario es quien crea y asigna el plan nutricional de tu mascota. Agenda una cita o consulta con tu veterinario para que registre el plan.</p>
+            <div v-if="!plan">
+              <div v-if="!selectedPet" style="color:var(--muted); padding:1rem; text-align:center;">Selecciona una mascota para ver su plan de alimentación.</div>
+              <template v-else>
+                <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:.85rem 1rem; margin-bottom:1rem; font-size:.85rem; color:#166534;">
+                  {{ iconoMascota }} <strong>Plan recomendado para {{ selectedPet.Nombre }}</strong> según su especie ({{ selectedPet.Especie }}), edad ({{ petEdad }}) y peso ({{ petPeso }}).
+                  Es una guía de referencia: tu veterinario puede ajustarlo y asignarte uno oficial.
+                </div>
+                <div v-if="avisoPlanes && !planesSugeridos.length" class="card" style="padding:1.25rem; background:#fff5f0; border:1px solid #fde2e2; text-align:center; color:#7f1d1d;">{{ avisoPlanes }}</div>
+                <template v-else>
+                  <div v-if="avisoPlanes" style="font-size:.8rem; color:#92400e; margin-bottom:.75rem;">ℹ️ {{ avisoPlanes }}</div>
+                  <PlanSugerido :plan="planesSugeridos[0]" destacado />
+                  <p style="font-size:.82rem; color:var(--muted);">
+                    Mira otras opciones para {{ selectedPet.Nombre }} en la pestaña
+                    <a href="javascript:void(0)" @click="cambiarTab('alternativas')" style="color:var(--purple); font-weight:700;">Alternativas Recomendadas</a>.
+                  </p>
+                </template>
+              </template>
             </div>
             <div v-else>
                 <!-- Stats -->
@@ -275,6 +300,7 @@ onMounted(async () => {
               </div>
             </div>
 
+          <template v-if="plan">
           <!-- Alimento recomendado -->
           <div class="alimento-rec">
             <div>
@@ -337,6 +363,7 @@ onMounted(async () => {
           <!-- Observaciones -->
           <h4 style="font-family:'Nunito',sans-serif; font-weight:800; margin:1.25rem 0 .75rem;">Observaciones</h4>
           <div class="observaciones">{{ observaciones }}</div>
+          </template>
           </div><!-- Cierre plan-content -->
 
           <!-- TAB HISTORIAL DE CAMBIOS -->
@@ -349,135 +376,22 @@ onMounted(async () => {
 
           <!-- TAB PLANES DE ALIMENTACIÓN RECOMENDADOS -->
           <div id="alternativas-content" v-show="selectedTab === 'alternativas'">
-            <h5 style="font-family:'Nunito',sans-serif; font-weight:700; margin:0 0 .25rem; color:var(--dark);">Planes de Alimentación Veterinarios</h5>
-            <p style="font-size:.82rem; color:var(--muted); margin-bottom:1.25rem;">Planes recomendados por veterinarias especializadas. Solo el administrador puede asignar uno a tu mascota.</p>
+            <h5 style="font-family:'Nunito',sans-serif; font-weight:700; margin:0 0 .25rem; color:var(--dark);">
+              Planes recomendados{{ selectedPet ? ' para ' + selectedPet.Nombre : '' }}
+            </h5>
+            <p style="font-size:.82rem; color:var(--muted); margin-bottom:1.25rem;">
+              Calculados con la especie, edad y peso de tu mascota, a partir de guías de veterinarias y asociaciones veterinarias. Solo el veterinario puede asignar el plan oficial.
+            </p>
 
-            <!-- Plan 1: Mantenimiento Estándar -->
-            <div class="plan-rec-card" style="border-left:4px solid var(--green);">
-              <div class="plan-rec-header">
-                <div>
-                  <div class="plan-rec-title">🥗 Plan Mantenimiento Estándar</div>
-                  <div class="plan-rec-vet">Clínica Veterinaria del Valle · Adultos sanos</div>
-                </div>
-                <span class="badge badge-green">Más popular</span>
-              </div>
-              <div class="plan-rec-grid">
-                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Balanceada completa</strong></div>
-                <div class="plan-rec-item"><span>Frecuencia</span><strong>2 veces al día</strong></div>
-                <div class="plan-rec-item"><span>Horario</span><strong>7:00 AM · 6:00 PM</strong></div>
-                <div class="plan-rec-item"><span>Calorías/día</span><strong>1 200 kcal</strong></div>
-                <div class="plan-rec-item"><span>Proteína</span><strong>26 – 30 %</strong></div>
-                <div class="plan-rec-item"><span>Grasas</span><strong>12 – 16 %</strong></div>
-              </div>
-              <div class="plan-rec-comidas">
-                <span class="comida-badge">🌅 Desayuno · Croquetas Premium 180 g + agua</span>
-                <span class="comida-badge">🌆 Cena · Croquetas Premium 180 g + vegetal cocido</span>
-              </div>
-              <div class="plan-rec-obs">Sin restricciones específicas. Ideal para mascotas adultas sin patologías. Revisión nutricional cada 6 meses.</div>
-            </div>
-
-            <!-- Plan 2: Control de Peso -->
-            <div class="plan-rec-card" style="border-left:4px solid var(--orange);">
-              <div class="plan-rec-header">
-                <div>
-                  <div class="plan-rec-title">⚖️ Plan Control de Peso</div>
-                  <div class="plan-rec-vet">Centro Veterinario Bienestar Animal · Mascotas con sobrepeso</div>
-                </div>
-                <span class="badge badge-yellow">Especializado</span>
-              </div>
-              <div class="plan-rec-grid">
-                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Hipocalórica controlada</strong></div>
-                <div class="plan-rec-item"><span>Frecuencia</span><strong>3 veces al día</strong></div>
-                <div class="plan-rec-item"><span>Horario</span><strong>8:00 AM · 1:00 PM · 7:00 PM</strong></div>
-                <div class="plan-rec-item"><span>Calorías/día</span><strong>800 – 950 kcal</strong></div>
-                <div class="plan-rec-item"><span>Proteína</span><strong>30 – 35 %</strong></div>
-                <div class="plan-rec-item"><span>Grasas</span><strong>6 – 10 %</strong></div>
-              </div>
-              <div class="plan-rec-comidas">
-                <span class="comida-badge">🌅 Mañana · Alimento Light 120 g + zanahoria rallada</span>
-                <span class="comida-badge">☀️ Mediodía · Pollo hervido 80 g sin piel</span>
-                <span class="comida-badge">🌆 Noche · Alimento Light 120 g + caldo sin sal</span>
-              </div>
-              <div class="plan-rec-obs">Sin golosinas entre comidas. Ejercicio diario de 30 min recomendado. Pesaje mensual obligatorio.</div>
-            </div>
-
-            <!-- Plan 3: Renal / Digestivo -->
-            <div class="plan-rec-card" style="border-left:4px solid var(--purple);">
-              <div class="plan-rec-header">
-                <div>
-                  <div class="plan-rec-title">💊 Plan Soporte Renal y Digestivo</div>
-                  <div class="plan-rec-vet">Hospital Veterinario San Francisco · Patologías internas</div>
-                </div>
-                <span class="badge badge-blue">Prescripción médica</span>
-              </div>
-              <div class="plan-rec-grid">
-                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Terapéutica baja en fósforo</strong></div>
-                <div class="plan-rec-item"><span>Frecuencia</span><strong>3 – 4 veces al día</strong></div>
-                <div class="plan-rec-item"><span>Horario</span><strong>Cada 6 horas</strong></div>
-                <div class="plan-rec-item"><span>Calorías/día</span><strong>900 – 1 100 kcal</strong></div>
-                <div class="plan-rec-item"><span>Proteína</span><strong>14 – 18 % (alta calidad)</strong></div>
-                <div class="plan-rec-item"><span>Fósforo</span><strong>&lt; 0.5 %</strong></div>
-              </div>
-              <div class="plan-rec-comidas">
-                <span class="comida-badge">Hill's k/d Kidney Care · ración según peso</span>
-                <span class="comida-badge">Royal Canin Renal · alternado según tolerancia</span>
-              </div>
-              <div class="plan-rec-obs">Requiere diagnóstico previo. Evitar proteínas de origen vegetal. Control de BUN y creatinina cada 3 meses.</div>
-            </div>
-
-            <!-- Plan 4: Cachorro / Junior -->
-            <div class="plan-rec-card" style="border-left:4px solid #f59e0b;">
-              <div class="plan-rec-header">
-                <div>
-                  <div class="plan-rec-title">🐾 Plan Crecimiento (Cachorros / Junior)</div>
-                  <div class="plan-rec-vet">Clínica PetLife · Hasta los 12 meses</div>
-                </div>
-                <span class="badge badge-yellow">Junior</span>
-              </div>
-              <div class="plan-rec-grid">
-                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Alta energía / hipercalórica</strong></div>
-                <div class="plan-rec-item"><span>Frecuencia</span><strong>4 veces al día</strong></div>
-                <div class="plan-rec-item"><span>Horario</span><strong>7 AM · 12 PM · 5 PM · 9 PM</strong></div>
-                <div class="plan-rec-item"><span>Calorías/día</span><strong>1 500 – 1 800 kcal</strong></div>
-                <div class="plan-rec-item"><span>Proteína</span><strong>28 – 32 %</strong></div>
-                <div class="plan-rec-item"><span>Calcio</span><strong>1.2 – 1.8 %</strong></div>
-              </div>
-              <div class="plan-rec-comidas">
-                <span class="comida-badge">🌅 Mañana · Puppy food húmedo 100 g + DHA</span>
-                <span class="comida-badge">☀️ Mediodía · Croquetas Junior 120 g</span>
-                <span class="comida-badge">🌆 Tarde · Croquetas Junior 120 g + calcio</span>
-                <span class="comida-badge">🌙 Noche · Puppy food seco 100 g</span>
-              </div>
-              <div class="plan-rec-obs">Suplementar con omega-3 para desarrollo neurológico. Transición gradual de 7 días al cambiar de alimento.</div>
-            </div>
-
-            <!-- Plan 5: Senior -->
-            <div class="plan-rec-card" style="border-left:4px solid #6366f1;">
-              <div class="plan-rec-header">
-                <div>
-                  <div class="plan-rec-title">🏥 Plan Geronto (Senior +7 años)</div>
-                  <div class="plan-rec-vet">Clínica Veterinaria Oasis · Mascotas mayores</div>
-                </div>
-                <span class="badge" style="background:#ede9fe; color:#7c3aed;">Senior</span>
-              </div>
-              <div class="plan-rec-grid">
-                <div class="plan-rec-item"><span>Tipo de dieta</span><strong>Baja en sodio, antiinflamatoria</strong></div>
-                <div class="plan-rec-item"><span>Frecuencia</span><strong>2 – 3 veces al día</strong></div>
-                <div class="plan-rec-item"><span>Horario</span><strong>8:00 AM · 3:00 PM · 8:00 PM</strong></div>
-                <div class="plan-rec-item"><span>Calorías/día</span><strong>1 000 – 1 200 kcal</strong></div>
-                <div class="plan-rec-item"><span>Proteína</span><strong>22 – 28 %</strong></div>
-                <div class="plan-rec-item"><span>Fibra</span><strong>3 – 5 %</strong></div>
-              </div>
-              <div class="plan-rec-comidas">
-                <span class="comida-badge">Hill's Science Diet Senior · según peso</span>
-                <span class="comida-badge">Suplemento glucosamina/condroitina · diario</span>
-                <span class="comida-badge">Omega-3 · 1 cápsula diaria</span>
-              </div>
-              <div class="plan-rec-obs">Evitar alimentos procesados con alto sodio. Control geriátrico anual. Agua fresca disponible siempre.</div>
-            </div>
+            <div v-if="!selectedPet" style="color:var(--muted); padding:1rem; text-align:center;">Selecciona una mascota para ver sus planes.</div>
+            <div v-else-if="!planesSugeridos.length" class="card" style="padding:1.25rem; background:#fff5f0; border:1px solid #fde2e2; text-align:center; color:#7f1d1d;">{{ avisoPlanes }}</div>
+            <template v-else>
+              <div v-if="avisoPlanes" style="font-size:.8rem; color:#92400e; margin-bottom:.75rem;">ℹ️ {{ avisoPlanes }}</div>
+              <PlanSugerido v-for="p in planesSugeridos" :key="p.id" :plan="p" />
+            </template>
 
             <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:.85rem 1rem; margin-top:.5rem; font-size:.82rem; color:#0c4a6e;">
-              <strong>ℹ️ Nota:</strong> Estos planes son de referencia. El plan activo de tu mascota solo puede ser asignado o modificado por el veterinario administrador de PetCard.
+              <strong>ℹ️ Nota:</strong> Estos planes son de referencia. El plan activo de tu mascota solo puede ser asignado o modificado por el veterinario de PetCard.
             </div>
           </div><!-- Cierre alternativas-content -->
         </div><!-- Cierre card principal -->
@@ -497,29 +411,6 @@ onMounted(async () => {
           <div class="info-row"><span>Edad:</span><strong>{{ petEdad }}</strong></div>
           <div class="info-row"><span>Raza:</span><strong>{{ petRaza }}</strong></div>
           <div class="info-row"><span>Actividad:</span><strong>{{ petActividad }}</strong></div>
-        </div>
-
-        <!-- Próximas Comidas -->
-        <div class="card">
-          <div class="card-title" style="color:var(--orange);">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Próximas Comidas
-          </div>
-          <div class="proxima-comida">
-            <div>
-              <div style="font-weight:700; font-size:.875rem;">Comida 1</div>
-              <div style="font-size:.78rem; color:var(--muted);">Próxima: 7:00 AM</div>
-            </div>
-            <span class="badge badge-red">400 cal</span>
-          </div>
-          <div class="proxima-comida">
-            <div>
-              <div style="font-weight:700; font-size:.875rem;">Comida 3</div>
-              <div style="font-size:.78rem; color:var(--muted);">Próxima: 7:00 PM</div>
-            </div>
-            <span class="badge badge-red">400 cal</span>
-          </div>
-          <button class="btn btn-danger btn-full" style="margin-top:.75rem;" id="btn-marcar-comida">Marcar Comida Completada</button>
         </div>
 
         <!-- Consumo Nutricional -->
@@ -555,7 +446,7 @@ onMounted(async () => {
       <div class="footer-brand"><span class="nav-logo" style="color:#fff; margin-bottom:.5rem; display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div>
       <div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div>
       <div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div>
-      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div>
+      <div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div>
     </div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>

@@ -2,6 +2,14 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { API_URL } from '../../api.js'
+import {
+  FECHA_MAX_CITA, HORAS_CITA, validarFechaCita, validarFechaHoraCita,
+  hoyColombia, horaA24, formatHora, construirHoras
+} from '../../utils/validators'
+
+// Rango permitido para agendar: desde hoy hasta el 31/12/2026
+const fechaMin = hoyColombia()
+const fechaMax = FECHA_MAX_CITA
 const API = API_URL
 
 const citas = ref([])
@@ -14,14 +22,14 @@ const cargando = ref(false)
 const error = ref('')
 const mostrarModalNuevo = ref(false)
 const mostrarModalEditar = ref(false)
-const mostrarModalEliminar = ref(false)
 const citaSeleccionada = ref(null)
-const citaAEliminar = ref(null)
+const hoy = hoyColombia()
 
-const TODAS_LAS_HORAS = [
-  '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
-  '02:00 PM', '03:00 PM', '04:00 PM'
-]
+const TODAS_LAS_HORAS = HORAS_CITA
+const ESTADOS = ['Pendiente', 'Confirmada', 'Completada', 'Cancelada']
+
+// Fecha, hora y veterinario con los que se abrio la cita a editar (para saber si se esta reprogramando)
+const citaOriginal = ref(null)
 
 const horasDisponiblesNuevo = ref(TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true })))
 const cargandoHorasNuevo = ref(false)
@@ -32,20 +40,14 @@ function getToken() {
   return localStorage.getItem('petcard_token')
 }
 
-function horaA24(horaStr) {
-  if (!horaStr) return ''
-  const str = String(horaStr).trim()
-  const ampmMatch = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
-  if (ampmMatch) {
-    let h = parseInt(ampmMatch[1], 10)
-    const m = ampmMatch[2]
-    const ap = ampmMatch[3].toUpperCase()
-    if (ap === 'PM' && h !== 12) h += 12
-    if (ap === 'AM' && h === 12) h = 0
-    return `${String(h).padStart(2, '0')}:${m}`
+// Lee el mensaje de error que devuelve el servidor (ej. "Esa hora ya pasó...") para mostrarlo tal cual
+async function mensajeDeError(res, porDefecto) {
+  try {
+    const data = await res.json()
+    return data.error || porDefecto
+  } catch {
+    return porDefecto
   }
-  const parts = str.split(':')
-  return `${parts[0].padStart(2, '0')}:${parts[1]}`
 }
 
 const nuevaCita = ref({
@@ -95,9 +97,14 @@ async function cargarVeterinarios() {
   } catch {}
 }
 
+// Una hora se ofrece solo si no la tiene otra cita y no ha pasado ya (si la fecha es hoy).
+// Solo se aplica la respuesta mas reciente de cada formulario.
+let ultimaConsultaNuevo = 0
 async function cargarHorasNuevo() {
+  const consulta = ++ultimaConsultaNuevo
   if (!nuevaCita.value.ID_veterinario || !nuevaCita.value.Fecha) {
-    horasDisponiblesNuevo.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    horasDisponiblesNuevo.value = construirHoras(nuevaCita.value.Fecha)
+    cargandoHorasNuevo.value = false
     return
   }
   cargandoHorasNuevo.value = true
@@ -106,20 +113,29 @@ async function cargarHorasNuevo() {
       `${API}/citas/horas-ocupadas?ID_veterinario=${nuevaCita.value.ID_veterinario}&Fecha=${nuevaCita.value.Fecha}`,
       { headers: { Authorization: `Bearer ${getToken()}` } }
     )
+    if (!res.ok) throw new Error(await mensajeDeError(res, 'No se pudo consultar la disponibilidad.'))
     const data = await res.json()
-    const ocupadas24 = (data.horasOcupadas || []).map(horaA24)
-    horasDisponiblesNuevo.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: !ocupadas24.includes(horaA24(h)) }))
-    if (nuevaCita.value.Hora && ocupadas24.includes(horaA24(nuevaCita.value.Hora))) nuevaCita.value.Hora = ''
-  } catch {
-    horasDisponiblesNuevo.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    if (consulta !== ultimaConsultaNuevo) return
+    horasDisponiblesNuevo.value = construirHoras(nuevaCita.value.Fecha, data.horasOcupadas || [])
+    const h = nuevaCita.value.Hora
+    if (h && !horasDisponiblesNuevo.value.some(x => x.hora === h && x.disponible)) nuevaCita.value.Hora = ''
+  } catch (e) {
+    if (consulta !== ultimaConsultaNuevo) return
+    // Sin saber la disponibilidad real no se ofrece ninguna hora
+    horasDisponiblesNuevo.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: false }))
+    nuevaCita.value.Hora = ''
+    error.value = e.message || 'No se pudo consultar la disponibilidad.'
   } finally {
-    cargandoHorasNuevo.value = false
+    if (consulta === ultimaConsultaNuevo) cargandoHorasNuevo.value = false
   }
 }
 
+let ultimaConsultaEditar = 0
 async function cargarHorasEditar() {
+  const consulta = ++ultimaConsultaEditar
   if (!citaSeleccionada.value?.ID_veterinario || !citaSeleccionada.value?.Fecha) {
     horasDisponiblesEditar.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    cargandoHorasEditar.value = false
     return
   }
   cargandoHorasEditar.value = true
@@ -129,15 +145,26 @@ async function cargarHorasEditar() {
       `${API}/citas/horas-ocupadas?ID_veterinario=${citaSeleccionada.value.ID_veterinario}&Fecha=${fechaSolo}`,
       { headers: { Authorization: `Bearer ${getToken()}` } }
     )
+    if (!res.ok) throw new Error(await mensajeDeError(res, 'No se pudo consultar la disponibilidad.'))
     const data = await res.json()
-    let ocupadas24 = (data.horasOcupadas || []).map(horaA24)
-    const horaActual24 = horaA24(citaSeleccionada.value.Hora)
-    ocupadas24 = ocupadas24.filter(h => h !== horaActual24)
-    horasDisponiblesEditar.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: !ocupadas24.includes(horaA24(h)) }))
-  } catch {
-    horasDisponiblesEditar.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    if (consulta !== ultimaConsultaEditar) return
+    let lista = construirHoras(fechaSolo, data.horasOcupadas || [])
+
+    // Si no se cambia ni el veterinario ni el dia, la hora de ESTA misma cita siempre se puede conservar
+    // (aunque ya haya pasado, o aparezca "ocupada" por la propia cita).
+    const o = citaOriginal.value
+    const mismaAgenda = o && String(o.ID_veterinario) === String(citaSeleccionada.value.ID_veterinario) && o.Fecha === fechaSolo
+    if (mismaAgenda) {
+      const horaOriginal = horaA24(o.Hora)
+      lista = lista.map(i => (horaA24(i.hora) === horaOriginal ? { ...i, disponible: true } : i))
+    }
+    horasDisponiblesEditar.value = lista
+  } catch (e) {
+    if (consulta !== ultimaConsultaEditar) return
+    horasDisponiblesEditar.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: false }))
+    error.value = e.message || 'No se pudo consultar la disponibilidad.'
   } finally {
-    cargandoHorasEditar.value = false
+    if (consulta === ultimaConsultaEditar) cargandoHorasEditar.value = false
   }
 }
 
@@ -146,26 +173,54 @@ watch(() => nuevaCita.value.Fecha, cargarHorasNuevo)
 watch(() => citaSeleccionada.value?.ID_veterinario, cargarHorasEditar)
 watch(() => citaSeleccionada.value?.Fecha, cargarHorasEditar)
 
+// Una cita es "anterior" si su fecha ya pasó. Esas no salen en la lista principal:
+// solo aparecen cuando se busca por texto o se elige un estado en el filtro.
+function esAnterior(cita) {
+  return String(cita.Fecha || '').slice(0, 10) < hoy
+}
+
+const buscando = computed(() => busqueda.value.trim() !== '' || filtroEstado.value !== 'Todos')
+
 const citasFiltradas = computed(() => {
-  return citas.value.filter(c => {
-    const texto = `${c.Nombre_mascota} ${c.Nombre_cliente} ${c.Nombre_servicio}`.toLowerCase()
-    const coincide = texto.includes(busqueda.value.toLowerCase())
-    const estado = c.Observaciones ? 'Confirmada' : 'Pendiente'
-    const coincideEstado = filtroEstado.value === 'Todos' || estado === filtroEstado.value
-    return coincide && coincideEstado
-  })
+  const q = busqueda.value.trim().toLowerCase()
+  return citas.value
+    .filter(c => {
+      const texto = `${c.Nombre_mascota} ${c.Nombre_cliente} ${c.Nombre_servicio}`.toLowerCase()
+      const coincide = texto.includes(q)
+      const coincideEstado = filtroEstado.value === 'Todos' || estadoCita(c) === filtroEstado.value
+      const visible = buscando.value || !esAnterior(c)
+      return coincide && coincideEstado && visible
+    })
+    // Las citas recién creadas primero (ID más alto = creada más recientemente)
+    .sort((a, b) => Number(b.ID_cita) - Number(a.ID_cita))
 })
 
-function estadoCita(cita) { return cita.Observaciones ? 'Confirmada' : 'Pendiente' }
+const anterioresOcultas = computed(() => buscando.value ? 0 : citas.value.filter(esAnterior).length)
+
+// Estado guardado en la cita ("pendiente" -> "Pendiente"). Es el que se edita y se envía al servidor.
+function estadoBase(cita) {
+  const e = String(cita.Estado || 'Pendiente').toLowerCase()
+  return ESTADOS.find(x => x.toLowerCase() === e) || (e === 'completa' ? 'Completada' : 'Pendiente')
+}
+
+// Estado que se muestra: una cita Pendiente/Confirmada cuya fecha ya pasó se ve como "Vencida".
+function estadoCita(cita) {
+  const e = estadoBase(cita)
+  if ((e === 'Pendiente' || e === 'Confirmada') && esAnterior(cita)) return 'Vencida'
+  return e
+}
 
 function badgeClass(estado) {
   if (estado === 'Confirmada') return 'badge badge-green'
   if (estado === 'Pendiente') return 'badge badge-yellow'
+  if (estado === 'Cancelada') return 'badge badge-red'
   return 'badge badge-gray'
 }
 
 function abrirEditar(cita) {
-  citaSeleccionada.value = { ...cita, Fecha: String(cita.Fecha).slice(0, 10) }
+  const fecha = String(cita.Fecha).slice(0, 10)
+  citaSeleccionada.value = { ...cita, Fecha: fecha, Estado: estadoBase(cita) }
+  citaOriginal.value = { Fecha: fecha, Hora: cita.Hora, ID_veterinario: cita.ID_veterinario }
   mostrarModalEditar.value = true
   cargarHorasEditar()
 }
@@ -177,37 +232,63 @@ function abrirNuevo() {
 }
 
 async function guardarEdicion() {
+  const c = citaSeleccionada.value
+  const o = citaOriginal.value
+  const cambiaFecha = !!o && c.Fecha !== o.Fecha
+  const mueveHorario = !!o && (cambiaFecha || horaA24(c.Hora) !== horaA24(o.Hora))
+
+  // Una fecha ya vencida se tolera solo si la cita no se mueve; nunca posterior al 31/12/2026
+  const errFecha = validarFechaCita(c.Fecha, { permitirPasado: !cambiaFecha })
+  if (errFecha) {
+    alert(errFecha)
+    return
+  }
+  // Si se reprograma para hoy, la hora no puede haber pasado ya
+  if (mueveHorario) {
+    const errHora = validarFechaHoraCita(c.Fecha, c.Hora)
+    if (errHora) {
+      alert(errHora)
+      await cargarHorasEditar()
+      return
+    }
+  }
   try {
-    const res = await fetch(`${API}/citas/${citaSeleccionada.value.ID_cita}`, {
+    const res = await fetch(`${API}/citas/${c.ID_cita}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(citaSeleccionada.value)
+      // Solo los campos editables (antes se enviaba el objeto completo, con nombres y datos de solo lectura)
+      body: JSON.stringify({
+        ID_servicio: c.ID_servicio,
+        ID_veterinario: c.ID_veterinario,
+        Fecha: c.Fecha,
+        Hora: c.Hora,
+        Motivo: c.Motivo,
+        Observaciones: c.Observaciones,
+        Estado: c.Estado
+      })
     })
-    if (!res.ok) throw new Error()
+    if (!res.ok) throw new Error(await mensajeDeError(res, 'Error al guardar los cambios.'))
     await cargarCitas()
     mostrarModalEditar.value = false
-  } catch {
-    alert('Error al guardar los cambios.')
-  }
-}
-
-function confirmarEliminar(cita) { citaAEliminar.value = cita; mostrarModalEliminar.value = true }
-
-async function eliminarCita() {
-  try {
-    const res = await fetch(`${API}/citas/${citaAEliminar.value.ID_cita}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
-    })
-    if (!res.ok) throw new Error()
-    await cargarCitas()
-    mostrarModalEliminar.value = false
-  } catch {
-    alert('Error al eliminar la cita.')
+  } catch (e) {
+    alert(e.message || 'Error al guardar los cambios.')
   }
 }
 
 async function crearCita() {
+  const errFecha = validarFechaCita(nuevaCita.value.Fecha)
+  if (errFecha) {
+    alert(errFecha)
+    return
+  }
+  // Si es hoy, la hora elegida no puede haber pasado ya (ej. son las 8:01 y eligio las 8:00)
+  const errHora = validarFechaHoraCita(nuevaCita.value.Fecha, nuevaCita.value.Hora)
+  if (errHora) {
+    alert(errHora)
+    nuevaCita.value.Hora = ''
+    await cargarHorasNuevo()
+    return
+  }
   const mascota = mascotas.value.find(m => m.ID_mascota == nuevaCita.value.ID_mascota)
   if (mascota) nuevaCita.value.ID_cliente = mascota.ID_cliente
   try {
@@ -216,13 +297,15 @@ async function crearCita() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(nuevaCita.value)
     })
-    if (!res.ok) throw new Error()
+    if (!res.ok) throw new Error(await mensajeDeError(res, 'No se pudo crear la cita.'))
     await cargarCitas()
     nuevaCita.value = { ID_cliente: '', ID_mascota: '', ID_servicio: '', ID_veterinario: '', Fecha: '', Hora: '', Motivo: '', Observaciones: '' }
     mostrarModalNuevo.value = false
-  } catch {
+  } catch (e) {
+    // Antes fallaba en silencio: ahora se dice por que (horario ocupado, hora pasada, etc.)
     nuevaCita.value.Hora = ''
     await cargarHorasNuevo()
+    alert(e.message || 'No se pudo crear la cita.')
   }
 }
 </script>
@@ -242,9 +325,16 @@ async function crearCita() {
       </div>
       <select class="filter-select" v-model="filtroEstado">
         <option>Todos</option>
-        <option>Confirmada</option>
         <option>Pendiente</option>
+        <option>Confirmada</option>
+        <option>Completada</option>
+        <option>Cancelada</option>
+        <option>Vencida</option>
       </select>
+    </div>
+
+    <div v-if="anterioresOcultas > 0" style="font-size:.82rem;color:#64748b;margin:-.25rem 0 .75rem;">
+      Mostrando las citas de hoy en adelante, las más recientes primero. Hay {{ anterioresOcultas }} cita{{ anterioresOcultas === 1 ? '' : 's' }} anterior{{ anterioresOcultas === 1 ? '' : 'es' }} que se ven al buscar.
     </div>
 
     <div v-if="cargando" style="text-align:center;padding:2rem;color:#888;">Cargando citas...</div>
@@ -264,13 +354,12 @@ async function crearCita() {
         <div class="admin-card-body">
           <div class="detail">{{ cita.Nombre_servicio }}</div>
           <div class="admin-card-meta">con {{ cita.Nombre_veterinario }}</div>
-          <div class="admin-card-meta">📅 {{ cita.Fecha?.slice(0,10) }} — 🕐 {{ cita.Hora }}</div>
+          <div class="admin-card-meta">📅 {{ cita.Fecha?.slice(0,10) }} — 🕐 {{ formatHora(cita.Hora) }}</div>
           <div class="admin-card-meta" v-if="cita.Motivo">Motivo: {{ cita.Motivo }}</div>
           <div class="admin-card-meta" v-if="cita.Observaciones" style="font-style:italic;">"{{ cita.Observaciones }}"</div>
         </div>
         <div class="admin-card-actions">
           <button class="btn btn-secondary btn-sm" @click="abrirEditar(cita)">Editar</button>
-          <button class="btn btn-danger btn-sm" @click="confirmarEliminar(cita)">Eliminar</button>
         </div>
       </div>
     </div>
@@ -296,7 +385,7 @@ async function crearCita() {
             <option v-for="v in veterinarios" :key="v.ID_veterinario" :value="v.ID_veterinario">{{ v.Nombre }}</option>
           </select>
           <label>Fecha</label>
-          <input type="date" v-model="nuevaCita.Fecha" />
+          <input type="date" v-model="nuevaCita.Fecha" :min="fechaMin" :max="fechaMax" />
 
           <label>
             Hora
@@ -343,7 +432,7 @@ async function crearCita() {
             <option v-for="v in veterinarios" :key="v.ID_veterinario" :value="v.ID_veterinario">{{ v.Nombre }}</option>
           </select>
           <label>Fecha</label>
-          <input type="date" v-model="citaSeleccionada.Fecha" />
+          <input type="date" v-model="citaSeleccionada.Fecha" :max="fechaMax" />
 
           <label>
             Hora
@@ -364,6 +453,10 @@ async function crearCita() {
             </div>
           </div>
 
+          <label>Estado</label>
+          <select v-model="citaSeleccionada.Estado">
+            <option v-for="e in ESTADOS" :key="e" :value="e">{{ e }}</option>
+          </select>
           <label>Motivo</label>
           <input v-model="citaSeleccionada.Motivo" />
           <label>Observaciones</label>
@@ -372,18 +465,6 @@ async function crearCita() {
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="mostrarModalEditar = false">Cancelar</button>
           <button class="btn btn-success btn-sm" :disabled="!citaSeleccionada.Hora" @click="guardarEdicion">Guardar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal Eliminar -->
-    <div v-if="mostrarModalEliminar" class="modal-overlay" @click.self="mostrarModalEliminar = false">
-      <div class="modal">
-        <h3>¿Eliminar cita?</h3>
-        <p>¿Eliminar la cita de <strong>{{ citaAEliminar?.Nombre_mascota }}</strong>? Esta acción no se puede deshacer.</p>
-        <div class="modal-footer">
-          <button class="btn btn-secondary btn-sm" @click="mostrarModalEliminar = false">Cancelar</button>
-          <button class="btn btn-danger btn-sm" @click="eliminarCita">Eliminar</button>
         </div>
       </div>
     </div>

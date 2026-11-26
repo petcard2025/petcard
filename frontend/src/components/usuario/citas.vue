@@ -1,10 +1,17 @@
 ﻿<script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import PageHero from '../shared/PageHero.vue'
+import { HERO_IMAGENES } from '../../utils/imagenesModulos'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
 import { clientesAPI, mascotasAPI, serviciosAPI, veterinariosAPI, citasAPI, API_URL } from '../../api.js'
+import {
+  FECHA_MAX_CITA, HORAS_CITA, validarFechaCita, validarFechaHoraCita,
+  hoyColombia, horaA24, formatHora, citaYaPaso, construirHoras
+} from '../../utils/validators'
 
 const router = useRouter()
+const route = useRoute()
 const { usuarioLogueado, isAuthenticated, cerrarSesion, irALogin, irARegistro } = useAuth()
 
 const clienteActual = ref(null)
@@ -21,18 +28,11 @@ const showAllCitas = ref(false)
 const citaCancelarId = ref(null)
 const showConfirmCancel = ref(false)
 
-const TODAS_LAS_HORAS = [
-  '08:00 AM',
-  '09:00 AM',
-  '10:00 AM',
-  '11:00 AM',
-  '02:00 PM',
-  '03:00 PM',
-  '04:00 PM'
-]
+const TODAS_LAS_HORAS = HORAS_CITA
 
 const horasDisponibles = ref(TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true })))
 const cargandoHoras = ref(false)
+const errorHoras = ref(false) // true si no se pudo consultar la disponibilidad
 const resaltarHoras = ref(false) // 🆕 resalta el recuadro de horas cuando es el único campo faltante
 
 const form = reactive({
@@ -44,35 +44,20 @@ const form = reactive({
   notas: ''
 })
 
-const fechaMin = ref((() => {
-  const hoy = new Date()
-  const y = hoy.getFullYear()
-  const m = String(hoy.getMonth() + 1).padStart(2, '0')
-  const d = String(hoy.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-})())
+// Rango permitido para agendar: desde hoy hasta el 31/12/2026
+const fechaMin = ref(hoyColombia())
+const fechaMax = FECHA_MAX_CITA
 
-// 🆕 Convierte cualquier formato de hora ("08:00 AM", "08:00:00", "20:00") a "HH:MM" 24h,
-// para poder comparar de forma confiable sin importar cómo la haya guardado el admin o el cliente.
-function horaA24(horaStr) {
-  if (!horaStr) return ''
-  const str = String(horaStr).trim()
-  const ampmMatch = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
-  if (ampmMatch) {
-    let h = parseInt(ampmMatch[1], 10)
-    const m = ampmMatch[2]
-    const ap = ampmMatch[3].toUpperCase()
-    if (ap === 'PM' && h !== 12) h += 12
-    if (ap === 'AM' && h === 12) h = 0
-    return `${String(h).padStart(2, '0')}:${m}`
-  }
-  const parts = str.split(':')
-  return `${parts[0].padStart(2, '0')}:${parts[1]}`
-}
-
+// Una hora se ofrece solo si no la tiene otra cita y no ha pasado ya (si la fecha es hoy).
+// Solo se aplica la respuesta mas reciente: si el usuario cambia de fecha rapido, una
+// respuesta lenta de la fecha anterior no debe pisar a la nueva.
+let ultimaConsultaHoras = 0
 async function cargarHorasDisponibles() {
+  const consulta = ++ultimaConsultaHoras
+  errorHoras.value = false
   if (!form.veterinario || !form.fecha) {
-    horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    horasDisponibles.value = construirHoras(form.fecha)
+    cargandoHoras.value = false
     return
   }
   cargandoHoras.value = true
@@ -82,28 +67,56 @@ async function cargarHorasDisponibles() {
       `${API_URL}/citas/horas-ocupadas?ID_veterinario=${form.veterinario}&Fecha=${form.fecha}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
-    const data = await res.json()
-    const ocupadas24 = (data.horasOcupadas || []).map(horaA24)
-    horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({
-      hora: h,
-      disponible: !ocupadas24.includes(horaA24(h))
-    }))
-    if (form.hora && ocupadas24.includes(horaA24(form.hora))) {
+    const data = await res.json().catch(() => ({}))
+    if (consulta !== ultimaConsultaHoras) return
+    if (!res.ok) throw new Error(data.error || 'No se pudo consultar la disponibilidad.')
+    horasDisponibles.value = construirHoras(form.fecha, data.horasOcupadas || [])
+    if (form.hora && !horasDisponibles.value.some(h => h.hora === form.hora && h.disponible)) {
       form.hora = ''
     }
   } catch (e) {
+    if (consulta !== ultimaConsultaHoras) return
     console.error('Error al cargar horas disponibles:', e)
-    horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
+    // Sin saber la disponibilidad real no se ofrece ninguna hora (antes se mostraban todas libres)
+    errorHoras.value = true
+    horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: false }))
+    form.hora = ''
   } finally {
-    cargandoHoras.value = false
+    if (consulta === ultimaConsultaHoras) cargandoHoras.value = false
   }
 }
 
 watch(() => form.veterinario, cargarHorasDisponibles)
 watch(() => form.fecha, cargarHorasDisponibles)
 
+// Mientras la pagina esta abierta pasa el tiempo: cada 30 s se quitan las horas de hoy que ya pasaron
+let timerHoras = null
+function quitarHorasPasadas() {
+  if (form.fecha !== hoyColombia()) return
+  horasDisponibles.value = horasDisponibles.value.map(i => ({ ...i, disponible: i.disponible && !citaYaPaso(form.fecha, i.hora) }))
+  if (form.hora && citaYaPaso(form.fecha, form.hora)) form.hora = ''
+}
+onMounted(() => { timerHoras = setInterval(quitarHorasPasadas, 30000) })
+onUnmounted(() => { if (timerHoras) clearInterval(timerHoras) })
+
+// Una cita Pendiente/Confirmada cuya fecha ya pasó se muestra como "vencida"
+function esAnterior(cita) {
+  return String(cita.Fecha || '').slice(0, 10) < hoyColombia()
+}
+
+function estadoVisible(cita) {
+  const e = (cita.Estado || 'Pendiente').toLowerCase()
+  if ((e === 'pendiente' || e === 'confirmada') && esAnterior(cita)) return 'vencida'
+  return e
+}
+
+// Las recién creadas primero; las vigentes (hoy en adelante) son las que se ven por defecto
+const citasOrdenadas = computed(() => [...citas.value].sort((a, b) => Number(b.ID_cita) - Number(a.ID_cita)))
+const citasVisiblesPorDefecto = computed(() => citasOrdenadas.value.filter(c => !esAnterior(c)).slice(0, 3))
+
 function estadoBadgeClass(estado) {
   const e = (estado || 'Pendiente').toLowerCase()
+  if (e === 'vencida') return 'badge-gray'
   if (e === 'confirmada') return 'badge-green'
   if (e === 'completada' || e === 'completa') return 'badge-gray'
   if (e === 'cancelada') return 'badge-red'
@@ -112,17 +125,30 @@ function estadoBadgeClass(estado) {
 
 function estadoLabel(estado) {
   const e = (estado || 'Pendiente').toLowerCase()
+  if (e === 'vencida') return '⌛ Vencida'
   if (e === 'confirmada') return '✅ Confirmada'
   if (e === 'completada' || e === 'completa') return '☑️ Completada'
   if (e === 'cancelada') return '❌ Cancelada'
   return '🕐 Pendiente'
 }
 
-function formatFechaCita(fecha) {
+function formatFechaCita(fecha, largo = false) {
   if (!fecha) return '—'
   const soloFecha = String(fecha).split('T')[0]
   const [y, m, d] = soloFecha.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+  // new Date(y, m-1, d) usa la zona local: no corre el dia (new Date('2026-11-20') lo mostraba como el 19)
+  return new Date(y, m - 1, d).toLocaleDateString(
+    'es-ES',
+    largo
+      ? { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }
+      : { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }
+  )
+}
+
+// Solo se puede cancelar una cita pendiente o confirmada que aun no ha pasado
+function puedeCancelar(cita) {
+  const e = (cita.Estado || 'pendiente').toLowerCase()
+  return ['pendiente', 'confirmada'].includes(e) && !citaYaPaso(cita.Fecha, cita.Hora)
 }
 
 function pedirCancelar(idCita) {
@@ -168,17 +194,33 @@ async function cargarMascotas() {
   if (!clienteActual.value?.ID_cliente) return
   try {
     mascotas.value = await mascotasAPI.obtenerPorCliente(clienteActual.value.ID_cliente)
-    if (mascotas.value.length) form.mascota = mascotas.value[0].ID_mascota
+    // Solo se preselecciona si hay una unica opcion; si hay varias, el usuario elige
+    if (mascotas.value.length === 1) form.mascota = mascotas.value[0].ID_mascota
   } catch (error) {
     console.error('Error al cargar mascotas:', error)
     errorMessage.value = 'Error al cargar tus mascotas.'
   }
 }
 
+// Si el usuario llegó desde la vista de Servicios (/citas?servicio=Desparasitación),
+// deja ese servicio ya seleccionado en el formulario.
+// Compara sin tildes ni mayúsculas y por la raíz de la palabra, para que
+// "Vacunación" encuentre "Vacuna Antirrábica" y "Cirugías" encuentre "Cirugía Esterilización".
+const normalizar = (t) => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+
+function preseleccionarServicio() {
+  const pedido = normalizar(route.query.servicio)
+  if (!pedido) return
+  const raiz = pedido.slice(0, 6)
+  const encontrado = servicios.value.find(s => normalizar(s.Nombre) === pedido)
+    || servicios.value.find(s => normalizar(s.Nombre).includes(raiz))
+  if (encontrado) form.servicio = encontrado.ID_servicio
+}
+
 async function cargarServicios() {
   try {
     servicios.value = await serviciosAPI.obtener()
-    if (servicios.value.length) form.servicio = servicios.value[0].ID_servicio
+    if (servicios.value.length === 1) form.servicio = servicios.value[0].ID_servicio
   } catch (error) {
     console.error('Error al cargar servicios:', error)
     errorMessage.value = 'Error al cargar los servicios.'
@@ -188,7 +230,7 @@ async function cargarServicios() {
 async function cargarVeterinarios() {
   try {
     veterinarios.value = await veterinariosAPI.obtener()
-    if (veterinarios.value.length) form.veterinario = veterinarios.value[0].ID_veterinario
+    if (veterinarios.value.length === 1) form.veterinario = veterinarios.value[0].ID_veterinario
   } catch (error) {
     console.error('Error al cargar veterinarios:', error)
     errorMessage.value = 'Error al cargar los veterinarios.'
@@ -206,12 +248,13 @@ async function cargarCitas() {
 }
 
 function resetForm() {
-  form.mascota = mascotas.value[0]?.ID_mascota || ''
-  form.servicio = servicios.value[0]?.ID_servicio || ''
-  form.veterinario = veterinarios.value[0]?.ID_veterinario || ''
+  form.mascota = mascotas.value.length === 1 ? mascotas.value[0].ID_mascota : ''
+  form.servicio = servicios.value.length === 1 ? servicios.value[0].ID_servicio : ''
+  form.veterinario = veterinarios.value.length === 1 ? veterinarios.value[0].ID_veterinario : ''
   form.fecha = ''
   form.hora = ''
   form.notas = ''
+  errorHoras.value = false
   horasDisponibles.value = TODAS_LAS_HORAS.map(h => ({ hora: h, disponible: true }))
 }
 
@@ -238,18 +281,24 @@ function validateForm() {
     errorMessage.value = 'Selecciona una fecha.'
     return false
   }
+  // La fecha se valida antes que la hora: con una fecha invalida no tiene sentido pedir la hora
+  const errFecha = validarFechaCita(form.fecha)
+  if (errFecha) {
+    errorMessage.value = errFecha
+    return false
+  }
   if (!form.hora) {
     errorMessage.value = 'Falta seleccionar la hora: haz clic en uno de los horarios disponibles.'
     resaltarHoras.value = true
     setTimeout(() => { resaltarHoras.value = false }, 2000)
     return false
   }
-  const [y, m, d] = form.fecha.split('-').map(Number)
-  const fechaSeleccionada = new Date(y, m - 1, d)
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  if (fechaSeleccionada < hoy) {
-    errorMessage.value = 'No puedes agendar una cita en una fecha pasada.'
+  // Si la pagina estuvo abierta un rato, la hora elegida puede haber pasado ya (ej. son las 8:01 y eligio las 8:00)
+  const errHora = validarFechaHoraCita(form.fecha, form.hora)
+  if (errHora) {
+    errorMessage.value = errHora
+    form.hora = ''
+    quitarHorasPasadas()
     return false
   }
   return true
@@ -280,17 +329,16 @@ async function agendarCita() {
     const vetNombre = veterinarios.value.find(v => v.ID_veterinario === Number(form.veterinario))?.Nombre || ''
     citaCreada.value = { mascota: mascotaNombre, servicio: servicioNombre, veterinario: vetNombre, fecha: form.fecha, hora: form.hora }
     showSuccess.value = true
-    successMessage.value = 'Cita registrada con éxito en la base de datos.'
     await cargarCitas()
     resetForm()
   } catch (error) {
     console.error('Error al agendar cita:', error)
-    // 🆕 Si el horario se ocupó justo antes de confirmar (carrera entre usuarios),
-    // no mostramos ninguna alerta: solo limpiamos la hora y refrescamos la grilla
-    // para que esa hora desaparezca de las opciones disponibles.
+    // Si el horario se ocupó justo antes de confirmar (otro usuario lo tomó), se limpia la hora,
+    // se refresca la grilla y se avisa: antes la hora desaparecia sin ninguna explicacion.
     if (error.message && error.message.toLowerCase().includes('ya tiene una cita agendada')) {
       form.hora = ''
       await cargarHorasDisponibles()
+      errorMessage.value = 'Ese horario acaba de ocuparse. Elige otro horario disponible.'
     } else {
       errorMessage.value = error.message || 'Error al registrar la cita.'
     }
@@ -316,6 +364,7 @@ onMounted(async () => {
   await cargarVeterinarios()
   await cargarCitas()
   resetForm()
+  preseleccionarServicio()
 })
 </script>
 
@@ -344,7 +393,7 @@ onMounted(async () => {
     </div>
   </nav>
 
-  <div class="hero"><h1>Agendamiento de Citas</h1><p>Programa tu atención veterinaria que tu mascota necesita</p></div>
+  <PageHero titulo="Agendamiento de Citas" :imagen="HERO_IMAGENES.citas">Programa la atención veterinaria que tu mascota necesita</PageHero>
 
   <div class="page-wrapper" style="margin-top:2rem;">
     <div class="two-col">
@@ -391,7 +440,7 @@ onMounted(async () => {
             </div>
             <div class="form-group">
               <label>Fecha <span class="req">*</span></label>
-              <input type="date" class="form-control" v-model="form.fecha" :min="fechaMin" />
+              <input type="date" class="form-control" v-model="form.fecha" :min="fechaMin" :max="fechaMax" />
             </div>
           </div>
 
@@ -424,9 +473,16 @@ onMounted(async () => {
                 v-if="horasDisponibles.every(h => !h.disponible)"
                 class="horas-llenas"
               >
-                <span style="font-size:1.3rem;">📅</span>
-                No hay horarios disponibles para este día con este veterinario.
-                <br><span style="font-weight:400; color:var(--muted);">Prueba con otra fecha o elige otro veterinario.</span>
+                <template v-if="errorHoras">
+                  <span style="font-size:1.3rem;">⚠️</span>
+                  No se pudo consultar la disponibilidad.
+                  <br><span style="font-weight:400; color:var(--muted);">Revisa tu conexión y vuelve a elegir la fecha para reintentar.</span>
+                </template>
+                <template v-else>
+                  <span style="font-size:1.3rem;">📅</span>
+                  No hay horarios disponibles para este día con este veterinario.
+                  <br><span style="font-weight:400; color:var(--muted);">Prueba con otra fecha o elige otro veterinario.</span>
+                </template>
               </div>
             </div>
           </div>
@@ -458,12 +514,12 @@ onMounted(async () => {
             <div style="font-size:.88rem;">Aún no tienes citas agendadas.</div>
           </div>
 
-          <div v-for="cita in (showAllCitas ? citas : citas.slice(0, 3))" :key="cita.ID_cita"
+          <div v-for="cita in (showAllCitas ? citasOrdenadas : citasVisiblesPorDefecto)" :key="cita.ID_cita"
                class="cita-item-card"
                :class="{ 'cita-cancelada': (cita.Estado || '').toLowerCase() === 'cancelada' }">
             <div class="cita-item-top">
               <div class="cita-item-servicio">{{ cita.Nombre_servicio || 'Cita veterinaria' }}</div>
-              <span class="badge" :class="estadoBadgeClass(cita.Estado)">{{ estadoLabel(cita.Estado) }}</span>
+              <span class="badge" :class="estadoBadgeClass(estadoVisible(cita))">{{ estadoLabel(estadoVisible(cita)) }}</span>
             </div>
             <div class="cita-item-row">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -471,14 +527,14 @@ onMounted(async () => {
             </div>
             <div class="cita-item-row">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              {{ cita.Hora }}
+              {{ formatHora(cita.Hora) }}
             </div>
             <div class="cita-item-row">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
               <strong>{{ cita.Nombre_mascota }}</strong>
             </div>
             <button
-              v-if="['pendiente','confirmada'].includes((cita.Estado || 'pendiente').toLowerCase())"
+              v-if="puedeCancelar(cita)"
               class="btn-cancelar-cita"
               @click="pedirCancelar(cita.ID_cita)"
             >
@@ -486,7 +542,11 @@ onMounted(async () => {
             </button>
           </div>
 
-          <button v-if="citas.length > 3" class="ver-todas-btn" @click="showAllCitas = !showAllCitas">
+          <div v-if="citas.length > 0 && citasVisiblesPorDefecto.length === 0 && !showAllCitas" style="padding:.75rem 0; text-align:center; color:var(--muted); font-size:.85rem;">
+            No tienes citas próximas.
+          </div>
+
+          <button v-if="citasOrdenadas.length > citasVisiblesPorDefecto.length" class="ver-todas-btn" @click="showAllCitas = !showAllCitas">
             {{ showAllCitas ? '▲ Ver menos' : `Ver todas (${citas.length}) →` }}
           </button>
         </div>
@@ -496,9 +556,10 @@ onMounted(async () => {
           <ul style="list-style:none; display:flex; flex-direction:column; gap:.5rem;">
             <li style="font-size:.83rem; color:var(--muted);">+1 234 567 8901</li>
             <li style="font-size:.83rem; color:var(--muted);">info@petcard.com</li>
-            <li style="font-size:.83rem; color:var(--muted);">Lun – Vie: 8:00 AM – 6:00 PM</li>
+            <li style="font-size:.83rem; color:var(--muted);">Lunes - Viernes: 8:00 AM - 7:00 PM</li>
+            <li style="font-size:.83rem; color:var(--muted);">Sábados: 9:00 AM - 6:00 PM</li>
+            <li style="font-size:.83rem; color:var(--muted);">Domingos: 10:00 AM - 4:00 PM</li>
           </ul>
-          <p style="color:var(--red); font-weight:700; font-size:.83rem; margin-top:.5rem;">🔴 Emergencias 24/7</p>
         </div>
       </div>
     </div>
@@ -531,17 +592,17 @@ onMounted(async () => {
           <div class="success-detail-row"><span>🐶 Mascota</span><strong>{{ citaCreada.mascota }}</strong></div>
           <div class="success-detail-row"><span>🩺 Servicio</span><strong>{{ citaCreada.servicio }}</strong></div>
           <div class="success-detail-row"><span>👨‍⚕️ Veterinario</span><strong>{{ citaCreada.veterinario }}</strong></div>
-          <div class="success-detail-row"><span>📅 Fecha</span><strong>{{ new Date(citaCreada.fecha).toLocaleDateString('es-ES', { weekday:'long', day:'2-digit', month:'long', year:'numeric' }) }}</strong></div>
+          <div class="success-detail-row"><span>📅 Fecha</span><strong>{{ formatFechaCita(citaCreada.fecha, true) }}</strong></div>
           <div class="success-detail-row"><span>🕐 Hora</span><strong>{{ citaCreada.hora }}</strong></div>
         </div>
         <button class="success-btn" @click="showSuccess = false">¡Perfecto, entendido!</button>
-        <p class="success-note">Puedes ver tu cita en el panel de <strong>Próximas Citas</strong> →</p>
+        <p class="success-note">Puedes ver tu cita en el panel de <strong>Mis Citas</strong> →</p>
       </div>
     </div>
   </Teleport>
 
   <footer class="footer" style="margin-top:2rem;">
-    <div class="footer-grid"><div class="footer-brand"><span class="nav-logo" style="color:#fff;display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div><div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div><div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div><div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p><p class="footer-emergency">Emergencias 24/7</p></div></div>
+    <div class="footer-grid"><div class="footer-brand"><span class="nav-logo" style="color:#fff;display:flex;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C17.5 22.15 21 17.25 21 12V6l-9-4z" fill="white" opacity=".2"/></svg>PetCard</span><p>Comprometidos con brindar toda la atención profesional que tu mascota.</p></div><div class="footer-col"><h4>Servicios</h4><ul><li><a href="#">Consulta Generales</a></li><li><a href="#">Vacunación</a></li><li><a href="#">Cirugías</a></li><li><a href="#">Emergencias</a></li></ul></div><div class="footer-col"><h4>Contacto</h4><p>+1 234 567 8901</p><p>info@petcard.com</p><p>Calle Principal 123, Ciudad</p></div><div class="footer-col"><h4>Horarios</h4><p>Lunes - Viernes: 8:00 AM - 7:00 PM</p><p>Sábados: 9:00 AM - 6:00 PM</p><p>Domingos: 10:00 AM - 4:00 PM</p></div></div>
     <div class="footer-bottom">© 2024 PetCard. Todos los derechos reservados.</div>
   </footer>
 </template>

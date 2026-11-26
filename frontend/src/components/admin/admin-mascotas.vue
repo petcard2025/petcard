@@ -2,6 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { mascotasAPI, clientesAPI } from '../../api'
+import ComboSelect from '../shared/combo-select.vue'
+import { FECHA_NAC_MIN, fechaNacMax, limitarAnioFecha, soloTeclasFecha } from '../../utils/validators'
 
 const mascotas = ref([])
 const clientes = ref([])
@@ -56,6 +58,34 @@ const especies = computed(() => {
   return ['Todas', ...set]
 })
 
+// Selectores de dueño con búsqueda (escribes nombre o correo y la lista se filtra)
+const TODOS_LOS_DUENOS = 'Todos los dueños'
+const etiquetaCliente = c => `${c.Nombre} — ${c.Correo}`
+const opcionesCliente = computed(() => clientes.value.map(etiquetaCliente))
+const opcionesFiltroCliente = computed(() => [TODOS_LOS_DUENOS, ...opcionesCliente.value])
+
+const clienteNuevoElegido = computed({
+  get() {
+    const c = clientes.value.find(x => String(x.ID_cliente) === String(nuevaMascota.value.ID_cliente))
+    return c ? etiquetaCliente(c) : ''
+  },
+  set(texto) {
+    const c = clientes.value.find(x => etiquetaCliente(x) === texto)
+    nuevaMascota.value.ID_cliente = c ? c.ID_cliente : ''
+  }
+})
+
+const filtroClienteElegido = computed({
+  get() {
+    const c = clientes.value.find(x => String(x.ID_cliente) === String(filtroCliente.value))
+    return c ? etiquetaCliente(c) : TODOS_LOS_DUENOS
+  },
+  set(texto) {
+    const c = clientes.value.find(x => etiquetaCliente(x) === texto)
+    filtroCliente.value = c ? c.ID_cliente : ''
+  }
+})
+
 const mascotasFiltradas = computed(() => {
   return mascotas.value.filter(m => {
     const texto = `${m.Nombre} ${m.Raza} ${m.Nombre_dueno}`.toLowerCase()
@@ -92,7 +122,6 @@ function iconoEspecie(especie) {
 
 function abrirNuevo() {
   nuevaMascota.value = formVacio()
-  if (clientes.value.length > 0) nuevaMascota.value.ID_cliente = clientes.value[0].ID_cliente
   mostrarModalNuevo.value = true
 }
 
@@ -163,10 +192,14 @@ async function eliminarMascota() {
       <select class="filter-select" v-model="filtroEspecie">
         <option v-for="e in especies" :key="e" :value="e">{{ e }}</option>
       </select>
-      <select class="filter-select" v-model="filtroCliente" style="min-width:180px;">
-        <option value="">Todos los dueños</option>
-        <option v-for="c in clientes" :key="c.ID_cliente" :value="c.ID_cliente">{{ c.Nombre }}</option>
-      </select>
+      <div style="min-width:240px;">
+        <ComboSelect
+          v-model="filtroClienteElegido"
+          :options="opcionesFiltroCliente"
+          placeholder="Buscar dueño..."
+          texto-vacio="No se encontraron dueños"
+        />
+      </div>
     </div>
 
     <div v-if="cargando" style="text-align:center;padding:2rem;color:#888;">Cargando mascotas...</div>
@@ -202,10 +235,12 @@ async function eliminarMascota() {
         <h3>Nueva Mascota</h3>
         <div class="modal-body">
           <label>Dueño (cliente) <span class="req">*</span></label>
-          <select v-model="nuevaMascota.ID_cliente">
-            <option value="" disabled>-- Selecciona el dueño --</option>
-            <option v-for="c in clientes" :key="c.ID_cliente" :value="c.ID_cliente">{{ c.Nombre }} — {{ c.Correo }}</option>
-          </select>
+          <ComboSelect
+            v-model="clienteNuevoElegido"
+            :options="opcionesCliente"
+            placeholder="Busca por nombre o correo..."
+            texto-vacio="No se encontraron dueños"
+          />
 
           <label>Nombre de la mascota <span class="req">*</span></label>
           <input v-model="nuevaMascota.Nombre" placeholder="Ej: Max" />
@@ -240,7 +275,7 @@ async function eliminarMascota() {
             </div>
             <div>
               <label>Fecha de nacimiento</label>
-              <input type="date" v-model="nuevaMascota.Fecha_nacimiento" />
+              <input type="date" v-model="nuevaMascota.Fecha_nacimiento" :min="FECHA_NAC_MIN" :max="fechaNacMax()" @keydown="soloTeclasFecha" @input="limitarAnioFecha" />
             </div>
           </div>
 
@@ -294,7 +329,7 @@ async function eliminarMascota() {
             </div>
             <div>
               <label>Fecha de nacimiento</label>
-              <input type="date" v-model="mascotaSeleccionada.Fecha_nacimiento" />
+              <input type="date" v-model="mascotaSeleccionada.Fecha_nacimiento" :min="FECHA_NAC_MIN" :max="fechaNacMax()" @keydown="soloTeclasFecha" @input="limitarAnioFecha" />
             </div>
           </div>
 
