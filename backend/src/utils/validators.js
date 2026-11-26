@@ -165,6 +165,23 @@ function validarFechaHoraCita(fecha, hora, ahora = ahoraColombia()) {
   return null
 }
 
+// Reglas del servicio (catálogo). Longitudes según la tabla servicio: Nombre 120, Categoria 100, Precio decimal(10,2)
+function validarServicio({ Nombre, Categoria, Precio }) {
+  const nombre = typeof Nombre === 'string' ? Nombre.trim() : ''
+  if (nombre.length < 2 || nombre.length > 120) {
+    return 'El nombre del servicio es obligatorio (mínimo 2, máximo 120 caracteres).'
+  }
+  if (Categoria !== undefined && Categoria !== null && String(Categoria).trim().length > 100) {
+    return 'La categoría no puede superar 100 caracteres.'
+  }
+  if (Precio !== undefined && Precio !== null && Precio !== '') {
+    const precio = Number(Precio)
+    if (isNaN(precio) || precio < 0) return 'El precio no es válido.'
+    if (precio > 99999999.99) return 'El precio es demasiado alto.'
+  }
+  return null
+}
+
 module.exports = {
   normalizarTelefono,
   validarNombrePersona,
@@ -174,6 +191,7 @@ module.exports = {
   validarDireccion,
   validarRegistroCliente,
   validarMascota,
+  validarServicio,
   FECHA_MAX_CITA,
   HORAS_CITA,
   validarFechaCita,
