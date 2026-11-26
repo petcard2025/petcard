@@ -204,7 +204,7 @@ app.use(cors({
   credentials: true
 }))
 
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

@@ -82,10 +82,7 @@ async function eliminarUsuario() {
     <div v-if="error" class="alert alert-danger"><span>{{ error }}</span></div>
 
     <div class="search-filter">
-      <div class="search-wrap">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" placeholder="Buscar por nombre, correo, rol o ID..." v-model="busqueda" />
-      </div>
+      <BuscadorLupa v-model="busqueda" :sugerencias="sugerenciasBusqueda" placeholder="Buscar por nombre, correo, rol o ID..." />
       <select class="filter-select" v-model="filtroRol">
         <option>Todos</option>
         <option value="administrador">administrador</option>

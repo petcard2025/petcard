@@ -2,6 +2,10 @@
   import { ref, computed, onMounted } from 'vue'
   import AdminLayout from './AdminLayout.vue'
   import { serviciosAPI } from '../../api'
+  import CampoOpciones from '../shared/campo-opciones.vue'
+  import BuscadorLupa from '../shared/buscador-lupa.vue'
+  import { CATEGORIAS_SERVICIO, nombresServicio, descripcionesServicio } from '../../utils/opcionesClinicas'
+  import { coincideBusqueda, sugerenciasGenericas } from '../../utils/busqueda'
 
   const servicios = ref([])
   const busqueda = ref('')
@@ -30,11 +34,19 @@
     }
   }
 
-  const serviciosFiltrados = computed(() =>
-    servicios.value.filter(s =>
-      `${s.Nombre} ${s.Descripcion} ${s.Categoria}`.toLowerCase().includes(busqueda.value.toLowerCase())
-    )
+  const sugerenciasBusqueda = computed(() =>
+    sugerenciasGenericas(servicios.value, s => s.Nombre, s => s.Categoria, '🩺')
   )
+
+  const serviciosFiltrados = computed(() =>
+    servicios.value.filter(s => coincideBusqueda(busqueda.value, s.Nombre, s.Descripcion, s.Categoria))
+  )
+
+  // Nombre y descripción de opción múltiple según la categoría elegida
+  const nombresNuevo = computed(() => nombresServicio(nuevoServicio.value.Categoria))
+  const descripcionesNuevo = computed(() => descripcionesServicio(nuevoServicio.value.Categoria))
+  const nombresEdicion = computed(() => nombresServicio(servicioSeleccionado.value?.Categoria))
+  const descripcionesEdicion = computed(() => descripcionesServicio(servicioSeleccionado.value?.Categoria))
 
   function abrirEditar(s) { servicioSeleccionado.value = { ...s }; mostrarModalEditar.value = true }
 
@@ -81,10 +93,7 @@
       <div v-if="error" class="alert alert-danger"><span>{{ error }}</span></div>
 
       <div class="search-filter">
-        <div class="search-wrap">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" placeholder="Buscar servicios..." v-model="busqueda" />
-        </div>
+        <BuscadorLupa v-model="busqueda" :sugerencias="sugerenciasBusqueda" placeholder="Buscar servicios..." />
       </div>
 
       <div v-if="cargando" style="text-align:center;padding:2rem;color:#888;">Cargando servicios...</div>
@@ -112,9 +121,12 @@
         <div class="modal">
           <h3>Nuevo Servicio</h3>
           <div class="modal-body">
-            <label>Nombre</label><input v-model="nuevoServicio.Nombre" />
-            <label>Descripción</label><input v-model="nuevoServicio.Descripcion" />
-            <label>Categoría</label><input v-model="nuevoServicio.Categoria" placeholder="Ej: Consulta, Vacunación..." />
+            <label>Categoría</label>
+            <CampoOpciones v-model="nuevoServicio.Categoria" :options="CATEGORIAS_SERVICIO" placeholder="-- Selecciona la categoría --" />
+            <label>Nombre</label>
+            <CampoOpciones v-model="nuevoServicio.Nombre" :options="nombresNuevo" placeholder="-- Selecciona el servicio --" />
+            <label>Descripción</label>
+            <CampoOpciones v-model="nuevoServicio.Descripcion" :options="descripcionesNuevo" placeholder="-- Selecciona la descripción --" />
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary btn-sm" @click="mostrarModalNuevo = false">Cancelar</button>
@@ -128,9 +140,12 @@
         <div class="modal">
           <h3>Editar Servicio</h3>
           <div class="modal-body" v-if="servicioSeleccionado">
-            <label>Nombre</label><input v-model="servicioSeleccionado.Nombre" />
-            <label>Descripción</label><input v-model="servicioSeleccionado.Descripcion" />
-            <label>Categoría</label><input v-model="servicioSeleccionado.Categoria" />
+            <label>Categoría</label>
+            <CampoOpciones v-model="servicioSeleccionado.Categoria" :options="CATEGORIAS_SERVICIO" placeholder="-- Selecciona la categoría --" />
+            <label>Nombre</label>
+            <CampoOpciones v-model="servicioSeleccionado.Nombre" :options="nombresEdicion" placeholder="-- Selecciona el servicio --" />
+            <label>Descripción</label>
+            <CampoOpciones v-model="servicioSeleccionado.Descripcion" :options="descripcionesEdicion" placeholder="-- Selecciona la descripción --" />
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary btn-sm" @click="mostrarModalEditar = false">Cancelar</button>

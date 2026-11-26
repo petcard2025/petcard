@@ -3,6 +3,10 @@ import { ref, computed, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { notificacionesAPI, usuariosAPI } from '../../api'
 import ComboSelect from '../shared/combo-select.vue'
+import CampoOpciones from '../shared/campo-opciones.vue'
+import BuscadorLupa from '../shared/buscador-lupa.vue'
+import { mensajesNotificacion } from '../../utils/opcionesClinicas'
+import { coincideBusqueda, sugerenciasGenericas } from '../../utils/busqueda'
 
 const notificaciones = ref([])
 const usuarios = ref([])
@@ -58,17 +62,23 @@ const tipos = computed(() => {
   return ['Todos', ...set]
 })
 
+const sugerenciasBusqueda = computed(() =>
+  sugerenciasGenericas(notificaciones.value, n => n.Nombre_usuario, null, '👤')
+)
+
+// Mensajes de opción múltiple según el tipo de notificación
+const mensajesTipo = computed(() => mensajesNotificacion(nuevaNotificacion.value.Tipo))
+
 const notificacionesFiltradas = computed(() => {
   return notificaciones.value
     .filter(n => {
-      const texto = `${n.Mensaje} ${n.Nombre_usuario}`.toLowerCase()
-      const coincideBusqueda = texto.includes(busqueda.value.toLowerCase())
+      const coincideTexto = coincideBusqueda(busqueda.value, n.Mensaje, n.Nombre_usuario)
       const coincideTipo = filtroTipo.value === 'Todos' || n.Tipo === filtroTipo.value
       const coincideLeida =
         filtroLeida.value === 'Todas' ||
         (filtroLeida.value === 'Leídas' && Number(n.Leida) === 1) ||
         (filtroLeida.value === 'No leídas' && Number(n.Leida) !== 1)
-      return coincideBusqueda && coincideTipo && coincideLeida
+      return coincideTexto && coincideTipo && coincideLeida
     })
     .sort((a, b) => new Date(b.Fecha_envio) - new Date(a.Fecha_envio))
 })
@@ -137,10 +147,7 @@ async function enviarNotificacion() {
     <div v-if="error" class="alert alert-danger"><span>{{ error }}</span></div>
 
     <div class="search-filter">
-      <div class="search-wrap">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" placeholder="Buscar por mensaje o usuario..." v-model="busqueda" />
-      </div>
+      <BuscadorLupa v-model="busqueda" :sugerencias="sugerenciasBusqueda" placeholder="Buscar por mensaje o usuario..." />
       <select class="filter-select" v-model="filtroTipo">
         <option v-for="t in tipos" :key="t" :value="t">{{ t }}</option>
       </select>
@@ -187,7 +194,7 @@ async function enviarNotificacion() {
             texto-vacio="No se encontraron usuarios"
           />
           <label>Tipo</label>
-          <select v-model="nuevaNotificacion.Tipo">
+          <select v-model="nuevaNotificacion.Tipo" @change="nuevaNotificacion.Mensaje = ''">
             <option>General</option>
             <option>cita</option>
             <option>vacuna</option>
@@ -199,7 +206,7 @@ async function enviarNotificacion() {
             <option>SMS</option>
           </select>
           <label>Mensaje</label>
-          <textarea v-model="nuevaNotificacion.Mensaje" rows="3" placeholder="Escribe el mensaje..."></textarea>
+          <CampoOpciones v-model="nuevaNotificacion.Mensaje" :options="mensajesTipo" placeholder="-- Selecciona el mensaje --" />
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="mostrarModalNuevo = false">Cancelar</button>

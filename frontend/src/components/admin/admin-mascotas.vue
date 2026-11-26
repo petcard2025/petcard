@@ -3,6 +3,10 @@ import { ref, computed, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { mascotasAPI, clientesAPI } from '../../api'
 import ComboSelect from '../shared/combo-select.vue'
+import CampoOpciones from '../shared/campo-opciones.vue'
+import BuscadorLupa from '../shared/buscador-lupa.vue'
+import { razasPorEspecie, ESPECIES_MASCOTA } from '../../utils/opcionesClinicas'
+import { coincideBusqueda, sugerenciasMascota } from '../../utils/busqueda'
 import { FECHA_NAC_MIN, fechaNacMax, limitarAnioFecha, soloTeclasFecha } from '../../utils/validators'
 
 const mascotas = ref([])
@@ -86,15 +90,23 @@ const filtroClienteElegido = computed({
   }
 })
 
+// Esta vista busca por mascota y por dueño (cliente)
+const sugerenciasBusqueda = computed(() =>
+  sugerenciasMascota(mascotas.value, m => m.Nombre, m => m.Nombre_dueno)
+)
+
 const mascotasFiltradas = computed(() => {
   return mascotas.value.filter(m => {
-    const texto = `${m.Nombre} ${m.Raza} ${m.Nombre_dueno}`.toLowerCase()
-    const coincideBusqueda = texto.includes(busqueda.value.toLowerCase())
+    const coincideTexto = coincideBusqueda(busqueda.value, m.Nombre, m.Nombre_dueno, m.Raza, m.Especie)
     const coincideCliente = !filtroCliente.value || String(m.ID_cliente) === String(filtroCliente.value)
     const coincideEspecie = filtroEspecie.value === 'Todas' || m.Especie === filtroEspecie.value
-    return coincideBusqueda && coincideCliente && coincideEspecie
+    return coincideTexto && coincideCliente && coincideEspecie
   })
 })
+
+// Razas de opción múltiple según la especie elegida
+const razasNuevo = computed(() => razasPorEspecie(nuevaMascota.value.Especie))
+const razasEdicion = computed(() => razasPorEspecie(mascotaSeleccionada.value?.Especie))
 
 function edadDesde(fecha) {
   if (!fecha) return '—'
@@ -185,10 +197,7 @@ async function eliminarMascota() {
     <div v-if="error" class="alert alert-danger"><span>{{ error }}</span></div>
 
     <div class="search-filter">
-      <div class="search-wrap">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" placeholder="Buscar por mascota, raza o dueño..." v-model="busqueda" />
-      </div>
+      <BuscadorLupa v-model="busqueda" :sugerencias="sugerenciasBusqueda" placeholder="Buscar por mascota, dueño o raza..." />
       <select class="filter-select" v-model="filtroEspecie">
         <option v-for="e in especies" :key="e" :value="e">{{ e }}</option>
       </select>
@@ -248,12 +257,8 @@ async function eliminarMascota() {
           <div class="form-row-modal">
             <div>
               <label>Especie</label>
-              <select v-model="nuevaMascota.Especie">
-                <option>Perro</option>
-                <option>Gato</option>
-                <option>Ave</option>
-                <option>Conejo</option>
-                <option>Otro</option>
+              <select v-model="nuevaMascota.Especie" @change="nuevaMascota.Raza = ''">
+                <option v-for="e in ESPECIES_MASCOTA" :key="e">{{ e }}</option>
               </select>
             </div>
             <div>
@@ -266,7 +271,7 @@ async function eliminarMascota() {
           </div>
 
           <label>Raza</label>
-          <input v-model="nuevaMascota.Raza" placeholder="Ej: Labrador" />
+          <CampoOpciones v-model="nuevaMascota.Raza" :options="razasNuevo" placeholder="-- Selecciona la raza --" />
 
           <div class="form-row-modal">
             <div>
@@ -302,12 +307,8 @@ async function eliminarMascota() {
           <div class="form-row-modal">
             <div>
               <label>Especie</label>
-              <select v-model="mascotaSeleccionada.Especie">
-                <option>Perro</option>
-                <option>Gato</option>
-                <option>Ave</option>
-                <option>Conejo</option>
-                <option>Otro</option>
+              <select v-model="mascotaSeleccionada.Especie" @change="mascotaSeleccionada.Raza = ''">
+                <option v-for="e in ESPECIES_MASCOTA" :key="e">{{ e }}</option>
               </select>
             </div>
             <div>
@@ -320,7 +321,7 @@ async function eliminarMascota() {
           </div>
 
           <label>Raza</label>
-          <input v-model="mascotaSeleccionada.Raza" />
+          <CampoOpciones v-model="mascotaSeleccionada.Raza" :options="razasEdicion" placeholder="-- Selecciona la raza --" />
 
           <div class="form-row-modal">
             <div>

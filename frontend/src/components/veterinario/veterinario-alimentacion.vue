@@ -4,6 +4,10 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../../composables/useAuth'
 import { API_URL } from '../../api.js'
 import PlanSugerido from '../shared/PlanSugerido.vue'
+import CampoOpciones from '../shared/campo-opciones.vue'
+import BuscadorLupa from '../shared/buscador-lupa.vue'
+import { opcionesPlan, categoriaDeServicio, horarioCompatible } from '../../utils/opcionesClinicas'
+import { coincideBusqueda, sugerenciasMascota } from '../../utils/busqueda'
 import { generarPlanes, edadEnMeses, textoEdad, planAPayload, ESPECIES_PLAN, ICONO_ESPECIE } from '../../utils/planesAlimentacion'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
@@ -222,15 +226,43 @@ const claveOpcionActual = computed(() =>
     : ''
 )
 
+// ── Opciones de los formularios (según la especie de la mascota y el servicio) ──
+const especieDe = (idMascota) =>
+  catalogo.value.find(m => String(m.ID_mascota) === String(idMascota))?.Especie || ''
+const categoriaDe = (idServicio) =>
+  categoriaDeServicio(servicios.value.find(s => String(s.ID_servicio) === String(idServicio)))
+
+const optsNuevo = computed(() => opcionesPlan(
+  especieDe(nuevoPlan.value.ID_mascota),
+  categoriaDe(nuevoPlan.value.ID_servicio),
+  nuevoPlan.value.Frecuencia
+))
+const optsEdicion = computed(() => {
+  const p = planSeleccionado.value
+  return p
+    ? opcionesPlan(especieDe(p.ID_mascota), categoriaDe(p.ID_servicio), p.Frecuencia)
+    : opcionesPlan('', '', '')
+})
+
+// Al cambiar la frecuencia, el horario elegido debe seguir siendo coherente
+function cambiarFrecuencia(plan, valor) {
+  plan.Frecuencia = valor
+  if (!horarioCompatible(plan.Horario, valor)) plan.Horario = ''
+}
+
 // ── Filtros ───────────────────────────────────────────────────
+// Esta vista busca solo por mascota (y tipo de dieta)
+const sugerenciasBusqueda = computed(() =>
+  sugerenciasMascota(planes.value, p => p.Nombre_mascota)
+)
+
 const planesFiltrados = computed(() => {
   return planes.value
     .filter(p => {
-      const texto = `${p.Nombre_mascota || ''} ${p.Tipo_dieta || ''}`.toLowerCase()
-      const coincideBusqueda = texto.includes(busqueda.value.toLowerCase())
+      const coincideTexto = coincideBusqueda(busqueda.value, p.Nombre_mascota, p.Tipo_dieta)
       const estado = p.Revision_nutricional || 'Pendiente'
       const coincideEstado = filtroEstado.value === 'Todos' || estado === filtroEstado.value
-      return coincideBusqueda && coincideEstado
+      return coincideTexto && coincideEstado
     })
 })
 
@@ -443,12 +475,7 @@ async function eliminarPlan() {
 
     <!-- Toolbar -->
     <div class="vet-toolbar">
-      <div class="search-wrap" style="flex:1;">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input type="text" placeholder="Buscar por mascota o tipo de dieta..." v-model="busqueda"/>
-      </div>
+      <BuscadorLupa v-model="busqueda" :sugerencias="sugerenciasBusqueda" placeholder="Buscar por mascota o tipo de dieta..." />
       <select class="filter-select" v-model="filtroEstado">
         <option>Todos</option>
         <option>Activo</option>
@@ -586,12 +613,12 @@ async function eliminarPlan() {
         </template>
         <div class="form-group">
           <label>Tipo de dieta</label>
-          <input class="form-control" v-model="nuevoPlan.Tipo_dieta" placeholder="Balanceada, especial digestiva..." />
+          <CampoOpciones v-model="nuevoPlan.Tipo_dieta" :options="optsNuevo.dietas" placeholder="-- Selecciona el tipo de dieta --" />
         </div>
         <div class="form-row" style="display:flex; gap:1rem;">
           <div class="form-group" style="flex:1;">
             <label>Frecuencia</label>
-            <input class="form-control" v-model="nuevoPlan.Frecuencia" placeholder="2 veces al día" />
+            <CampoOpciones :model-value="nuevoPlan.Frecuencia" @update:model-value="v => cambiarFrecuencia(nuevoPlan, v)" :options="optsNuevo.frecuencias" placeholder="-- Selecciona --" />
           </div>
           <div class="form-group" style="flex:1;">
             <label>Calorías</label>
@@ -600,19 +627,19 @@ async function eliminarPlan() {
         </div>
         <div class="form-group">
           <label>Horario</label>
-          <input class="form-control" v-model="nuevoPlan.Horario" placeholder="8am - 6pm" />
+          <CampoOpciones v-model="nuevoPlan.Horario" :options="optsNuevo.horarios" placeholder="-- Selecciona el horario --" />
         </div>
         <div class="form-group">
           <label>Alergias</label>
-          <input class="form-control" v-model="nuevoPlan.Alergias" placeholder="Ninguna" />
+          <CampoOpciones v-model="nuevoPlan.Alergias" multiple :exclusivas="['Ninguna conocida']" :options="optsNuevo.alergias" placeholder="Selecciona una o varias" />
         </div>
         <div class="form-group">
           <label>Suplementos</label>
-          <input class="form-control" v-model="nuevoPlan.Suplementos" placeholder="Vitaminas" />
+          <CampoOpciones v-model="nuevoPlan.Suplementos" multiple :exclusivas="['Ninguno']" :options="optsNuevo.suplementos" placeholder="Selecciona uno o varios" />
         </div>
         <div class="form-group">
           <label>Comidas</label>
-          <textarea class="form-control" v-model="nuevoPlan.Comidas" placeholder="Desayuno 8:00 400 cal, Almuerzo 1:00 500 cal" rows="2"></textarea>
+          <CampoOpciones v-model="nuevoPlan.Comidas" multiple separador=" | " :options="optsNuevo.comidas" placeholder="Selecciona las comidas del plan" />
         </div>
         <div class="form-row" style="display:flex; gap:1rem;">
           <div class="form-group" style="flex:1;">
@@ -626,11 +653,11 @@ async function eliminarPlan() {
         </div>
         <div class="form-group">
           <label>Diagnóstico nutricional</label>
-          <textarea class="form-control" v-model="nuevoPlan.Diagnostico" rows="2"></textarea>
+          <CampoOpciones v-model="nuevoPlan.Diagnostico" :options="optsNuevo.diagnosticos" placeholder="-- Selecciona el diagnóstico --" />
         </div>
         <div class="form-group">
           <label>Observaciones</label>
-          <textarea class="form-control" v-model="nuevoPlan.Observaciones" rows="2"></textarea>
+          <CampoOpciones v-model="nuevoPlan.Observaciones" multiple separador=" | " :options="optsNuevo.observaciones" placeholder="Selecciona las indicaciones" />
         </div>
         <div class="form-group">
           <label>Estado</label>
@@ -657,12 +684,12 @@ async function eliminarPlan() {
       <div class="vet-modal-body">
         <div class="form-group">
           <label>Tipo de dieta</label>
-          <input class="form-control" v-model="planSeleccionado.Tipo_dieta" />
+          <CampoOpciones v-model="planSeleccionado.Tipo_dieta" :options="optsEdicion.dietas" placeholder="-- Selecciona el tipo de dieta --" />
         </div>
         <div class="form-row" style="display:flex; gap:1rem;">
           <div class="form-group" style="flex:1;">
             <label>Frecuencia</label>
-            <input class="form-control" v-model="planSeleccionado.Frecuencia" />
+            <CampoOpciones :model-value="planSeleccionado.Frecuencia" @update:model-value="v => cambiarFrecuencia(planSeleccionado, v)" :options="optsEdicion.frecuencias" placeholder="-- Selecciona --" />
           </div>
           <div class="form-group" style="flex:1;">
             <label>Calorías</label>
@@ -671,19 +698,19 @@ async function eliminarPlan() {
         </div>
         <div class="form-group">
           <label>Horario</label>
-          <input class="form-control" v-model="planSeleccionado.Horario" />
+          <CampoOpciones v-model="planSeleccionado.Horario" :options="optsEdicion.horarios" placeholder="-- Selecciona el horario --" />
         </div>
         <div class="form-group">
           <label>Alergias</label>
-          <input class="form-control" v-model="planSeleccionado.Alergias" />
+          <CampoOpciones v-model="planSeleccionado.Alergias" multiple :exclusivas="['Ninguna conocida']" :options="optsEdicion.alergias" placeholder="Selecciona una o varias" />
         </div>
         <div class="form-group">
           <label>Suplementos</label>
-          <input class="form-control" v-model="planSeleccionado.Suplementos" />
+          <CampoOpciones v-model="planSeleccionado.Suplementos" multiple :exclusivas="['Ninguno']" :options="optsEdicion.suplementos" placeholder="Selecciona uno o varios" />
         </div>
         <div class="form-group">
           <label>Comidas</label>
-          <textarea class="form-control" v-model="planSeleccionado.Comidas" rows="2"></textarea>
+          <CampoOpciones v-model="planSeleccionado.Comidas" multiple separador=" | " :options="optsEdicion.comidas" placeholder="Selecciona las comidas del plan" />
         </div>
         <div class="form-row" style="display:flex; gap:1rem;">
           <div class="form-group" style="flex:1;">
@@ -697,11 +724,11 @@ async function eliminarPlan() {
         </div>
         <div class="form-group">
           <label>Diagnóstico nutricional</label>
-          <textarea class="form-control" v-model="planSeleccionado.Diagnostico" rows="2"></textarea>
+          <CampoOpciones v-model="planSeleccionado.Diagnostico" :options="optsEdicion.diagnosticos" placeholder="-- Selecciona el diagnóstico --" />
         </div>
         <div class="form-group">
           <label>Observaciones</label>
-          <textarea class="form-control" v-model="planSeleccionado.Observaciones" rows="2"></textarea>
+          <CampoOpciones v-model="planSeleccionado.Observaciones" multiple separador=" | " :options="optsEdicion.observaciones" placeholder="Selecciona las indicaciones" />
         </div>
         <div class="form-group">
           <label>Estado</label>

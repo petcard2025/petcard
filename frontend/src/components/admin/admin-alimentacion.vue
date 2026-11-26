@@ -1,6 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
+import CampoOpciones from '../shared/campo-opciones.vue'
+import BuscadorLupa from '../shared/buscador-lupa.vue'
+import { opcionesPlan, categoriaDeServicio, horarioCompatible } from '../../utils/opcionesClinicas'
+import { coincideBusqueda, sugerenciasMascota } from '../../utils/busqueda'
 
 const API = 'https://localhost:3001/api'
 const headersAuth = () => ({ Authorization: `Bearer ${localStorage.getItem('petcard_token')}` })
@@ -60,18 +64,51 @@ async function cargarServicios() {
   } catch (e) {}
 }
 
+// Esta vista busca solo por mascota (y tipo de dieta)
+const sugerenciasBusqueda = computed(() =>
+  sugerenciasMascota(planes.value, p => p.Nombre_mascota)
+)
+
 const planesFiltrados = computed(() => {
   return planes.value.filter(p => {
-    const nombre = (p.Nombre_mascota || '').toLowerCase()
-    const dieta = (p.Tipo_dieta || '').toLowerCase()
-    const coincideBusqueda = nombre.includes(busqueda.value.toLowerCase()) || dieta.includes(busqueda.value.toLowerCase())
+    const coincideTexto = coincideBusqueda(busqueda.value, p.Nombre_mascota, p.Tipo_dieta)
     const estado = p.Revision_nutricional || ''
     const coincideEstado = filtroEstado.value === 'Todos' || estado === filtroEstado.value
-    return coincideBusqueda && coincideEstado
+    return coincideTexto && coincideEstado
   })
 })
 
-function abrirEditar(plan) { planSeleccionado.value = { ...plan }; mostrarModal.value = true }
+// ── Opciones de los formularios (según la especie de la mascota y el servicio) ──
+const especieDe = (idMascota) =>
+  mascotas.value.find(m => String(m.ID_mascota) === String(idMascota))?.Especie || ''
+const categoriaDe = (idServicio) =>
+  categoriaDeServicio(servicios.value.find(s => String(s.ID_servicio) === String(idServicio)))
+
+const optsNuevo = computed(() => opcionesPlan(
+  especieDe(nuevoPlan.value.ID_mascota),
+  categoriaDe(nuevoPlan.value.ID_servicio),
+  nuevoPlan.value.Frecuencia
+))
+const optsEdicion = computed(() => {
+  const p = planSeleccionado.value
+  return p
+    ? opcionesPlan(especieDe(p.ID_mascota), categoriaDe(p.ID_servicio), p.Frecuencia)
+    : opcionesPlan('', '', '')
+})
+
+function cambiarFrecuencia(plan, valor) {
+  plan.Frecuencia = valor
+  if (!horarioCompatible(plan.Horario, valor)) plan.Horario = ''
+}
+
+function abrirEditar(plan) {
+  planSeleccionado.value = {
+    ...plan,
+    Fecha_inicio: plan.Fecha_inicio ? String(plan.Fecha_inicio).slice(0, 10) : '',
+    Fecha_fin: plan.Fecha_fin ? String(plan.Fecha_fin).slice(0, 10) : ''
+  }
+  mostrarModal.value = true
+}
 
 async function guardarEdicion() {
   try {
@@ -143,12 +180,7 @@ function badgeClass(estado) {
     </template>
 
     <div class="search-filter">
-      <div class="search-wrap">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input type="text" placeholder="Buscar por mascota o dieta..." v-model="busqueda" />
-      </div>
+      <BuscadorLupa v-model="busqueda" :sugerencias="sugerenciasBusqueda" placeholder="Buscar por mascota o dieta..." />
       <select class="filter-select" v-model="filtroEstado">
         <option>Todos</option>
         <option>Activo</option>
@@ -190,23 +222,27 @@ function badgeClass(estado) {
         <h3>Editar Plan de Alimentación</h3>
         <div class="modal-body">
           <label>Tipo de dieta</label>
-          <input v-model="planSeleccionado.Tipo_dieta" />
+          <CampoOpciones v-model="planSeleccionado.Tipo_dieta" :options="optsEdicion.dietas" placeholder="-- Selecciona el tipo de dieta --" />
           <label>Frecuencia</label>
-          <input v-model="planSeleccionado.Frecuencia" />
+          <CampoOpciones :model-value="planSeleccionado.Frecuencia" @update:model-value="v => cambiarFrecuencia(planSeleccionado, v)" :options="optsEdicion.frecuencias" placeholder="-- Selecciona la frecuencia --" />
           <label>Calorías</label>
-          <input v-model="planSeleccionado.Calorias" />
+          <input type="number" v-model="planSeleccionado.Calorias" />
           <label>Horario</label>
-          <input v-model="planSeleccionado.Horario" />
+          <CampoOpciones v-model="planSeleccionado.Horario" :options="optsEdicion.horarios" placeholder="-- Selecciona el horario --" />
           <label>Alergias</label>
-          <input v-model="planSeleccionado.Alergias" />
+          <CampoOpciones v-model="planSeleccionado.Alergias" multiple :exclusivas="['Ninguna conocida']" :options="optsEdicion.alergias" placeholder="Selecciona una o varias" />
           <label>Suplementos</label>
-          <input v-model="planSeleccionado.Suplementos" />
+          <CampoOpciones v-model="planSeleccionado.Suplementos" multiple :exclusivas="['Ninguno']" :options="optsEdicion.suplementos" placeholder="Selecciona uno o varios" />
+          <label>Comidas</label>
+          <CampoOpciones v-model="planSeleccionado.Comidas" multiple separador=" | " :options="optsEdicion.comidas" placeholder="Selecciona las comidas del plan" />
           <label>Fecha inicio</label>
           <input type="date" v-model="planSeleccionado.Fecha_inicio" />
           <label>Fecha fin</label>
           <input type="date" v-model="planSeleccionado.Fecha_fin" />
+          <label>Diagnóstico nutricional</label>
+          <CampoOpciones v-model="planSeleccionado.Diagnostico" :options="optsEdicion.diagnosticos" placeholder="-- Selecciona el diagnóstico --" />
           <label>Observaciones</label>
-          <input v-model="planSeleccionado.Observaciones" />
+          <CampoOpciones v-model="planSeleccionado.Observaciones" multiple separador=" | " :options="optsEdicion.observaciones" placeholder="Selecciona las indicaciones" />
           <label>Estado</label>
           <select v-model="planSeleccionado.Revision_nutricional">
             <option>Activo</option>
@@ -248,23 +284,27 @@ function badgeClass(estado) {
             <option v-for="s in servicios" :key="s.ID_servicio" :value="s.ID_servicio">{{ s.Nombre }}</option>
           </select>
           <label>Tipo de dieta</label>
-          <input v-model="nuevoPlan.Tipo_dieta" />
+          <CampoOpciones v-model="nuevoPlan.Tipo_dieta" :options="optsNuevo.dietas" placeholder="-- Selecciona el tipo de dieta --" />
           <label>Frecuencia</label>
-          <input v-model="nuevoPlan.Frecuencia" />
+          <CampoOpciones :model-value="nuevoPlan.Frecuencia" @update:model-value="v => cambiarFrecuencia(nuevoPlan, v)" :options="optsNuevo.frecuencias" placeholder="-- Selecciona la frecuencia --" />
           <label>Calorías</label>
-          <input v-model="nuevoPlan.Calorias" />
+          <input type="number" v-model="nuevoPlan.Calorias" />
           <label>Horario</label>
-          <input v-model="nuevoPlan.Horario" />
+          <CampoOpciones v-model="nuevoPlan.Horario" :options="optsNuevo.horarios" placeholder="-- Selecciona el horario --" />
           <label>Alergias</label>
-          <input v-model="nuevoPlan.Alergias" />
+          <CampoOpciones v-model="nuevoPlan.Alergias" multiple :exclusivas="['Ninguna conocida']" :options="optsNuevo.alergias" placeholder="Selecciona una o varias" />
           <label>Suplementos</label>
-          <input v-model="nuevoPlan.Suplementos" />
+          <CampoOpciones v-model="nuevoPlan.Suplementos" multiple :exclusivas="['Ninguno']" :options="optsNuevo.suplementos" placeholder="Selecciona uno o varios" />
+          <label>Comidas</label>
+          <CampoOpciones v-model="nuevoPlan.Comidas" multiple separador=" | " :options="optsNuevo.comidas" placeholder="Selecciona las comidas del plan" />
           <label>Fecha inicio</label>
           <input type="date" v-model="nuevoPlan.Fecha_inicio" />
           <label>Fecha fin</label>
           <input type="date" v-model="nuevoPlan.Fecha_fin" />
+          <label>Diagnóstico nutricional</label>
+          <CampoOpciones v-model="nuevoPlan.Diagnostico" :options="optsNuevo.diagnosticos" placeholder="-- Selecciona el diagnóstico --" />
           <label>Observaciones</label>
-          <input v-model="nuevoPlan.Observaciones" />
+          <CampoOpciones v-model="nuevoPlan.Observaciones" multiple separador=" | " :options="optsNuevo.observaciones" placeholder="Selecciona las indicaciones" />
           <label>Estado</label>
           <select v-model="nuevoPlan.Revision_nutricional">
             <option>Activo</option>

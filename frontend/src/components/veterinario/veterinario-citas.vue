@@ -4,12 +4,17 @@ import { ref, computed, onMounted } from 'vue'
 import { useAuth } from '../../composables/useAuth'
 import { API_URL } from '../../api.js'
 import { hoyColombia, formatHora } from '../../utils/validators'
+import CampoOpciones from '../shared/campo-opciones.vue'
+import BuscadorLupa from '../shared/buscador-lupa.vue'
+import { categoriaDeServicio, observacionesCita } from '../../utils/opcionesClinicas'
+import { coincideBusqueda, sugerenciasMascota } from '../../utils/busqueda'
 
 const { usuarioLogueado, cerrarSesion } = useAuth()
 const API = API_URL
 
 // ── Estado ────────────────────────────────────────────────────
 const citas = ref([])
+const servicios = ref([])
 const busqueda = ref('')
 const filtroEstado = ref('Todos')
 const cargando = ref(false)
@@ -30,7 +35,14 @@ const accionEnCurso = ref(null)   // ID de la cita que se está actualizando
 const hoy = hoyColombia()
 
 // ── Carga de datos ────────────────────────────────────────────
-onMounted(cargarCitas)
+onMounted(() => { cargarCitas(); cargarServicios() })
+
+async function cargarServicios() {
+  try {
+    const res = await fetch(`${API}/servicios`)
+    if (res.ok) servicios.value = await res.json()
+  } catch { /* sin servicios se deduce la categoría por el nombre */ }
+}
 
 async function cargarCitas() {
   cargando.value = true
@@ -58,11 +70,15 @@ async function cargarCitas() {
 }
 
 // ── Filtros ───────────────────────────────────────────────────
+// Esta vista busca por mascota y cliente (y servicio)
+const sugerenciasBusqueda = computed(() =>
+  sugerenciasMascota(citas.value, c => c.Nombre_mascota, c => c.Nombre_cliente)
+)
+
 const citasFiltradas = computed(() => {
   return citas.value
     .filter(c => {
-      const texto = `${c.Nombre_mascota} ${c.Nombre_cliente} ${c.Nombre_servicio}`.toLowerCase()
-      const coincide = texto.includes(busqueda.value.toLowerCase())
+      const coincide = coincideBusqueda(busqueda.value, c.Nombre_mascota, c.Nombre_cliente, c.Nombre_servicio)
 
       const coincideEstado =
         filtroEstado.value === 'Todos' || estadoCita(c) === filtroEstado.value
@@ -127,6 +143,14 @@ function iniciales(nombre) {
   if (!nombre) return '?'
   return nombre.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
 }
+
+// Observaciones sugeridas según el servicio de la cita
+const opcionesObservaciones = computed(() => {
+  const c = citaSeleccionada.value
+  if (!c) return observacionesCita('')
+  const srv = servicios.value.find(x => String(x.ID_servicio) === String(c.ID_servicio)) || { Nombre_servicio: c.Nombre_servicio }
+  return observacionesCita(categoriaDeServicio(srv))
+})
 
 // ── Acciones ──────────────────────────────────────────────────
 function abrirConfirmar(cita) {
@@ -265,12 +289,7 @@ async function guardarObservaciones() {
 
     <!-- Panel de filtros -->
     <div class="vet-toolbar">
-      <div class="search-wrap" style="flex:1;">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input type="text" placeholder="Buscar por mascota, cliente o servicio..." v-model="busqueda"/>
-      </div>
+      <BuscadorLupa v-model="busqueda" :sugerencias="sugerenciasBusqueda" placeholder="Buscar por mascota, cliente o servicio..." />
       <span class="vet-resultados">{{ totalResultados }} resultado{{ totalResultados === 1 ? '' : 's' }}</span>
     </div>
 
@@ -415,12 +434,13 @@ async function guardarObservaciones() {
 
         <div class="form-group">
           <label>Observaciones clínicas</label>
-          <textarea
-            class="form-control"
+          <CampoOpciones
             v-model="observaciones"
-            rows="4"
-            placeholder="Anota el diagnóstico, tratamiento, indicaciones o notas de la consulta..."
-          ></textarea>
+            multiple
+            separador=" | "
+            :options="opcionesObservaciones"
+            placeholder="Selecciona el diagnóstico, tratamiento o indicaciones de la consulta"
+          />
         </div>
 
         <div v-if="mensajeExito" class="vet-success-inline">{{ mensajeExito }}</div>

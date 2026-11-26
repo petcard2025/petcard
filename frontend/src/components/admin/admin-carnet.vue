@@ -2,6 +2,10 @@
 import { ref, computed, onMounted } from 'vue'
 import AdminLayout from './AdminLayout.vue'
 import { vacunasAPI, mascotasAPI, serviciosAPI } from '../../api'
+import CampoOpciones from '../shared/campo-opciones.vue'
+import BuscadorLupa from '../shared/buscador-lupa.vue'
+import { vacunasPorEspecie, OBS_VACUNA } from '../../utils/opcionesClinicas'
+import { coincideBusqueda, sugerenciasMascota } from '../../utils/busqueda'
 
 const vacunas = ref([])
 const mascotas = ref([])
@@ -46,13 +50,30 @@ async function cargarTodo() {
   }
 }
 
+// Esta vista busca solo por mascota (y nombre de la vacuna)
+const sugerenciasBusqueda = computed(() =>
+  sugerenciasMascota(vacunas.value, r => r.Nombre_mascota)
+)
+
 const registrosFiltrados = computed(() => {
   return vacunas.value.filter(r => {
-    const texto = `${r.Nombre_mascota || ''} ${r.Nombre_vacuna || ''}`.toLowerCase()
-    const coincideBusqueda = texto.includes(buscarTexto.value.toLowerCase())
+    const coincideTexto = coincideBusqueda(buscarTexto.value, r.Nombre_mascota, r.Nombre_vacuna)
     const coincideFiltro = filtroEstado.value === 'Todos' || r.Estado === filtroEstado.value
-    return coincideBusqueda && coincideFiltro
+    return coincideTexto && coincideFiltro
   })
+})
+
+// Vacunas de opción múltiple según la especie de la mascota y el servicio elegido
+const especieDe = (idMascota) =>
+  mascotas.value.find(m => String(m.ID_mascota) === String(idMascota))?.Especie || ''
+const servicioDe = (idServicio) =>
+  servicios.value.find(s => String(s.ID_servicio) === String(idServicio))
+const vacunasNuevo = computed(() =>
+  vacunasPorEspecie(especieDe(nuevaVacuna.value.ID_mascota), servicioDe(nuevaVacuna.value.ID_servicio))
+)
+const vacunasEdicion = computed(() => {
+  const v = vacunaSeleccionada.value
+  return vacunasPorEspecie(especieDe(v?.ID_mascota), servicioDe(v?.ID_servicio))
 })
 
 function getEstadoClass(estado) {
@@ -77,7 +98,7 @@ function abrirModalEditar(registro) {
 
 async function guardarNuevaVacuna() {
   if (!nuevaVacuna.value.ID_mascota || !nuevaVacuna.value.Nombre_vacuna) {
-    alert('Selecciona la mascota e ingresa el nombre de la vacuna.')
+    alert('Selecciona la mascota y la vacuna.')
     return
   }
   guardando.value = true
@@ -130,10 +151,7 @@ async function eliminarRegistro() {
     <div v-if="error" class="alert alert-danger"><span>{{ error }}</span></div>
 
     <div class="search-filter">
-      <div class="search-wrap">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input v-model="buscarTexto" type="text" placeholder="Buscar mascota o vacuna..." />
-      </div>
+      <BuscadorLupa v-model="buscarTexto" :sugerencias="sugerenciasBusqueda" placeholder="Buscar mascota o vacuna..." />
       <select v-model="filtroEstado" class="filter-select">
         <option value="Todos">Todos</option>
         <option value="Pendiente">Pendiente</option>
@@ -183,7 +201,7 @@ async function eliminarRegistro() {
             <option v-for="s in servicios" :key="s.ID_servicio" :value="s.ID_servicio">{{ s.Nombre }}</option>
           </select>
           <label>Nombre de la vacuna</label>
-          <input v-model="nuevaVacuna.Nombre_vacuna" placeholder="Ej: Antirrábica" />
+          <CampoOpciones v-model="nuevaVacuna.Nombre_vacuna" :options="vacunasNuevo" placeholder="-- Selecciona la vacuna --" />
           <label>Lote</label>
           <input v-model="nuevaVacuna.Lote" />
           <label>Fecha de aplicación</label>
@@ -196,7 +214,7 @@ async function eliminarRegistro() {
             <option>Completada</option>
           </select>
           <label>Observaciones</label>
-          <textarea v-model="nuevaVacuna.Observaciones" rows="2"></textarea>
+          <CampoOpciones v-model="nuevaVacuna.Observaciones" multiple separador=" | " :options="OBS_VACUNA" placeholder="Selecciona las observaciones (opcional)" />
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="mostrarModalNuevo = false">Cancelar</button>
@@ -211,7 +229,7 @@ async function eliminarRegistro() {
         <h3>Editar Registro — {{ vacunaSeleccionada.Nombre_mascota }}</h3>
         <div class="modal-body" v-if="vacunaSeleccionada">
           <label>Nombre de la vacuna</label>
-          <input v-model="vacunaSeleccionada.Nombre_vacuna" />
+          <CampoOpciones v-model="vacunaSeleccionada.Nombre_vacuna" :options="vacunasEdicion" placeholder="-- Selecciona la vacuna --" />
           <label>Lote</label>
           <input v-model="vacunaSeleccionada.Lote" />
           <label>Fecha de aplicación</label>
@@ -224,7 +242,7 @@ async function eliminarRegistro() {
             <option>Completada</option>
           </select>
           <label>Observaciones</label>
-          <textarea v-model="vacunaSeleccionada.Observaciones" rows="2"></textarea>
+          <CampoOpciones v-model="vacunaSeleccionada.Observaciones" multiple separador=" | " :options="OBS_VACUNA" placeholder="Selecciona las observaciones (opcional)" />
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="mostrarModalEditar = false">Cancelar</button>

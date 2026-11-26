@@ -1,6 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import AdminLayout from './AdminLayout.vue'
+import CampoOpciones from '../shared/campo-opciones.vue'
+import BuscadorLupa from '../shared/buscador-lupa.vue'
+import { categoriaDeServicio, motivosCita, observacionesCita } from '../../utils/opcionesClinicas'
+import { coincideBusqueda, sugerenciasMascota } from '../../utils/busqueda'
 import { API_URL } from '../../api.js'
 import {
   FECHA_MAX_CITA, HORAS_CITA, validarFechaCita, validarFechaHoraCita,
@@ -181,12 +185,23 @@ function esAnterior(cita) {
 
 const buscando = computed(() => busqueda.value.trim() !== '' || filtroEstado.value !== 'Todos')
 
+// Esta vista busca por mascota y cliente (y servicio)
+const sugerenciasBusqueda = computed(() =>
+  sugerenciasMascota(citas.value, c => c.Nombre_mascota, c => c.Nombre_cliente)
+)
+
+// Motivos y observaciones de opción múltiple según el servicio elegido
+const categoriaDe = (idServicio) =>
+  categoriaDeServicio(servicios.value.find(s => String(s.ID_servicio) === String(idServicio)))
+const motivosNuevo = computed(() => motivosCita(categoriaDe(nuevaCita.value.ID_servicio)))
+const observacionesNuevo = computed(() => observacionesCita(categoriaDe(nuevaCita.value.ID_servicio)))
+const motivosEdicion = computed(() => motivosCita(categoriaDe(citaSeleccionada.value?.ID_servicio)))
+const observacionesEdicion = computed(() => observacionesCita(categoriaDe(citaSeleccionada.value?.ID_servicio)))
+
 const citasFiltradas = computed(() => {
-  const q = busqueda.value.trim().toLowerCase()
   return citas.value
     .filter(c => {
-      const texto = `${c.Nombre_mascota} ${c.Nombre_cliente} ${c.Nombre_servicio}`.toLowerCase()
-      const coincide = texto.includes(q)
+      const coincide = coincideBusqueda(busqueda.value, c.Nombre_mascota, c.Nombre_cliente, c.Nombre_servicio)
       const coincideEstado = filtroEstado.value === 'Todos' || estadoCita(c) === filtroEstado.value
       const visible = buscando.value || !esAnterior(c)
       return coincide && coincideEstado && visible
@@ -319,10 +334,7 @@ async function crearCita() {
     <div v-if="error" class="alert alert-danger"><span>{{ error }}</span></div>
 
     <div class="search-filter">
-      <div class="search-wrap">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" placeholder="Buscar por mascota, cliente o servicio..." v-model="busqueda" />
-      </div>
+      <BuscadorLupa v-model="busqueda" :sugerencias="sugerenciasBusqueda" placeholder="Buscar por mascota, cliente o servicio..." />
       <select class="filter-select" v-model="filtroEstado">
         <option>Todos</option>
         <option>Pendiente</option>
@@ -372,10 +384,10 @@ async function crearCita() {
           <label>Mascota</label>
           <select v-model="nuevaCita.ID_mascota">
             <option value="" disabled>Selecciona mascota</option>
-            <option v-for="m in mascotas" :key="m.ID_mascota" :value="m.ID_mascota">{{ m.Nombre }} ({{ m.Especie }})</option>
+            <option v-for="m in mascotas" :key="m.ID_mascota" :value="m.ID_mascota">{{ m.Nombre }} ({{ m.Especie }}) — {{ m.Nombre_dueno }}</option>
           </select>
           <label>Servicio</label>
-          <select v-model="nuevaCita.ID_servicio">
+          <select v-model="nuevaCita.ID_servicio" @change="nuevaCita.Motivo = ''; nuevaCita.Observaciones = ''">
             <option value="" disabled>Selecciona servicio</option>
             <option v-for="s in servicios" :key="s.ID_servicio" :value="s.ID_servicio">{{ s.Nombre }}</option>
           </select>
@@ -407,9 +419,9 @@ async function crearCita() {
           </div>
 
           <label>Motivo</label>
-          <input v-model="nuevaCita.Motivo" placeholder="Motivo de la cita..." />
+          <CampoOpciones v-model="nuevaCita.Motivo" :options="motivosNuevo" placeholder="-- Selecciona el motivo de la cita --" />
           <label>Observaciones</label>
-          <textarea v-model="nuevaCita.Observaciones" rows="2"></textarea>
+          <CampoOpciones v-model="nuevaCita.Observaciones" multiple separador=" | " :options="observacionesNuevo" placeholder="Selecciona las observaciones (opcional)" />
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="mostrarModalNuevo = false">Cancelar</button>
@@ -458,9 +470,9 @@ async function crearCita() {
             <option v-for="e in ESTADOS" :key="e" :value="e">{{ e }}</option>
           </select>
           <label>Motivo</label>
-          <input v-model="citaSeleccionada.Motivo" />
+          <CampoOpciones v-model="citaSeleccionada.Motivo" :options="motivosEdicion" placeholder="-- Selecciona el motivo de la cita --" />
           <label>Observaciones</label>
-          <textarea v-model="citaSeleccionada.Observaciones" rows="2"></textarea>
+          <CampoOpciones v-model="citaSeleccionada.Observaciones" multiple separador=" | " :options="observacionesEdicion" placeholder="Selecciona las observaciones (opcional)" />
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary btn-sm" @click="mostrarModalEditar = false">Cancelar</button>

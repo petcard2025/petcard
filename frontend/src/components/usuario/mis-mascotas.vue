@@ -474,8 +474,22 @@ function handleFotoUpload(event) {
   }
   const reader = new FileReader()
   reader.onload = (e) => {
-    fotoPreview.value = e.target.result
-    formData.Foto = e.target.result
+    const img = new Image()
+    img.onload = () => {
+      const MAX = 400
+      const escala = Math.min(1, MAX / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * escala)
+      canvas.height = Math.round(img.height * escala)
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const comprimida = canvas.toDataURL('image/jpeg', 0.8)
+      fotoPreview.value = comprimida
+      formData.Foto = comprimida
+    }
+    img.src = e.target.result
   }
   reader.readAsDataURL(file)
 }
