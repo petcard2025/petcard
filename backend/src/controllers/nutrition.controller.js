@@ -1,5 +1,6 @@
 // CONTROLADOR DE ALIMENTACION - Gestion de planes nutricionales
 const db = require('../config/database')
+const { validarPlanAlimentacion, normalizarPlanAlimentacion } = require('../utils/alimentacion-validators')
 
 // OBTENER PLANES - Admin ve todos, veterinario solo los que atendio
 async function getNutritionPlans(req, res) {
@@ -33,7 +34,10 @@ async function getNutritionPlansByPet(req, res) {
 
 // CREAR PLAN - Solo si el veterinario atendio esa mascota+servicio
 async function createNutritionPlan(req, res) {
-  const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
+  const errorPlan = validarPlanAlimentacion(req.body, { crear: true })
+  if (errorPlan) return res.status(400).json({ error: errorPlan })
+  const { Calorias, Fecha_inicio, Fecha_fin } = normalizarPlanAlimentacion(req.body)
+  const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Suplementos, Comidas, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'INSERT INTO planalimentacion (ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional],
@@ -46,7 +50,10 @@ async function createNutritionPlan(req, res) {
 
 // ACTUALIZAR PLAN - Solo si el veterinario atendio esa mascota+servicio
 async function updateNutritionPlan(req, res) {
-  const { Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
+  const errorPlan = validarPlanAlimentacion(req.body, { crear: false })
+  if (errorPlan) return res.status(400).json({ error: errorPlan })
+  const { Calorias, Fecha_inicio, Fecha_fin } = normalizarPlanAlimentacion(req.body)
+  const { Tipo_dieta, Frecuencia, Alergias, Horario, Suplementos, Comidas, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'UPDATE planalimentacion SET Tipo_dieta=?, Frecuencia=?, Alergias=?, Horario=?, Calorias=?, Suplementos=?, Comidas=?, Fecha_inicio=?, Fecha_fin=?, Observaciones=?, Diagnostico=?, Revision_nutricional=? WHERE ID_planAlimentacion=?',
     [Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional, req.params.id],

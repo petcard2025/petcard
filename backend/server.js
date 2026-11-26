@@ -13,7 +13,8 @@ require('dotenv').config()
 
 require('./mailer')
 const authController = require('./src/controllers/auth.controller')
-const { validarRegistroCliente } = require('./src/utils/validators')
+const { validarRegistroCliente, validarServicio } = require('./src/utils/validators')
+const { validarPlanAlimentacion, normalizarPlanAlimentacion } = require('./src/utils/alimentacion-validators')
 
 if (!process.env.JWT_SECRET) {
   console.error('FATAL: La variable de entorno JWT_SECRET no esta definida.')
@@ -762,10 +763,12 @@ app.get('/api/servicios', (req, res) => {
 })
 
 app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria } = req.body
+  const errorServicio = validarServicio(req.body)
+  if (errorServicio) return res.status(400).json({ error: errorServicio })
+  const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
-    'INSERT INTO servicio (Nombre, Descripcion, Categoria) VALUES (?,?,?)',
-    [Nombre, Descripcion, Categoria],
+    'INSERT INTO servicio (Nombre, Descripcion, Categoria, Precio) VALUES (?,?,?,?)',
+    [Nombre, Descripcion, Categoria, Precio === undefined || Precio === '' ? null : Precio],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ ID_servicio: result.insertId, ...req.body })
@@ -774,10 +777,12 @@ app.post('/api/servicios', verifyToken, verifyAdmin, (req, res) => {
 })
 
 app.put('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
-  const { Nombre, Descripcion, Categoria } = req.body
+  const errorServicio = validarServicio(req.body)
+  if (errorServicio) return res.status(400).json({ error: errorServicio })
+  const { Nombre, Descripcion, Categoria, Precio } = req.body
   db.query(
-    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=? WHERE ID_servicio=?',
-    [Nombre, Descripcion, Categoria, req.params.id],
+    'UPDATE servicio SET Nombre=?, Descripcion=?, Categoria=?, Precio=COALESCE(?, Precio) WHERE ID_servicio=?',
+    [Nombre, Descripcion, Categoria, Precio === undefined || Precio === '' ? null : Precio, req.params.id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json({ message: 'Servicio actualizado' })
@@ -787,7 +792,13 @@ app.put('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
 
 app.delete('/api/servicios/:id', verifyToken, verifyAdmin, (req, res) => {
   db.query('DELETE FROM servicio WHERE ID_servicio=?', [req.params.id], (err) => {
-    if (err) return res.status(500).json({ error: err.message })
+    if (err) {
+      // 23503 = llave foránea en PostgreSQL; ER_ROW_IS_REFERENCED_2 = equivalente en MySQL
+      if (err.code === '23503' || err.code === 'ER_ROW_IS_REFERENCED_2') {
+        return res.status(409).json({ error: 'No se puede eliminar: el servicio tiene citas, vacunas o planes asociados.' })
+      }
+      return res.status(500).json({ error: err.message })
+    }
     res.json({ message: 'Servicio eliminado' })
   })
 })
@@ -1010,9 +1021,10 @@ app.delete('/api/vacunas/:id', verifyToken, (req, res) => {
 // PLAN DE ALIMENTACION
 // =============================================================
 app.get('/api/alimentacion', verifyToken, cargarVeterinario, (req, res) => {
-  let sql = `SELECT pa.*, m.Nombre AS Nombre_mascota
+  let sql = `SELECT pa.*, m.Nombre AS Nombre_mascota, s.Nombre AS Nombre_servicio
      FROM planalimentacion pa
-     JOIN mascota m ON pa.ID_mascota = m.ID_mascota`
+     JOIN mascota m ON pa.ID_mascota = m.ID_mascota
+     JOIN servicio s ON pa.ID_servicio = s.ID_servicio`
   const params = []
   if (req.usuario.Rol === 'veterinario') {
     sql += ` WHERE EXISTS (
@@ -1035,10 +1047,13 @@ app.get('/api/alimentacion/mascota/:id_mascota', verifyToken, (req, res) => {
 })
 
 app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendioMascota, (req, res) => {
-  const { ID_mascota, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
+  const errorPlan = validarPlanAlimentacion(req.body, { crear: true })
+  if (errorPlan) return res.status(400).json({ error: errorPlan })
+  const { Calorias, Fecha_inicio, Fecha_fin } = normalizarPlanAlimentacion(req.body)
+  const { ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Suplementos, Comidas, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
-    'INSERT INTO planalimentacion (ID_mascota, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [ID_mascota, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional],
+    'INSERT INTO planalimentacion (ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [ID_mascota, ID_servicio, Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional],
     async (err, result) => {
       if (err) return res.status(500).json({ error: err.message })
       try { await notifSync.sincronizarPlan(result.insertId) } catch (e) { console.error('Sync notificación alimentación:', e.message) }
@@ -1048,7 +1063,10 @@ app.post('/api/alimentacion', verifyToken, cargarVeterinario, verificarVetAtendi
 })
 
 app.put('/api/alimentacion/:id', verifyToken, cargarVeterinario, verificarVetAtendioMascota, (req, res) => {
-  const { Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional } = req.body
+  const errorPlan = validarPlanAlimentacion(req.body, { crear: false })
+  if (errorPlan) return res.status(400).json({ error: errorPlan })
+  const { Calorias, Fecha_inicio, Fecha_fin } = normalizarPlanAlimentacion(req.body)
+  const { Tipo_dieta, Frecuencia, Alergias, Horario, Suplementos, Comidas, Observaciones, Diagnostico, Revision_nutricional } = req.body
   db.query(
     'UPDATE planalimentacion SET Tipo_dieta=?, Frecuencia=?, Alergias=?, Horario=?, Calorias=?, Suplementos=?, Comidas=?, Fecha_inicio=?, Fecha_fin=?, Observaciones=?, Diagnostico=?, Revision_nutricional=? WHERE ID_planAlimentacion=?',
     [Tipo_dieta, Frecuencia, Alergias, Horario, Calorias, Suplementos, Comidas, Fecha_inicio, Fecha_fin, Observaciones, Diagnostico, Revision_nutricional, req.params.id],
