@@ -1120,6 +1120,30 @@ app.put('/api/notificaciones/:id', verifyToken, (req, res) => {
   )
 })
 
+// OJO: /bulk y /estadisticas van ANTES de las rutas con /:id; si no, Express las toma como un id
+app.delete('/api/notificaciones/bulk', verifyToken, (req, res) => {
+  const { ids } = req.body
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids debe ser un array no vacío' })
+  const placeholders = ids.map(() => '?').join(',')
+  db.query(`DELETE FROM notificacion WHERE ID_notificacion IN (${placeholders})`, ids, (err) => {
+    if (err) return res.status(500).json({ error: err.message })
+    res.json({ eliminadas: ids.length })
+  })
+})
+
+app.get('/api/notificaciones/estadisticas', verifyToken, (req, res) => {
+  db.query(
+    `SELECT COUNT(*) as total,
+     SUM(CASE WHEN Leida = 1 THEN 1 ELSE 0 END) as leidas,
+     SUM(CASE WHEN Leida = 0 THEN 1 ELSE 0 END) as no_leidas
+     FROM notificacion`,
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      res.json(results[0])
+    }
+  )
+})
+
 app.delete('/api/notificaciones/:id', verifyToken, (req, res) => {
   db.query('DELETE FROM notificacion WHERE ID_notificacion=?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message })
@@ -1180,34 +1204,11 @@ app.patch('/api/notificaciones/marcar-como-leidas/bulk', verifyToken, (req, res)
   })
 })
 
-app.delete('/api/notificaciones/bulk', verifyToken, (req, res) => {
-  const { ids } = req.body
-  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids debe ser un array no vacío' })
-  const placeholders = ids.map(() => '?').join(',')
-  db.query(`DELETE FROM notificacion WHERE ID_notificacion IN (${placeholders})`, ids, (err) => {
-    if (err) return res.status(500).json({ error: err.message })
-    res.json({ eliminadas: ids.length })
-  })
-})
-
 app.delete('/api/notificaciones/usuario/:idUsuario/todas', verifyToken, (req, res) => {
   db.query('DELETE FROM notificacion WHERE ID_usuario = ?', [req.params.idUsuario], (err, result) => {
     if (err) return res.status(500).json({ error: err.message })
     res.json({ eliminadas: result.affectedRows })
   })
-})
-
-app.get('/api/notificaciones/estadisticas', verifyToken, (req, res) => {
-  db.query(
-    `SELECT COUNT(*) as total,
-     SUM(CASE WHEN Leida = 1 THEN 1 ELSE 0 END) as leidas,
-     SUM(CASE WHEN Leida = 0 THEN 1 ELSE 0 END) as no_leidas
-     FROM notificacion`,
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json(results[0])
-    }
-  )
 })
 
 app.get('/api/notificaciones/usuario/:idUsuario/estadisticas', verifyToken, (req, res) => {
